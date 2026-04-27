@@ -26,10 +26,15 @@ Format: [Semantic Versioning](https://semver.org/) — `Added | Changed | Fixed 
 - **`src/components/MilestoneTimeline.tsx`** — Vertical numbered timeline with Solana Explorer links
 - **`src/components/DonateDialog.tsx`** — Donation modal: preset/custom amount, UPI/SOL tabs, success screen with explorer link
 - **`src/components/ProofUploadDialog.tsx`** — NGO proof upload dialog with mock IPFS CID generation
+- **`src/components/AuthDialog.tsx`** — Modal for email/password user authentication
 - **`src/pages/Home.tsx`** — Hero, feature cards, responsive campaign grid with skeleton loading
 - **`src/pages/DonorDashboard.tsx`** — Donations table, campaign selector, MilestoneTimeline panel, URL-param pre-selection
 - **`src/pages/NGODashboard.tsx`** — Campaign tabs, stats grid, active milestone action card, hidden demo cycle button (`#demo-cycle-btn`)
 - **`src/App.tsx`** — Sticky glass navbar (Home / Donor / NGO), WalletButton, react-router Routes, global Toaster
+
+### Changed
+- **Currency** — App-wide currency formatting updated to use Indian Rupees (INR/₹) instead of USD.
+- **Authentication** — Wallet connection is no longer mandatory for generic donations. Users authenticate via Email/Password credentials; wallets are strictly optional for Solana-based transfers.
 
 ### Architecture Notes
 - All async mock functions use `await delay(600–1000ms)` to simulate real API latency
