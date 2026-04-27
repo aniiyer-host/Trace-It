@@ -9,8 +9,8 @@ export interface Campaign {
     title: string
     ngo: string
     description: string
-    targetAmount: number   // in USD
-    raisedAmount: number   // in USD
+    targetAmount: number   // in INR
+    raisedAmount: number   // in INR
     milestones: Milestone[]
     imageUrl?: string
     category: 'education' | 'health' | 'disaster' | 'environment'
@@ -21,7 +21,7 @@ export interface Milestone {
     campaignId: string
     title: string
     description: string
-    targetAmount: number   // in USD
+    targetAmount: number   // in INR
     status: DonationStatus
     proofCid?: string      // IPFS CID (mock) – placeholder for real upload
     txHash?: string        // Solana tx hash (mock)
@@ -33,7 +33,7 @@ export interface Donation {
     id: string
     campaignId: string
     campaignTitle: string
-    amount: number         // in USD
+    amount: number         // in INR
     paymentMethod: PaymentMethod
     orderId: string        // Razorpay order ID (mock) or SOL tx hash
     txHash: string         // Solana explorer tx hash (mock)

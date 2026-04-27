@@ -3,8 +3,13 @@
 
 import { create } from 'zustand'
 import type { WalletState } from '@/types'
+import type { User } from '@/services/mockAuth'
 
 interface UIStore {
+    // ── Auth ──────────────────────────────────────
+    user: User | null
+    setUser: (u: User | null) => void
+
     // ── Wallet ──────────────────────────────────────
     wallet: WalletState
     walletLoading: boolean
@@ -21,6 +26,9 @@ interface UIStore {
 }
 
 export const useUIStore = create<UIStore>((set) => ({
+    user: null,
+    setUser: (u) => set({ user: u }),
+
     wallet: { connected: false, publicKey: null, balance: 0 },
     walletLoading: false,
     setWallet: (w) => set({ wallet: w }),

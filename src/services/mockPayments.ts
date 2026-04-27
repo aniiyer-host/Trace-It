@@ -13,11 +13,11 @@ let orderCounter = 1000
 
 /**
  * Simulate a UPI payment via Razorpay.
- * @param amountUSD – amount in USD (converted to INR internally in real impl)
+ * @param amountINR – amount in INR
  * TODO: Replace with Razorpay.open({ key, amount, currency, order_id, handler })
  */
 export async function initiateUpiPayment(
-    amountUSD: number,
+    amountINR: number,
 ): Promise<UpiPaymentResult> {
     await delay(900)
 
@@ -27,29 +27,29 @@ export async function initiateUpiPayment(
     const orderId = `${ORDER_PREFIX}${++orderCounter}`
     const razorpayPaymentId = `pay_${mockTxHash('upi' + orderCounter).slice(0, 16)}`
 
-    console.debug('[mockPayments] UPI payment', { amountUSD, orderId })
+    console.debug('[mockPayments] UPI payment', { amountINR, orderId })
 
     return { orderId, razorpayPaymentId, status: 'success' }
 }
 
 /**
  * Simulate sending SOL via Phantom.
- * @param amountUSD – converted to lamports in real impl
+ * @param amountINR – actual amount in INR (converted to lamports in real SOL payment impl based on market price)
  * @param recipientAddress – NGO vault address (mock)
  * TODO: Replace with:
  *   const tx = new Transaction().add(SystemProgram.transfer({...}))
  *   const sig = await sendAndConfirmTransaction(connection, tx, [wallet])
  */
 export async function initiateSolPayment(
-    amountUSD: number,
+    amountINR: number,
     recipientAddress = 'NGOVau1tXdEmoDev3mo9VBDkTraceItRealSoonPls',
 ): Promise<SolPaymentResult> {
     await delay(1000)
 
-    const txHash = mockTxHash(`sol${amountUSD}${recipientAddress}`)
+    const txHash = mockTxHash(`sol${amountINR}${recipientAddress}`)
     const url = explorerUrl(txHash)
 
-    console.debug('[mockPayments] SOL payment', { amountUSD, txHash })
+    console.debug('[mockPayments] SOL payment', { amountINR, txHash })
 
     return { txHash, explorerUrl: url, status: 'success' }
 }

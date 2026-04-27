@@ -29,15 +29,23 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
     const [loading, setLoading] = useState(false)
     const [successTx, setSuccessTx] = useState<string | null>(null)
 
-    const { wallet } = useUIStore()
+    const { wallet, user } = useUIStore()
     const { addDonation } = useDonationStore()
     const { toast } = useToast()
 
     const finalAmount = custom ? parseInt(custom, 10) || 0 : amount
 
     const handleDonate = async () => {
-        if (!campaign || !wallet.connected || !wallet.publicKey) {
-            toast({ title: 'Connect your wallet first', variant: 'destructive' })
+        if (!campaign) {
+            toast({ title: 'Select a campaign', variant: 'destructive' })
+            return
+        }
+        if (!user) {
+            toast({ title: 'Sign in to donate', variant: 'destructive' })
+            return
+        }
+        if (method === 'sol' && (!wallet.connected || !wallet.publicKey)) {
+            toast({ title: 'Connect wallet to use SOL', variant: 'destructive' })
             return
         }
         if (finalAmount < 1) {
@@ -61,8 +69,9 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                 txHash = result.txHash
             }
 
+            const walletAddr = wallet.publicKey || `mock-addr-${user!.id}`
             const donation = await createDonation(
-                campaign, finalAmount, method, orderId, txHash, wallet.publicKey,
+                campaign, finalAmount, method, orderId, txHash, walletAddr,
             )
             addDonation(donation)
             setSuccessTx(txHash)
@@ -108,7 +117,7 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                     <div className="space-y-5">
                         {/* Amount selector */}
                         <div>
-                            <p className="text-sm font-medium mb-2">Amount (USD)</p>
+                            <p className="text-sm font-medium mb-2">Amount (INR)</p>
                             <div className="grid grid-cols-4 gap-2 mb-2">
                                 {PRESET_AMOUNTS.map((a) => (
                                     <Button
@@ -117,7 +126,7 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                                         variant={amount === a && !custom ? 'default' : 'outline'}
                                         onClick={() => { setAmount(a); setCustom('') }}
                                     >
-                                        ${a}
+                                        ₹{a}
                                     </Button>
                                 ))}
                             </div>
@@ -144,11 +153,14 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                             </TabsContent>
                         </Tabs>
 
-                        <Button className="w-full" onClick={handleDonate} disabled={loading || !wallet.connected}>
+                        <Button className="w-full" onClick={handleDonate} disabled={loading || !user}>
                             {loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Processing…</> : `Donate ${formatUSD(finalAmount)}`}
                         </Button>
-                        {!wallet.connected && (
-                            <p className="text-xs text-center text-destructive">Connect your wallet above to donate</p>
+                        {!user && (
+                            <p className="text-xs text-center text-destructive">Sign in first to donate</p>
+                        )}
+                        {user && method === 'sol' && !wallet.connected && (
+                            <p className="text-xs text-center text-destructive">Connect Wallet to donate via SOL</p>
                         )}
                     </div>
                 )}

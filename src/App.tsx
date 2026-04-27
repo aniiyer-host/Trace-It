@@ -1,11 +1,16 @@
 // App.tsx – root layout, routing, and global Toaster
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { useState } from 'react'
 import { Toaster } from '@/components/ui/toaster'
 import { WalletButton } from '@/components/WalletButton'
+import { AuthDialog } from '@/components/AuthDialog'
+import { Button } from '@/components/ui/button'
+import { useUIStore } from '@/store/uiStore'
+import { logoutUser } from '@/services/mockAuth'
 import Home from '@/pages/Home'
 import DonorDashboard from '@/pages/DonorDashboard'
 import NGODashboard from '@/pages/NGODashboard'
-import { GitBranch } from 'lucide-react'
+import { GitBranch, UserCircle, LogOut } from 'lucide-react'
 
 const NAV_LINKS = [
   { to: '/', label: 'Campaigns', end: true },
@@ -14,6 +19,14 @@ const NAV_LINKS = [
 ]
 
 function NavBar() {
+  const { user, setUser } = useUIStore()
+  const [authOpen, setAuthOpen] = useState(false)
+
+  const handleLogout = async () => {
+    await logoutUser()
+    setUser(null)
+  }
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
       <div className="container max-w-6xl mx-auto flex h-14 items-center justify-between px-4">
@@ -42,8 +55,25 @@ function NavBar() {
           ))}
         </nav>
 
-        <WalletButton />
+        <div className="flex items-center gap-3">
+          {user ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground mr-2">{user.email}</span>
+              <Button size="sm" variant="ghost" className="gap-2" onClick={handleLogout}>
+                <LogOut className="h-4 w-4" />
+                Sign Out
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" onClick={() => setAuthOpen(true)} className="gap-2">
+              <UserCircle className="h-4 w-4" />
+              Sign In
+            </Button>
+          )}
+          <WalletButton />
+        </div>
       </div>
+      <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} />
     </header>
   )
 }
