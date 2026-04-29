@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { Toaster } from '@/components/ui/toaster'
 import { WalletButton } from '@/components/WalletButton'
 import { AuthDialog } from '@/components/AuthDialog'
+import { ModeToggle } from '@/components/ModeToggle'
+import { ThemeProvider } from '@/components/theme-provider'
 import { Button } from '@/components/ui/button'
 import { useUIStore } from '@/store/uiStore'
 import { logoutUser } from '@/services/mockAuth'
@@ -70,6 +72,7 @@ function NavBar() {
               Sign In
             </Button>
           )}
+          <ModeToggle />
           <WalletButton />
         </div>
       </div>
@@ -80,6 +83,7 @@ function NavBar() {
 
 export default function App() {
   return (
+    <ThemeProvider defaultTheme="system" storageKey="traceit-theme">
     <BrowserRouter>
       <div className="min-h-screen flex flex-col">
         <NavBar />
@@ -104,5 +108,6 @@ export default function App() {
       </div>
       <Toaster />
     </BrowserRouter>
+    </ThemeProvider>
   )
 }

@@ -12,7 +12,7 @@ import { useDonationStore } from '@/store/donationStore'
 import { initiateUpiPayment, initiateSolPayment } from '@/services/mockPayments'
 import { createDonation } from '@/services/mockApi'
 import { formatUSD, shortenHash } from '@/lib/utils'
-import type { Campaign, PaymentMethod } from '@/types'
+import type { Campaign, PaymentMethod, Donation } from '@/types'
 
 const PRESET_AMOUNTS = [25, 50, 100, 250]
 
@@ -27,7 +27,7 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
     const [custom, setCustom] = useState('')
     const [method, setMethod] = useState<PaymentMethod>('upi')
     const [loading, setLoading] = useState(false)
-    const [successTx, setSuccessTx] = useState<string | null>(null)
+    const [successDonation, setSuccessDonation] = useState<Donation | null>(null)
 
     const { wallet, user } = useUIStore()
     const { addDonation } = useDonationStore()
@@ -74,7 +74,7 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                 campaign, finalAmount, method, orderId, txHash, walletAddr,
             )
             addDonation(donation)
-            setSuccessTx(txHash)
+            setSuccessDonation(donation)
             toast({ title: `${formatUSD(finalAmount)} donation successful! 🎉` })
         } catch {
             toast({ title: 'Donation failed', variant: 'destructive' })
@@ -84,7 +84,7 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
     }
 
     const handleClose = () => {
-        setSuccessTx(null)
+        setSuccessDonation(null)
         setCustom('')
         setAmount(50)
         onClose()
@@ -98,19 +98,47 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                     <DialogDescription>{campaign?.title}</DialogDescription>
                 </DialogHeader>
 
-                {successTx ? (
+                {successDonation ? (
                     <div className="text-center space-y-4 py-4">
                         <p className="text-4xl">🎉</p>
                         <p className="font-semibold text-emerald-400">Donation Confirmed!</p>
-                        <p className="text-sm text-muted-foreground">Tx: {shortenHash(successTx)}</p>
+                        <p className="text-sm text-muted-foreground">Tx: {shortenHash(successDonation.txHash)}</p>
                         <a
-                            href={`https://explorer.solana.com/tx/${successTx}?cluster=devnet`}
+                            href={`https://explorer.solana.com/tx/${successDonation.txHash}?cluster=devnet`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-primary text-sm hover:underline"
                         >
                             <ExternalLink className="h-3 w-3" /> View on Solana Explorer
                         </a>
+
+                        {successDonation.paymentMethod === 'upi' && (
+                            <div className="mt-4 p-4 rounded-lg border border-border bg-muted/20 text-left space-y-2 text-sm">
+                                <h3 className="font-semibold border-b border-border/50 pb-2 mb-2">Donation Receipt</h3>
+                                <div className="flex justify-between"><span className="text-muted-foreground">Date:</span> <span>{new Date(successDonation.createdAt).toLocaleString()}</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">Order ID:</span> <span className="font-mono text-xs">{successDonation.orderId}</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">Campaign:</span> <span className="truncate ml-4">{successDonation.campaignTitle}</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">Amount:</span> <span className="font-semibold">{formatUSD(successDonation.amount)}</span></div>
+                                <div className="flex justify-between"><span className="text-muted-foreground">Payment:</span> <span className="uppercase">{successDonation.paymentMethod}</span></div>
+                                <Button 
+                                    variant="outline" 
+                                    className="w-full mt-4"
+                                    onClick={() => {
+                                        const text = `TRACE-IT DONATION RECEIPT\n--------------------------\nDate: ${new Date(successDonation.createdAt).toLocaleString()}\nOrder ID: ${successDonation.orderId}\nCampaign: ${successDonation.campaignTitle}\nAmount: ${formatUSD(successDonation.amount)}\nPayment Method: ${successDonation.paymentMethod.toUpperCase()}\nSolana TX: ${successDonation.txHash}\n\nThank you for your contribution!`;
+                                        const blob = new Blob([text], { type: 'text/plain' });
+                                        const url = URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = `Receipt_${successDonation.orderId}.txt`;
+                                        a.click();
+                                        URL.revokeObjectURL(url);
+                                    }}
+                                >
+                                    Download Receipt
+                                </Button>
+                            </div>
+                        )}
+                        
                         <Button className="w-full" onClick={handleClose}>Done</Button>
                     </div>
                 ) : (
