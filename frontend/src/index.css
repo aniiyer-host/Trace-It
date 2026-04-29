@@ -2,28 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @layer base {
+  /* ── Light mode ─────────────────────────────────────────────── */
   :root {
-    --background: 222 47% 4%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 7%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 7%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 174 72% 42%;
-    --primary-foreground: 222 47% 4%;
-    --secondary: 258 65% 55%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 38 92% 50%;
-    --accent-foreground: 222 47% 4%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 174 72% 42%;
-    --radius: 0.75rem;
+    --background:        30 20% 97%;      /* warm off-white    */
+    --foreground:        220 20% 18%;     /* soft charcoal     */
+
+    --card:              0 0% 100%;
+    --card-foreground:   220 20% 18%;
+
+    --popover:           0 0% 100%;
+    --popover-foreground: 220 20% 18%;
+
+    --primary:           155 38% 40%;    /* sage green        */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary:         210 18% 92%;    /* cool stone        */
+    --secondary-foreground: 220 20% 30%;
+
+    --muted:             210 18% 93%;
+    --muted-foreground:  220 12% 50%;
+
+    --accent:            37 75% 52%;     /* warm amber        */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive:       0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:            220 15% 87%;
+    --input:             220 15% 87%;
+    --ring:              155 38% 40%;
+
+    --radius:            0.75rem;
+  }
+
+  /* ── Dark mode ──────────────────────────────────────────────── */
+  .dark {
+    --background:        220 18% 10%;    /* deep blue-slate   */
+    --foreground:        210 20% 92%;    /* soft white        */
+
+    --card:              220 18% 14%;
+    --card-foreground:   210 20% 92%;
+
+    --popover:           220 18% 14%;
+    --popover-foreground: 210 20% 92%;
+
+    --primary:           155 38% 50%;    /* sage green        */
+    --primary-foreground: 220 18% 10%;
+
+    --secondary:         220 14% 22%;
+    --secondary-foreground: 210 20% 80%;
+
+    --muted:             220 14% 18%;
+    --muted-foreground:  210 14% 55%;
+
+    --accent:            37 70% 55%;     /* warm amber        */
+    --accent-foreground: 220 18% 10%;
+
+    --destructive:       0 65% 56%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:            220 14% 22%;
+    --input:             220 14% 22%;
+    --ring:              155 38% 50%;
   }
 }
 
@@ -33,25 +76,41 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    background-image:
-      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(174 72% 42% / 0.08) 0%, transparent 100%),
-      radial-gradient(ellipse 60% 40% at 80% 80%, hsl(258 65% 55% / 0.06) 0%, transparent 100%);
+    font-family: 'Inter', system-ui, sans-serif;
     min-height: 100vh;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { @apply bg-muted/30; }
-::-webkit-scrollbar-thumb { @apply bg-primary/40 rounded-full; }
-::-webkit-scrollbar-thumb:hover { @apply bg-primary/70; }
-
-/* Glass card effect used throughout app */
-.glass {
-  @apply bg-card/60 backdrop-blur-md border border-border/50;
+/* Subtle page background — light mode */
+body {
+  background-image:
+    radial-gradient(ellipse 70% 40% at 50% -10%, hsl(155 38% 40% / 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 30% at 80% 90%, hsl(37 75% 52% / 0.05) 0%, transparent 60%);
 }
 
-/* Gradient text utility */
+/* Subtle page background — dark mode */
+.dark body {
+  background-image:
+    radial-gradient(ellipse 70% 40% at 50% -10%, hsl(155 38% 50% / 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 30% at 80% 90%, hsl(37 70% 55% / 0.06) 0%, transparent 60%);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { @apply bg-transparent; }
+::-webkit-scrollbar-thumb { @apply bg-primary/30 rounded-full; }
+::-webkit-scrollbar-thumb:hover { @apply bg-primary/60; }
+
+/* Glass card effect */
+.glass {
+  @apply bg-card/80 backdrop-blur-sm border border-border/60;
+}
+
+/* Gradient text — adapts to mode */
 .gradient-text {
-  @apply bg-gradient-to-r from-[hsl(174_72%_55%)] to-[hsl(258_65%_70%)] bg-clip-text text-transparent;
+  @apply bg-gradient-to-r from-[hsl(155_38%_42%)] to-[hsl(37_75%_52%)] bg-clip-text text-transparent;
+}
+.dark .gradient-text {
+  @apply from-[hsl(155_38%_60%)] to-[hsl(37_75%_62%)];
 }

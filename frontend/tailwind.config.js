@@ -48,9 +48,9 @@ export default {
         },
         // TraceIt brand colours
         brand: {
-          teal: "hsl(174 72% 42%)",
-          purple: "hsl(258 65% 55%)",
-          amber: "hsl(38 92% 50%)",
+          sage:  "hsl(155 38% 45%)",
+          amber: "hsl(37 75% 52%)",
+          stone: "hsl(210 18% 92%)",
         },
       },
       borderRadius: {
@@ -64,8 +64,8 @@ export default {
           to: { opacity: "1", transform: "translateY(0)" },
         },
         "pulse-brand": {
-          "0%, 100%": { boxShadow: "0 0 0 0 hsl(174 72% 42% / 0.4)" },
-          "50%": { boxShadow: "0 0 0 8px hsl(174 72% 42% / 0)" },
+          "0%, 100%": { boxShadow: "0 0 0 0 hsl(155 38% 45% / 0.35)" },
+          "50%": { boxShadow: "0 0 0 8px hsl(155 38% 45% / 0)" },
         },
       },
       animation: {
