@@ -72,8 +72,8 @@ function NavBar() {
               Sign In
             </Button>
           )}
-          <ModeToggle />
           <WalletButton />
+          <ModeToggle />
         </div>
       </div>
       <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} />
