@@ -54,7 +54,10 @@ export function AuthDialog({ open, onClose }: Props) {
                         />
                     </div>
                     <div>
-                        <label className="text-sm font-medium mb-1 block">Password</label>
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="text-sm font-medium">Password</label>
+                            <a href="#" className="text-xs text-primary hover:underline" onClick={(e) => { e.preventDefault(); toast({ title: 'Forgot Password', description: 'Reset link sent (simulation).' }) }}>Forgot password?</a>
+                        </div>
                         <input
                             type="password"
                             value={password}
