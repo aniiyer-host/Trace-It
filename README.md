@@ -4,7 +4,6 @@
 - Primary legal obligation.
 - Section 43A requires **reasonable security practices** for sensitive personal data.
 - CDN-stored medical documents and user PII fall under this.
-- A documented information security program (even basic) is recommended for viva.
 
 ## DPDP Act 2023
 - India's **Digital Personal Data Protection Act**.
