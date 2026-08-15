@@ -1,19 +1,20 @@
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import { config as dotenvConfig } from 'dotenv';
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import { config as dotenvConfig } from "dotenv";
 
 // Load environment variables
 dotenvConfig();
 
-import authRoutes from './routes/auth';
-import publicRoutes from './routes/public';
-import donorRoutes from './routes/donor';
-import charityRoutes from './routes/charity';
-import webhookRoutes from './routes/webhooks/razorpay';
-import { errorHandler } from './middleware/errorHandler';
-import { notFound } from './middleware/notFound';
+import authRoutes from "./routes/auth";
+import publicRoutes from "./routes/public";
+import donorRoutes from "./routes/donor";
+import charityRoutes from "./routes/charity";
+import adminRoutes from "./routes/admin";
+import webhookRoutes from "./routes/webhooks/razorpay";
+import { errorHandler } from "./middleware/errorHandler";
+import { notFound } from "./middleware/notFound";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,15 +34,16 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // Routes
-app.get('/', (req, res) => {
-  res.json({ message: 'TraceIt API is running' });
+app.get("/", (req, res) => {
+  res.json({ message: "TraceIt API is running" });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/public', publicRoutes);
-app.use('/api/donor', donorRoutes);
-app.use('/api/charity', charityRoutes);
-app.use('/api/webhooks', webhookRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/public", publicRoutes);
+app.use("/api/donor", donorRoutes);
+app.use("/api/charity", charityRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/webhooks", webhookRoutes);
 
 // 404 handler
 app.use(notFound);
@@ -49,8 +51,14 @@ app.use(notFound);
 // Error handler
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+// app.listen(PORT, () => {
+//   console.log(`Server is running on port ${PORT}`);
+// });
+
+if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
 
 export default app;

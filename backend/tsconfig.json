@@ -13,10 +13,9 @@
     "emitDeclarationOnly": false,
     "allowImportingTsExtensions": false,
     "rewriteRelativeImportExtensions": true,
-    "types": ["node", "express"]
+    "types": ["node", "express", "jest", "supertest"]
   },
-  "include": [
-    "src/**/*",
-    "generated/prisma/**/*"
-  ]
+  // "include": ["src/**/*", "generated/prisma/**/*"]
+  "include": ["src/**/*", "generated/prisma/**/*", "tests/**/*"],
+  "exclude": ["tests/**/*"]
 }

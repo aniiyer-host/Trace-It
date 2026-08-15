@@ -2,7 +2,7 @@ import { Request, Response, NextFunction, Router } from "express";
 import { prisma } from "../db/prisma";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireRole } from "../middleware/requireRole";
-import { UserRole, NgoStatus, DocumentType, CampaignStatus } from "../../generated/prisma/enums";
+import { UserRole, NgoStatus, DocumentType, CampaignStatus, DisbursementStatus } from "../../generated/prisma/enums";
 import Joi from "joi";
 import { uploadSingle } from "../middleware/multerMiddleware";
 import { DocumentService } from "../services/documentService";
@@ -312,6 +312,120 @@ export const uploadCohortProof = async (req: Request, res: Response, next: NextF
 };
 
 // ---------------------------------------------------------------------------
+// POST /disburse
+// ---------------------------------------------------------------------------
+const disburseSchema = Joi.object({
+  campaignId: Joi.string().uuid().required(),
+  cohortId: Joi.string().uuid().optional(),
+  amountInr: Joi.number().positive().required(),
+  fieldReportUrl: Joi.string().uri().optional(),
+});
+
+export const createDisbursement = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: "User not authenticated" });
+
+    const { error, value } = disburseSchema.validate(req.body);
+    if (error) return res.status(400).json({ error: error.details[0].message });
+
+    const { campaignId, cohortId, amountInr, fieldReportUrl } = value;
+
+    // Verify campaign belongs to NGO
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+    if (!campaign || campaign.ngoId !== userId) {
+      return res.status(404).json({ error: "Campaign not found or doesn't belong to this NGO" });
+    }
+
+    if (cohortId) {
+      const cohort = await prisma.beneficiaryCohort.findUnique({ where: { id: cohortId } });
+      if (!cohort || cohort.ngoId !== userId || cohort.campaignId !== campaignId) {
+        return res.status(404).json({ error: "Cohort not found or mismatch with campaign" });
+      }
+      if (!cohort.sha512DocHash) {
+        return res.status(400).json({ error: "Cohort proof has not been uploaded yet" });
+      }
+    }
+
+    const disbursement = await prisma.disbursement.create({
+      data: {
+        campaignId,
+        ngoId: userId,
+        cohortId,
+        amountInr,
+        fieldReportUrl,
+        status: DisbursementStatus.PENDING,
+        // TODO(blockchain-team): amountSol, solanaTxHash, blockscoutUrl set to null initially
+      }
+    });
+
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: userId,
+      entityType: 'disbursement',
+      entityId: disbursement.id,
+      action: 'DISBURSEMENT_CREATED',
+      metadata: { campaignId, amountInr }
+    });
+
+    res.status(201).json(disbursement);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// GET /disbursements
+// ---------------------------------------------------------------------------
+export const getDisbursements = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: "User not authenticated" });
+
+    const disbursements = await prisma.disbursement.findMany({
+      where: { ngoId: userId },
+      include: {
+        campaign: { select: { id: true, title: true } },
+        cohort: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(disbursements);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// GET /disbursements/:id
+// ---------------------------------------------------------------------------
+export const getDisbursementById = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id;
+    const id = req.params.id as string;
+    if (!userId) return res.status(401).json({ error: "User not authenticated" });
+
+    const disbursement = await prisma.disbursement.findUnique({
+      where: { id },
+      include: {
+        campaign: true,
+        cohort: true,
+        documents: true,
+      }
+    });
+
+    if (!disbursement || disbursement.ngoId !== userId) {
+      return res.status(404).json({ error: "Disbursement not found" });
+    }
+
+    res.json(disbursement);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 charityRouter.post("/onboard", requireAuth, charityOnboard);
@@ -325,5 +439,9 @@ charityRouter.get("/campaigns", requireAuth, getCampaigns);
 
 charityRouter.post("/cohorts", requireAuth, requireRole(UserRole.CHARITY), createCohort);
 charityRouter.post("/cohorts/:id/proof", requireAuth, requireRole(UserRole.CHARITY), uploadSingle, uploadCohortProof);
+
+charityRouter.post("/disburse", requireAuth, requireRole(UserRole.CHARITY), createDisbursement);
+charityRouter.get("/disbursements", requireAuth, requireRole(UserRole.CHARITY), getDisbursements);
+charityRouter.get("/disbursements/:id", requireAuth, requireRole(UserRole.CHARITY), getDisbursementById);
 
 export default charityRouter;
