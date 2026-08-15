@@ -1,0 +1,22 @@
+
+> backend@1.0.0 dev
+> ts-node-dev src/index.ts
+
+[INFO] 18:39:11 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 7.0.2)
+/Users/adison/Programming/Trace-It/backend/node_modules/ts-node/dist/configuration.js:91
+    const { fileExists = ts.sys.fileExists, readFile = ts.sys.readFile, skipProject = index_1.DEFAULTS.skipProject, project = index_1.DEFAULTS.project, tsTrace = index_1.DEFAULTS.tsTrace, } = rawApiOptions;
+                                ^
+
+TypeError: Cannot read properties of undefined (reading 'fileExists')
+    at readConfig (/Users/adison/Programming/Trace-It/backend/node_modules/ts-node/dist/configuration.js:91:33)
+    at findAndReadConfig (/Users/adison/Programming/Trace-It/backend/node_modules/ts-node/dist/configuration.js:50:84)
+    at create (/Users/adison/Programming/Trace-It/backend/node_modules/ts-node/dist/index.js:146:69)
+    at Object.register (/Users/adison/Programming/Trace-It/backend/node_modules/ts-node/dist/index.js:127:19)
+    at registerTsNode (/Users/adison/Programming/Trace-It/backend/node_modules/ts-node-dev/lib/compiler.js:174:16)
+    at Object.init (/Users/adison/Programming/Trace-It/backend/node_modules/ts-node-dev/lib/compiler.js:121:9)
+    at exports.runDev (/Users/adison/Programming/Trace-It/backend/node_modules/ts-node-dev/lib/index.js:256:14)
+    at Object.<anonymous> (/Users/adison/Programming/Trace-It/backend/node_modules/ts-node-dev/lib/bin.js:136:4)
+    at Module._compile (node:internal/modules/cjs/loader:1803:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1934:10)
+
+Node.js v25.5.0
