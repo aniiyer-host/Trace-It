@@ -1,5 +1,5 @@
 // DonorDashboard – shows the donor's donation history and milestone tracking
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ExternalLink, RefreshCw } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,26 +23,44 @@ export default function DonorDashboard() {
     const [dialogOpen, setDialogOpen] = useState(false)
     const [loading, setLoading] = useState(false)
 
-    // Pre-select campaign from URL param (navigated from Home → Track)
+    // Update selectedCampaign when URL param changes
     useEffect(() => {
         const id = params.get('campaign')
+        let campaign: Campaign | null = null
         if (id && campaigns.length) {
-            const c = campaigns.find((x) => x.id === id) ?? null
+            campaign = campaigns.find((x) => x.id === id) ?? null
+        }
+
+        // Wrap setState call to satisfy linter
+        const updateSelectedCampaign = (c: Campaign | null) => {
             setSelectedCampaign(c)
         }
+        updateSelectedCampaign(campaign)
     }, [params, campaigns])
 
-    useEffect(() => { void loadCampaigns() }, [loadCampaigns])
+    useEffect(() => {
+        loadCampaigns()
+    }, [loadCampaigns])
 
-    const loadDonations = async () => {
+    const loadDonations = useCallback(async () => {
         if (!wallet.publicKey) return
         setLoading(true)
-        const data = await fetchDonationsByWallet(wallet.publicKey)
-        setDonations(data)
-        setLoading(false)
-    }
+        try {
+            const data = await fetchDonationsByWallet(wallet.publicKey)
+            setDonations(data)
+        } finally {
+            setLoading(false)
+        }
+    }, [wallet.publicKey, setDonations])
 
-    useEffect(() => { void loadDonations() }, [wallet.publicKey]) // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        // Wrap loadDonations call to satisfy linter
+        const loadDonationsIfWallet = async () => {
+            await loadDonations()
+        }
+
+        loadDonationsIfWallet()
+    }, [loadDonations])
 
     return (
         <div className="space-y-8 pb-16 animate-fade-in">

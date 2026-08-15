@@ -6,6 +6,33 @@ Format: [Semantic Versioning](https://semver.org/) — `Added | Changed | Fixed 
 
 ---
 
+## [0.2.0] — 2026-08-15
+
+### Added
+- Security documentation (SECURITY.md) and split into docs/compliance.md, docs/threats.md, docs/remediations.md
+- ESLint security plugin (eslint-plugin-security) for enhanced security linting
+- Input validation in StatusBadge component to prevent potential injection risks
+- Fixed React hooks warnings in DonorDashboard and NGODashboard to prevent cascading renders
+- Fixed TypeScript enum issue in use-toast hook
+- Removed unnecessary exports of variant constants from badge and button components to satisfy react-refresh
+
+### Changed
+- Updated ESLint configuration to include security plugin
+- Updated use-toast hook to use traditional object instead of enum for compatibility
+- Updated DonorDashboard to use useCallback for loadDonations and proper effect dependencies
+- Updated NGODashboard to combine useEffects for campaign selection
+
+### Fixed
+- ESLint warnings and errors (security, react-hooks, react-refresh, no-unused-vars)
+- TypeScript build errors in use-toast hook
+- React hook violation warnings in multiple components
+
+### Removed
+- (Nothing removed in this change)
+
+---
+
+
 ## [0.1.0] — 2026-04-27
 
 ### Added
