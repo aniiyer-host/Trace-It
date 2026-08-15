@@ -8,7 +8,7 @@
     "dev": "ts-node-dev src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],
@@ -28,6 +28,7 @@
     "@types/pg": "^8.21.0",
     "@types/supertest": "^7.2.1",
     "@types/uuid": "^10.0.0",
+    "cross-env": "^10.1.0",
     "jest": "^30.4.2",
     "prisma": "^7.9.1",
     "supertest": "^7.2.2",
