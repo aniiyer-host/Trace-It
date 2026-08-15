@@ -12,8 +12,9 @@
 
     "sourceMap": true,
     "declaration": true,
-    "emitDeclarationOnly": true,
-    "allowImportingTsExtensions": true,
+    "emitDeclarationOnly": false,
+    "allowImportingTsExtensions": false,
+    "rewriteRelativeImportExtensions": true,
     "types": ["node", "express"]
   }
 }
