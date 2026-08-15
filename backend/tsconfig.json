@@ -5,16 +5,18 @@
     "module": "ESnext",
     "moduleResolution": "bundler",
     "target": "ES2023",
-
     "esModuleInterop": true,
     "strict": true,
     "skipLibCheck": true,
-
     "sourceMap": true,
     "declaration": true,
     "emitDeclarationOnly": false,
     "allowImportingTsExtensions": false,
     "rewriteRelativeImportExtensions": true,
     "types": ["node", "express"]
-  }
+  },
+  "include": [
+    "src/**/*",
+    "generated/prisma/**/*"
+  ]
 }

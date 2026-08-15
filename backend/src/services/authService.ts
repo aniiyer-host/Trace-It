@@ -1,9 +1,7 @@
-import { PrismaClient } from '../../generated/prisma/client';
+import {prisma} from '../db/prisma'
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { generateOTP, sendOTP } from './emailService';
-
-const prisma = new PrismaClient();
 
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'access_secret';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'refresh_secret';
@@ -25,6 +23,10 @@ export const generateAccessToken = (userId: string): string => {
 
 export const generateRefreshToken = (userId: string): string => {
   return jwt.sign({ userId }, JWT_REFRESH_SECRET, { expiresIn: JWT_REFRESH_EXPIRES_IN });
+};
+
+export const hashToken = async (token: string): Promise<string> => {
+  return bcrypt.hash(token, 10);
 };
 
 export const signup = async (email: string, password: string, fullName?: string, phone?: string) => {
@@ -103,4 +105,92 @@ export const verifyEmail = async (email: string, otpCode: string) => {
   });
 
   return { id: user.id, email: user.email, isVerified: true };
+};
+
+export const login = async (email: string, password: string) => {
+  // Find user by email
+  const user = await prisma.profile.findUnique({ where: { email } });
+  if (!user) {
+    throw new Error('Invalid credentials');
+  }
+
+  // Check if password hash exists
+  if (!user.passwordHash) {
+    throw new Error('Invalid credentials');
+  }
+
+  // Check password
+  const passwordValid = await comparePassword(password, user.passwordHash);
+  if (!passwordValid) {
+    throw new Error('Invalid credentials');
+  }
+
+  // Generate access token
+  const accessToken = generateAccessToken(user.id);
+
+  // Generate refresh token and hash it for storage
+  const refreshToken = generateRefreshToken(user.id);
+  const refreshTokenHash = await hashToken(refreshToken);
+
+  // Update user with refresh token hash
+  await prisma.profile.update({
+    where: { id: user.id },
+    data: { refreshTokenHash },
+  });
+
+  // Return tokens (in practice, send refresh token as HttpOnly cookie)
+  return { accessToken, refreshToken };
+};
+
+export const refreshToken = async (oldRefreshToken: string) => {
+  // Find users with a non-null refreshTokenHash
+  const users = await prisma.profile.findMany({
+    where: { refreshTokenHash: { not: null } },
+    select: { id: true, refreshTokenHash: true }
+  });
+
+  for (const u of users) {
+    // Since we know refreshTokenHash is not null due to the where clause, we can use non-null assertion
+    const isValid = await bcrypt.compare(oldRefreshToken, u.refreshTokenHash!);
+    if (isValid) {
+      // Found the user
+      // Generate new tokens
+      const accessToken = generateAccessToken(u.id);
+      const newRefreshToken = generateRefreshToken(u.id);
+      const newRefreshTokenHash = await hashToken(newRefreshToken);
+
+      // Update the refresh token hash
+      await prisma.profile.update({
+        where: { id: u.id },
+        data: { refreshTokenHash: newRefreshTokenHash },
+      });
+
+      return { accessToken, refreshToken: newRefreshToken };
+    }
+  }
+
+  throw new Error('Invalid refresh token');
+};
+
+export const logout = async (refreshToken: string) => {
+  // Find users with a non-null refreshTokenHash
+  const users = await prisma.profile.findMany({
+    where: { refreshTokenHash: { not: null } },
+    select: { id: true, refreshTokenHash: true }
+  });
+
+  for (const u of users) {
+    // Since we know refreshTokenHash is not null due to the where clause, we can use non-null assertion
+    const isValid = await bcrypt.compare(refreshToken, u.refreshTokenHash!);
+    if (isValid) {
+      // Found the user
+      await prisma.profile.update({
+        where: { id: u.id },
+        data: { refreshTokenHash: null },
+      });
+      return { success: true };
+    }
+  }
+
+  throw new Error('Invalid refresh token');
 };
