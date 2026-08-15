@@ -17,5 +17,5 @@
   },
   // "include": ["src/**/*", "generated/prisma/**/*"]
   "include": ["src/**/*", "generated/prisma/**/*", "tests/**/*"],
-  "exclude": ["tests/**/*"]
+  "exclude": []
 }

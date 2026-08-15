@@ -4,6 +4,8 @@ import { prisma } from "../src/db/prisma";
 import jwt from "jsonwebtoken";
 import { UserRole, NgoStatus, CampaignStatus } from "../generated/prisma/enums";
 
+import { StorageService } from "../src/services/storageService";
+
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "access_secret";
 
 describe("Charity API Integration Tests", () => {
@@ -11,6 +13,9 @@ describe("Charity API Integration Tests", () => {
   let charityUserId: string;
 
   beforeAll(async () => {
+    // Mock the AWS S3 upload so it doesn't attempt to make real network requests
+    jest.spyOn(StorageService.prototype, "uploadFile").mockResolvedValue(undefined);
+    
     // Create a mock charity user
     const user = await prisma.profile.create({
       data: {
