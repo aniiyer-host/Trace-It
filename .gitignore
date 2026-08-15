@@ -20,3 +20,5 @@ node_modules
 .env
 
 /generated/prisma
+TraceIt*
+traceit*
