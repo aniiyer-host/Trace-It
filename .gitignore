@@ -3,3 +3,19 @@ CLAUDE.md
 **/dist/
 **/.*
 **/skills-lock.json
+
+#Anikets space
+scripts/*
+security_docs/*
+templates/*
+DEPLOYMENT_SUMMARY.MD
+Dockerfile
+Jenkinsfile
+
+
+
+node_modules
+# Keep environment variables out of version control
+.env
+
+/generated/prisma
