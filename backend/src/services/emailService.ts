@@ -12,3 +12,9 @@ export const sendOTP = async (email: string, otp: string) => {
 export const generateOTP = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
+
+// Stub for notifying admins
+export const notifyAdmin = async (subject: string, message: string) => {
+  console.log(`[ADMIN NOTIFICATION] ${subject}: ${message}`);
+  await delay(500);
+};

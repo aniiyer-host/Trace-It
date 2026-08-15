@@ -11,6 +11,10 @@ import { AuditActorType } from "../../generated/prisma/enums";
 
 const charityRouter = Router();
 
+interface MulterRequest extends Request {
+  file?: Express.Multer.File;
+}
+
 // Validation schema for charity onboarding
 const charityOnboardSchema = Joi.object({
   organisationName: Joi.string().required(),
@@ -76,10 +80,11 @@ export const charityOnboard = async (req: Request, res: Response, next: NextFunc
 // ---------------------------------------------------------------------------
 export const uploadDocument = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const multerReq = req as MulterRequest;
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: "User not authenticated" });
 
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    if (!multerReq.file) return res.status(400).json({ error: "No file uploaded" });
     
     // In a real app we'd get docType from body, default to NGO_CERT for now for onboarding
     const docType = (req.body.docType as DocumentType) || DocumentType.NGO_CERT;
@@ -87,7 +92,7 @@ export const uploadDocument = async (req: Request, res: Response, next: NextFunc
     const ttlExpiry = new Date();
     ttlExpiry.setMonth(ttlExpiry.getMonth() + 6); // now + 6 months
 
-    const document = await DocumentService.uploadDocument(req.file, userId, docType, { ttlExpiry });
+    const document = await DocumentService.uploadDocument(multerReq.file, userId, docType, { ttlExpiry });
 
     await writeAuditLog({
       actorType: AuditActorType.USER,
@@ -283,16 +288,17 @@ export const createCohort = async (req: Request, res: Response, next: NextFuncti
 // ---------------------------------------------------------------------------
 export const uploadCohortProof = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const multerReq = req as MulterRequest;
     const userId = req.user?.id;
     const id = req.params.id as string;
 
     if (!userId) return res.status(401).json({ error: "User not authenticated" });
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    if (!multerReq.file) return res.status(400).json({ error: "No file uploaded" });
 
     const cohort = await prisma.beneficiaryCohort.findUnique({ where: { id } });
     if (!cohort || cohort.ngoId !== userId) return res.status(404).json({ error: "Cohort not found" });
 
-    const document = await DocumentService.uploadDocument(req.file, userId, DocumentType.COHORT_PROOF, { campaignId: cohort.campaignId });
+    const document = await DocumentService.uploadDocument(multerReq.file, userId, DocumentType.COHORT_PROOF, { campaignId: cohort.campaignId });
 
     const updatedCohort = await prisma.beneficiaryCohort.update({
       where: { id },

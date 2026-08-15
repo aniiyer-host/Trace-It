@@ -11,6 +11,7 @@ import authRoutes from './routes/auth';
 import publicRoutes from './routes/public';
 import donorRoutes from './routes/donor';
 import charityRoutes from './routes/charity';
+import webhookRoutes from './routes/webhooks/razorpay';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 
@@ -40,6 +41,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/donor', donorRoutes);
 app.use('/api/charity', charityRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 // 404 handler
 app.use(notFound);

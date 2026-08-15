@@ -10,7 +10,7 @@
 ## Phase Status
 - Phase 1: COMPLETED
 - Phase 2: COMPLETED
-- Phase 3: NOT STARTED
+- Phase 3: COMPLETED
 - Phase 4: NOT STARTED
 - Phase 5: NOT STARTED
 
@@ -29,6 +29,11 @@
 - 2026-08-15: [Phase 2 completion] Created tests/phase2.integration.test.ts — full donate→receipt E2E tests
 - 2026-08-15: [Phase 2 completion] Added jest.config.ts + jest/supertest/ts-jest dev dependencies + npm test scripts
 - 2026-08-15: TypeScript build passes with zero errors (npm run build ✅)
+- 2026-08-15: Started Phase 3.
+- 2026-08-15: [Phase 3 completion] Fixed imports and typings in razorpay.ts.
+- 2026-08-15: [Phase 3 completion] Fixed req.file TS errors in charity.ts by providing MulterRequest interface.
+- 2026-08-15: [Phase 3 completion] Added notifyAdmin function in emailService.ts and integrated it into the Razorpay webhook for AML threshold triggers.
+- 2026-08-15: [Phase 3 completion] Razorpay webhook handlers, status transition logic (statusService.ts), and timeline endpoints are complete.
 
 ## Decisions and Discrepancies
 - Discrepancy between SQL enums and Prisma enums resolved during Phase 1.
@@ -36,9 +41,11 @@
 - Prisma v7 new client (prisma-client generator, not prisma-client-js) does not narrow select+relation return types for findMany/findFirst — worked around with `as unknown as` casts in response mappers. Relations ARE selected and present at runtime.
 - Receipt service stores storage path (not signed URL) in donations.tax_receipt_url — fresh 15-min signed URLs are generated on each GET /api/donor/receipt/:donationId call.
 - findFirst replaced with findMany({take:1}) in cases where Prisma v7 type inference was broken for select+relations.
+- Added explicit MulterRequest interface to handle multer type augmentation failures during build.
 
 ## Validation
 - Phase 1 validation: Auth endpoints tested manually, TypeScript compilation successful.
 - Phase 2 validation: npm run build ✅ zero errors. Integration tests written in tests/phase2.integration.test.ts (requires live DB to run: npm run test:phase2).
+- Phase 3 validation: Build passes cleanly with zero errors after resolving package dependencies and TS typings (npm run build ✅).
 
 ---
