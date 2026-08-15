@@ -30,14 +30,14 @@ export default function NGODashboard() {
 
     useEffect(() => {
         loadCampaigns().then(() => {
-            // Auto-select first campaign on load
-            setSelected((prev) => prev)
-        })
-    }, [loadCampaigns])
+            // Auto-select first campaign on load if none selected
+            if (!selected && ngoCampaigns.length) {
+                setSelected(ngoCampaigns[0]);
+            }
+        });
+    }, [loadCampaigns, selected, ngoCampaigns]);
 
-    useEffect(() => {
-        if (!selected && ngoCampaigns.length) setSelected(ngoCampaigns[0])
-    }, [ngoCampaigns, selected])
+    // No need for separate effect; the above handles initialization.
 
     const handleApprove = async (ms: Milestone) => {
         setApprovingId(ms.id)
