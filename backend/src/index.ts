@@ -10,6 +10,7 @@ dotenvConfig();
 import authRoutes from './routes/auth';
 import publicRoutes from './routes/public';
 import donorRoutes from './routes/donor';
+import charityRoutes from './routes/charity';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 
@@ -38,6 +39,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/donor', donorRoutes);
+app.use('/api/charity', charityRoutes);
 
 // 404 handler
 app.use(notFound);
