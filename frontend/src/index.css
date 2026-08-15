@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  /* ── Light mode ─────────────────────────────────────────────── */
+  :root {
+    --background:        30 20% 97%;      /* warm off-white    */
+    --foreground:        220 20% 18%;     /* soft charcoal     */
+
+    --card:              0 0% 100%;
+    --card-foreground:   220 20% 18%;
+
+    --popover:           0 0% 100%;
+    --popover-foreground: 220 20% 18%;
+
+    --primary:           155 38% 40%;    /* sage green        */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary:         210 18% 92%;    /* cool stone        */
+    --secondary-foreground: 220 20% 30%;
+
+    --muted:             210 18% 93%;
+    --muted-foreground:  220 12% 50%;
+
+    --accent:            37 75% 52%;     /* warm amber        */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive:       0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:            220 15% 87%;
+    --input:             220 15% 87%;
+    --ring:              155 38% 40%;
+
+    --radius:            0.75rem;
+  }
+
+  /* ── Dark mode ──────────────────────────────────────────────── */
+  .dark {
+    --background:        220 18% 10%;    /* deep blue-slate   */
+    --foreground:        210 20% 92%;    /* soft white        */
+
+    --card:              220 18% 14%;
+    --card-foreground:   210 20% 92%;
+
+    --popover:           220 18% 14%;
+    --popover-foreground: 210 20% 92%;
+
+    --primary:           155 38% 50%;    /* sage green        */
+    --primary-foreground: 220 18% 10%;
+
+    --secondary:         220 14% 22%;
+    --secondary-foreground: 210 20% 80%;
+
+    --muted:             220 14% 18%;
+    --muted-foreground:  210 14% 55%;
+
+    --accent:            37 70% 55%;     /* warm amber        */
+    --accent-foreground: 220 18% 10%;
+
+    --destructive:       0 65% 56%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:            220 14% 22%;
+    --input:             220 14% 22%;
+    --ring:              155 38% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+    min-height: 100vh;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+}
+
+/* Subtle page background — light mode */
+body {
+  background-image:
+    radial-gradient(ellipse 70% 40% at 50% -10%, hsl(155 38% 40% / 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 30% at 80% 90%, hsl(37 75% 52% / 0.05) 0%, transparent 60%);
+}
+
+/* Subtle page background — dark mode */
+.dark body {
+  background-image:
+    radial-gradient(ellipse 70% 40% at 50% -10%, hsl(155 38% 50% / 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 30% at 80% 90%, hsl(37 70% 55% / 0.06) 0%, transparent 60%);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { @apply bg-transparent; }
+::-webkit-scrollbar-thumb { @apply bg-primary/30 rounded-full; }
+::-webkit-scrollbar-thumb:hover { @apply bg-primary/60; }
+
+/* Glass card effect */
+.glass {
+  @apply bg-card/80 backdrop-blur-sm border border-border/60;
+}
+
+/* Gradient text — adapts to mode */
+.gradient-text {
+  @apply bg-gradient-to-r from-[hsl(155_38%_42%)] to-[hsl(37_75%_52%)] bg-clip-text text-transparent;
+}
+.dark .gradient-text {
+  @apply from-[hsl(155_38%_60%)] to-[hsl(37_75%_62%)];
+}
