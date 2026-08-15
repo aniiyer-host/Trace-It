@@ -130,3 +130,26 @@ Based on traceit_implementation_plan.md:
 - Run npx prisma generate
 - Run npx prisma migrate dev --name init
 - Run npx tsx seed.ts to seed the database
+
+
+## Phase 2 Implementation - NGO Onboarding & Documents
+
+**Date/Time**: 2026-08-15
+**Phase**: Phase 2 (Weeks 3-5)
+**Objective**: Build NGO onboarding, document upload, campaign management, and cohort flows.
+
+### Changes
+- Implemented `multerMiddleware.ts` for handling memory-based file uploads (PDF, JPEG, PNG) up to 10MB.
+- Upgraded `storageService.ts` to fully interact with Backblaze B2 via `@aws-sdk/client-s3`.
+- Created `documentService.ts` to handle file hashing (SHA-512) and AES-256-CBC encryption prior to upload.
+- Completely implemented all routes in `charity.ts` including:
+  - NGO Onboarding (schema fix)
+  - Document Upload
+  - Campaign CRUD (`POST`, `PUT`, `GET`, and `submit`)
+  - Cohort Management & Proof Upload
+- Mounted `/api/charity` routes properly in `index.ts`.
+- Created integration tests in `charity.test.ts`.
+- Resolved TypeScript typing errors with `req.params.id`.
+
+### Next Steps
+- Await instructions for Phase 3 (Disbursements).
