@@ -11,3 +11,251 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// ENUMS
+
+enum UserRole {
+  DONOR
+  BENEFICIARY
+  CHARITY
+  ADMIN
+}
+
+// NGO account approval — doc: "PENDING_REVIEW → APPROVED → ACTIVE"
+enum NgoStatus {
+  PENDING_REVIEW
+  APPROVED
+  ACTIVE
+  REJECTED
+}
+
+// Donor PAN/KYC tier — doc: under ₹10,000 = email only; above triggers PAN check
+enum KycStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Doc: "PENDING → SUCCESS → ALLOCATED → DISBURSED → DELIVERED"
+// FAILED isn't named in the doc but the webhook-mismatch / payment-decline path
+// needs a terminal state — flagging as an addition, confirm before relying on it.
+enum DonationStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  ALLOCATED
+  DISBURSED
+  DELIVERED
+}
+
+// Doc: "ACTIVE / COMPLETED / PAUSED"
+enum CampaignStatus {
+  ACTIVE
+  COMPLETED
+  PAUSED
+}
+
+// Doc: "NGO_CERT / BENEFICIARY_PROOF / COHORT_EVIDENCE"
+enum DocumentType {
+  NGO_CERT
+  BENEFICIARY_PROOF
+  COHORT_EVIDENCE
+}
+
+// Doc: "RECEIVED → UNDER_REVIEW → FULFILLED → CLOSED"
+enum GovRequestStatus {
+  RECEIVED
+  UNDER_REVIEW
+  FULFILLED
+  CLOSED
+}
+
+
+// USER — central identity record
+// Auth is custom JWT/bcrypt, NOT Supabase Auth — this table is
+// standalone, no FK into any auth.users table.
+
+model User {
+  id           String    @id @default(uuid())
+  fullName     String
+  email        String    @unique
+  passwordHash String                             // bcrypt, cost factor 12
+  role         UserRole
+  isVerified   Boolean   @default(false)           // set true after email OTP link
+
+  // Donor KYC (PAN, tiered above ₹10,000)
+  kycStatus    KycStatus @default(NOT_REQUIRED)
+  panHash      String?                             // HMAC-SHA-512(pan + secret), off-chain only, never on-chain
+
+  // Charity/NGO onboarding
+  ngoStatus    NgoStatus?                          // null for non-charity roles
+
+  // Beneficiary
+  tipLinkWallet String?                            // wallet address tokens are transferred to
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  donationsMade        Donation[]          @relation("DonorDonations")
+  donationsReceived    Donation[]          @relation("NgoDonations")
+  campaigns            Campaign[]
+  cohorts              BeneficiaryCohort[]
+  documents            Document[]
+  auditLogs            AuditLog[]
+  govRequestsAsTarget  GovernmentRequest[] @relation("GovRequestTargetUser")
+  govRequestsProcessed GovernmentRequest[] @relation("GovRequestAdmin")
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+
+// CAMPAIGN — belongs to a Charity/NGO
+
+model Campaign {
+  id           String         @id @default(uuid())
+  ngoId        String
+  name         String
+  description  String
+  sdgTags      String[]
+  goalAmount   Decimal        @db.Decimal(14, 2)
+  raisedAmount Decimal        @default(0) @db.Decimal(14, 2)
+  deadline     DateTime?
+  status       CampaignStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ngo       User                @relation(fields: [ngoId], references: [id])
+  donations Donation[]
+  cohorts   BeneficiaryCohort[]
+
+  @@index([ngoId])
+  @@index([status])
+  @@map("campaigns")
+}
+
+
+// BENEFICIARY COHORT — group managed by an NGO
+
+model BeneficiaryCohort {
+  id                  String   @id @default(uuid())
+  ngoId               String
+  campaignId          String?
+  eligibilityCriteria String
+  approximateSize     Int
+  verificationHash    String?                       // SHA-512 of proof bundle, written on-chain
+  createdAt           DateTime @default(now())
+
+  ngo      User      @relation(fields: [ngoId], references: [id])
+  campaign Campaign? @relation(fields: [campaignId], references: [id])
+
+  @@index([ngoId])
+  @@map("beneficiary_cohorts")
+}
+
+
+// DONATION — every donation attempt
+
+model Donation {
+  id               String         @id @default(uuid())
+  publicDonationId String         @unique @default(cuid())   // safe to expose via /api/public/
+  donorId          String
+  ngoId            String
+  projectId        String                                     // FK to Campaign
+  amount           Decimal        @db.Decimal(14, 2)
+  currency         String         @default("INR")
+  status           DonationStatus @default(PENDING)
+
+  razorpayOrderId   String? @unique
+  razorpayPaymentId String?
+  solanaTxHash      String?                                    // on-chain anchor, set after Phase 6
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  donor       User                @relation("DonorDonations", fields: [donorId], references: [id])
+  ngo         User                @relation("NgoDonations", fields: [ngoId], references: [id])
+  project     Campaign            @relation(fields: [projectId], references: [id])
+  govRequests GovernmentRequest[] @relation("GovRequestTargetDonation")
+
+  @@index([donorId])
+  @@index([ngoId])
+  @@index([projectId])
+  @@index([status])
+  @@index([razorpayOrderId])
+  @@map("donations")
+}
+
+
+// DOCUMENT — every file uploaded to Supabase Storage
+// (was S3 in the doc — see mapping table)
+
+model Document {
+  id          String       @id @default(uuid())
+  storagePath String                                  // Supabase Storage object path (was s3Key)
+  ipfsCid     String?                                  // optional Pinata redundancy pin
+  sha512Hash  String                                   // computed on raw file buffer before upload
+  ownerId     String
+  type        DocumentType
+  ttlExpiry   DateTime?                                // null under legalHold or "keep forever"
+  legalHold   Boolean      @default(false)             // true suspends TTL deletion (Legal Gateway)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner User @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId])
+  @@index([type])
+  @@index([ttlExpiry])
+  @@map("documents")
+}
+
+
+// AUDIT LOG — append-only SIEM ledger
+// Also doubles as the Grafana data source (see mapping table) —
+// enforce insert-only with a DB trigger, Prisma alone won't stop UPDATE/DELETE.
+
+model AuditLog {
+  id             BigInt   @id @default(autoincrement())
+  action         String
+  userId         String?
+  ip             String?
+  userAgent      String?
+  requestPath    String?
+  httpMethod     String?
+  responseStatus Int?
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+
+// GOVERNMENT REQUEST — Legal Gateway
+
+model GovernmentRequest {
+  id                   String           @id @default(uuid())
+  requestingAuthority  String
+  legalReferenceNumber String
+  targetUserId         String?
+  targetDonationId     String?
+  processedByAdminId   String?
+  filedAt              DateTime         @default(now())
+  status               GovRequestStatus @default(RECEIVED)
+
+  targetUser     User?     @relation("GovRequestTargetUser", fields: [targetUserId], references: [id])
+  targetDonation Donation? @relation("GovRequestTargetDonation", fields: [targetDonationId], references: [id])
+  processedBy    User?     @relation("GovRequestAdmin", fields: [processedByAdminId], references: [id])
+
+  @@index([status])
+  @@map("government_requests")
+}
