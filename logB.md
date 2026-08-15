@@ -112,3 +112,21 @@ Based on traceit_implementation_plan.md:
 1. Stop onboarding phase - do not implement yet
 2. Wait for explicit instruction to start DEV-B Phase 1
 3. When authorized, begin with database bootstrap work
+
+
+## Fixed seed.ts and added backend documentation
+
+**Date/Time**: 2026-08-15
+**Phase**: Setup
+**Objective**: Fix Prisma client import in seed.ts, add backend README and .env.example for new developers.
+
+### Changes
+- Fixed Prisma client import in backend/seed.ts by using the existing prisma instance from src/db/prisma.ts
+- Created backend/README.md with setup instructions for new developers
+- Created backend/.env.example with example environment variables
+
+### Next Steps
+- Run npm install in backend
+- Run npx prisma generate
+- Run npx prisma migrate dev --name init
+- Run npx tsx seed.ts to seed the database
