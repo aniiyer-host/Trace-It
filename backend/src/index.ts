@@ -8,6 +8,8 @@ import { config as dotenvConfig } from 'dotenv';
 dotenvConfig();
 
 import authRoutes from './routes/auth';
+import publicRoutes from './routes/public';
+import donorRoutes from './routes/donor';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 
@@ -34,6 +36,8 @@ app.get('/', (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/public', publicRoutes);
+app.use('/api/donor', donorRoutes);
 
 // 404 handler
 app.use(notFound);
