@@ -3,6 +3,7 @@ CLAUDE.md
 **/dist/
 **/.*
 **/skills-lock.json
+**/generated
 
 #Anikets space
 scripts/*
