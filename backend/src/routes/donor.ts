@@ -7,6 +7,7 @@ import Joi from 'joi';
 import { createRazorpayOrder } from '../services/donationService';
 import { writeAuditLog } from '../services/auditLogService';
 import { generateAndStoreReceipt, getReceiptSignedUrl } from '../services/receiptService';
+import { allocateDonation, markDisbursed, markDelivered } from '../services/statusService';
 
 // ---------------------------------------------------------------------------
 // GET /api/donor/dashboard
@@ -345,6 +346,58 @@ export const getDonorReceipt = async (
   }
 };
 
+/**
+ * Returns the status transition timeline for a donation.
+ * Only accessible by the donor who made the donation.
+ * Returns ordered audit log entries for the donation.
+ */
+export const getDonationTimeline = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const donationId = req.params['id'] as string;
+    const donorId = req.user?.id;
+    if (!donorId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    // Verify ownership of the donation (IDOR protection)
+    const donation = await prisma.donation.findFirst({
+      where: { id: donationId, donorId },
+      select: { id: true },
+    });
+
+    if (!donation) {
+      return res.status(404).json({ error: 'Donation not found' });
+    }
+
+    // Fetch audit logs for this donation, ordered by creation time
+    const auditLogs = await prisma.auditLog.findMany({
+      where: {
+        entityType: 'donation',
+        entityId: donationId,
+      },
+      select: {
+        id: true,
+        actorType: true,
+        action: true,
+        metadata: true,
+        createdAt: true,
+        ipAddress: true,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    res.json({ timeline: auditLogs });
+  } catch (err) {
+    next(err);
+  }
+};;
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -356,5 +409,6 @@ donorRouter.get('/dashboard', requireRole(UserRole.DONOR), getDonorDashboard);
 donorRouter.post('/donate', requireRole(UserRole.DONOR), createDonation);
 donorRouter.post('/kyc', requireRole(UserRole.DONOR), kycStub);
 donorRouter.get('/receipt/:donationId', requireRole(UserRole.DONOR), getDonorReceipt);
+donorRouter.get('/donations/:id/timeline', requireRole(UserRole.DONOR), getDonationTimeline);
 
 export default donorRouter;
