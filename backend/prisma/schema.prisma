@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -12,24 +10,22 @@ datasource db {
   provider = "postgresql"
 }
 
-// ENUMS
+// ENUMS from SQL
 
 enum UserRole {
   DONOR
-  BENEFICIARY
   CHARITY
   ADMIN
+  AUDITOR
 }
 
-// NGO account approval — doc: "PENDING_REVIEW → APPROVED → ACTIVE"
 enum NgoStatus {
-  PENDING_REVIEW
-  APPROVED
+  PENDING
   ACTIVE
   REJECTED
+  SUSPENDED
 }
 
-// Donor PAN/KYC tier — doc: under ₹10,000 = email only; above triggers PAN check
 enum KycStatus {
   NOT_REQUIRED
   PENDING
@@ -37,225 +33,344 @@ enum KycStatus {
   REJECTED
 }
 
-// Doc: "PENDING → SUCCESS → ALLOCATED → DISBURSED → DELIVERED"
-// FAILED isn't named in the doc but the webhook-mismatch / payment-decline path
-// needs a terminal state — flagging as an addition, confirm before relying on it.
+enum CampaignStatus {
+  DRAFT
+  PENDING_APPROVAL
+  ACTIVE
+  PAUSED
+  COMPLETED
+  REJECTED
+}
+
 enum DonationStatus {
-  PENDING
+  INITIATED
   SUCCESS
   FAILED
+  REFUNDED
   ALLOCATED
   DISBURSED
   DELIVERED
 }
 
-// Doc: "ACTIVE / COMPLETED / PAUSED"
-enum CampaignStatus {
-  ACTIVE
-  COMPLETED
-  PAUSED
-}
-
-// Doc: "NGO_CERT / BENEFICIARY_PROOF / COHORT_EVIDENCE"
 enum DocumentType {
   NGO_CERT
-  BENEFICIARY_PROOF
-  COHORT_EVIDENCE
+  PAN_CARD
+  AADHAR
+  FIELD_REPORT
+  COHORT_PROOF
+  TAX_RECEIPT
+  GOV_EXPORT
+  CAMPAIGN_MEDIA
 }
 
-// Doc: "RECEIVED → UNDER_REVIEW → FULFILLED → CLOSED"
-enum GovRequestStatus {
-  RECEIVED
-  UNDER_REVIEW
-  FULFILLED
-  CLOSED
+enum DocumentStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
+  LEGAL_HOLD
 }
 
+enum DisbursementStatus {
+  PENDING
+  APPROVED
+  SENT
+  SETTLED
+  FAILED
+}
 
-// USER — central identity record
-// Auth is custom JWT/bcrypt, NOT Supabase Auth — this table is
-// standalone, no FK into any auth.users table.
+enum PaymentMethod {
+  UPI
+  CARD
+  NETBANKING
+  WALLET
+  SOLANA_STUB
+}
 
-model User {
-  id           String    @id @default(uuid())
-  fullName     String
-  email        String    @unique
-  passwordHash String                             // bcrypt, cost factor 12
-  role         UserRole
-  isVerified   Boolean   @default(false)           // set true after email OTP link
+enum AuditActorType {
+  USER
+  SYSTEM
+  WEBHOOK
+  ADMIN
+}
 
-  // Donor KYC (PAN, tiered above ₹10,000)
-  kycStatus    KycStatus @default(NOT_REQUIRED)
-  panHash      String?                             // HMAC-SHA-512(pan + secret), off-chain only, never on-chain
+// MODELS
 
-  // Charity/NGO onboarding
-  ngoStatus    NgoStatus?                          // null for non-charity roles
+// Profiles table -> model Profile
+model Profile {
+  id            String   @id @default(uuid())
+  authUserId    String?   @unique
+  email         String   @unique
+  fullName      String?
+  phone         String?
+  role          UserRole @default(DONOR)
+  isVerified    Boolean  @default(false)
+  ngoStatus     NgoStatus @default(PENDING)
+  kycStatus     KycStatus @default(NOT_REQUIRED)
+  registrationNo String?
+  organisationName String?
+  panHash       String?
+  solWalletAddress String?
+  refreshTokenHash String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // Beneficiary
-  tipLinkWallet String?                            // wallet address tokens are transferred to
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  // Relations
+  emailVerifications EmailVerification[] @relation("emailVerifications")
   donationsMade        Donation[]          @relation("DonorDonations")
   donationsReceived    Donation[]          @relation("NgoDonations")
   campaigns            Campaign[]
   cohorts              BeneficiaryCohort[]
   documents            Document[]
-  auditLogs            AuditLog[]
-  govRequestsAsTarget  GovernmentRequest[] @relation("GovRequestTargetUser")
-  govRequestsProcessed GovernmentRequest[] @relation("GovRequestAdmin")
+  disbursementsAsNgo   Disbursement[]    @relation("disbursementsAsNgo")
+  impactTokensAsDonor  ImpactToken[]     @relation("impactTokensAsDonor")
+  auditLogsAsActor     AuditLog[]        @relation("auditLogsAsActor")
+  govRequestsAsCreatedBy GovernmentRequest[] @relation("govRequestsAsCreatedBy")
+  govRequestsAsTarget  GovernmentRequest[] @relation("govRequestsAsTarget")
+  govRequestsProcessed GovernmentRequest[] @relation("govRequestsProcessed")
 
   @@index([email])
   @@index([role])
-  @@map("users")
+  @@index([ngoStatus])
+  @@index([kycStatus])
+  @@map("profiles")
 }
 
-
-// CAMPAIGN — belongs to a Charity/NGO
-
-model Campaign {
-  id           String         @id @default(uuid())
-  ngoId        String
-  name         String
-  description  String
-  sdgTags      String[]
-  goalAmount   Decimal        @db.Decimal(14, 2)
-  raisedAmount Decimal        @default(0) @db.Decimal(14, 2)
-  deadline     DateTime?
-  status       CampaignStatus @default(ACTIVE)
-
+// Email OTP Verifications
+model EmailVerification {
+  id        String   @id @default(uuid())
+  profileId String
+  otpCode   String
+  expiresAt DateTime
+  consumedAt DateTime?
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  ngo       User                @relation(fields: [ngoId], references: [id])
+  profile Profile @relation("emailVerifications", fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@map("email_verifications")
+}
+
+// Campaigns
+model Campaign {
+  id                 String   @id @default(uuid())
+  ngoId              String
+  title              String
+  slug               String?   @unique
+  description        String
+  category           String?
+  targetAmount       Decimal   @db.Decimal(14, 2)
+  raisedAmount       Decimal   @default(0) @db.Decimal(14, 2)
+  currencyCode       String    @default("INR")
+  status             CampaignStatus @default(DRAFT)
+  approvedBy         String?   // references profiles.id
+  approvedAt         DateTime?
+  coverImageUrl      String?
+  startDate          DateTime?
+  endDate            DateTime?
+  sdgTags            String[]
+  solanaProgramId    String?
+  solanaVaultAddress String?
+  ipfsCid            String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  ngo       Profile @relation(fields: [ngoId], references: [id])
   donations Donation[]
   cohorts   BeneficiaryCohort[]
+  disbursements Disbursement[] @relation("campaignDisbursements")
+  documents Document[] @relation("campaignDocuments")
 
   @@index([ngoId])
   @@index([status])
+  @@index([slug])
   @@map("campaigns")
 }
 
-
-// BENEFICIARY COHORT — group managed by an NGO
-
-model BeneficiaryCohort {
-  id                  String   @id @default(uuid())
-  ngoId               String
-  campaignId          String?
-  eligibilityCriteria String
-  approximateSize     Int
-  verificationHash    String?                       // SHA-512 of proof bundle, written on-chain
-  createdAt           DateTime @default(now())
-
-  ngo      User      @relation(fields: [ngoId], references: [id])
-  campaign Campaign? @relation(fields: [campaignId], references: [id])
-
-  @@index([ngoId])
-  @@map("beneficiary_cohorts")
-}
-
-
-// DONATION — every donation attempt
-
+// Donations
 model Donation {
-  id               String         @id @default(uuid())
-  publicDonationId String         @unique @default(cuid())   // safe to expose via /api/public/
-  donorId          String
-  ngoId            String
-  projectId        String                                     // FK to Campaign
-  amount           Decimal        @db.Decimal(14, 2)
-  currency         String         @default("INR")
-  status           DonationStatus @default(PENDING)
+  id                 String   @id @default(uuid())
+  publicId           String   @unique @default(cuid())
+  donorId            String
+  ngoId              String
+  campaignId         String?
+  amount             Decimal   @db.Decimal(14, 2)
+  currencyCode       String    @default("INR")
+  paymentMethod      PaymentMethod
+  status             DonationStatus @default(INITIATED)
+  razorpayOrderId    String?   @unique
+  razorpayPaymentId  String?   @unique
+  donorMessage       String?
+  taxReceiptUrl      String?
+  taxReceiptEmailed  Boolean   @default(false)
+  donorIdHash        String?
+  solanaTxHash       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  razorpayOrderId   String? @unique
-  razorpayPaymentId String?
-  solanaTxHash      String?                                    // on-chain anchor, set after Phase 6
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  donor       User                @relation("DonorDonations", fields: [donorId], references: [id])
-  ngo         User                @relation("NgoDonations", fields: [ngoId], references: [id])
-  project     Campaign            @relation(fields: [projectId], references: [id])
+  donor       Profile @relation("DonorDonations", fields: [donorId], references: [id])
+  ngo         Profile @relation("NgoDonations", fields: [ngoId], references: [id])
+  project     Campaign? @relation(fields: [campaignId], references: [id])
   govRequests GovernmentRequest[] @relation("GovRequestTargetDonation")
+  impactTokens ImpactToken[] @relation("donationImpactTokens")
 
   @@index([donorId])
   @@index([ngoId])
-  @@index([projectId])
+  @@index([campaignId])
   @@index([status])
   @@index([razorpayOrderId])
   @@map("donations")
 }
 
+// Beneficiary Cohorts
+model BeneficiaryCohort {
+  id                 String   @id @default(uuid())
+  campaignId         String
+  ngoId              String
+  name               String
+  beneficiaryCount   Int
+  description        String?
+  sha512DocHash      String?
+  merkleRoot         String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-// DOCUMENT — every file uploaded to Supabase Storage
-// (was S3 in the doc — see mapping table)
+  campaign Campaign? @relation(fields: [campaignId], references: [id])
+  ngo    Profile   @relation(fields: [ngoId], references: [id])
+  disbursements Disbursement[] @relation("disbursementsAsCohort")
 
+  @@index([campaignId])
+  @@index([ngoId])
+  @@map("beneficiary_cohorts")
+}
+
+// Disbursements
+model Disbursement {
+  id                 String   @id @default(uuid())
+  campaignId         String
+  ngoId              String
+  cohortId           String?
+  amountInr          Decimal   @db.Decimal(14, 2)
+  amountSol          Decimal?  @db.Decimal(18, 8)
+  fieldReportUrl     String?
+  status             DisbursementStatus @default(PENDING)
+  approvedBy         String?   // references profiles.id
+  approvedAt         DateTime?
+  solanaTxHash       String?
+  blockscoutUrl      String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  campaign Campaign @relation("campaignDisbursements", fields: [campaignId], references: [id])
+  ngo    Profile   @relation("disbursementsAsNgo", fields: [ngoId], references: [id])
+  cohort BeneficiaryCohort? @relation("disbursementsAsCohort", fields: [cohortId], references: [id])
+  documents Document[] @relation("disbursementDocuments")
+
+  @@index([campaignId])
+  @@index([ngoId])
+  @@index([status])
+  @@map("disbursements")
+}
+
+// Documents
 model Document {
-  id          String       @id @default(uuid())
-  storagePath String                                  // Supabase Storage object path (was s3Key)
-  ipfsCid     String?                                  // optional Pinata redundancy pin
-  sha512Hash  String                                   // computed on raw file buffer before upload
-  ownerId     String
-  type        DocumentType
-  ttlExpiry   DateTime?                                // null under legalHold or "keep forever"
-  legalHold   Boolean      @default(false)             // true suspends TTL deletion (Legal Gateway)
+  id            String   @id @default(uuid())
+  ownerId       String
+  campaignId    String?
+  disbursementId String?
+  documentType  DocumentType
+  status        DocumentStatus @default(ACTIVE)
+  storageBucket String
+  storagePath   String
+  originalFilename String?
+  mimeType      String?
+  sizeBytes     BigInt?
+  sha512Hash    String
+  ipfsCid       String?
+  ipfsPinnedAt  DateTime?
+  legalHold     Boolean  @default(false)
+  ttlExpiry     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  owner User @relation(fields: [ownerId], references: [id])
+  owner         Profile @relation(fields: [ownerId], references: [id])
+  campaign      Campaign? @relation("campaignDocuments", fields: [campaignId], references: [id])
+  disbursement  Disbursement? @relation("disbursementDocuments", fields: [disbursementId], references: [id])
 
   @@index([ownerId])
-  @@index([type])
-  @@index([ttlExpiry])
+  @@index([campaignId])
+  @@index([disbursementId])
+  @@index([status])
+  @@index([legalHold])
   @@map("documents")
 }
 
+// Impact Tokens
+model ImpactToken {
+  id        String   @id @default(uuid())
+  donationId String
+  donorId    String
+  minted     Boolean @default(false)
+  mintedAt   DateTime?
+  mintAddress String?
+  metadataUri String?
+  redeemed   Boolean @default(false)
+  redeemedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-// AUDIT LOG — append-only SIEM ledger
-// Also doubles as the Grafana data source (see mapping table) —
-// enforce insert-only with a DB trigger, Prisma alone won't stop UPDATE/DELETE.
+  donation Donation @relation("donationImpactTokens", fields: [donationId], references: [id])
+  donor    Profile @relation("impactTokensAsDonor", fields: [donorId], references: [id])
 
-model AuditLog {
-  id             BigInt   @id @default(autoincrement())
-  action         String
-  userId         String?
-  ip             String?
-  userAgent      String?
-  requestPath    String?
-  httpMethod     String?
-  responseStatus Int?
-  metadata       Json     @default("{}")
-  createdAt      DateTime @default(now())
-
-  user User? @relation(fields: [userId], references: [id])
-
-  @@index([userId])
-  @@index([action])
-  @@index([createdAt])
-  @@map("audit_logs")
+  @@index([donationId])
+  @@index([donorId])
+  @@map("impact_tokens")
 }
 
-
-// GOVERNMENT REQUEST — Legal Gateway
-
+// Government Requests
 model GovernmentRequest {
-  id                   String           @id @default(uuid())
-  requestingAuthority  String
-  legalReferenceNumber String
-  targetUserId         String?
-  targetDonationId     String?
-  processedByAdminId   String?
-  filedAt              DateTime         @default(now())
-  status               GovRequestStatus @default(RECEIVED)
+  id                 String   @id @default(uuid())
+  requestRef         String   @unique
+  requestingBody     String
+  legalBasis         String
+  scope              Json     @default("{}")
+  status             String   @default("OPEN") // Note: SQL uses text, not enum
+  createdBy          String?   // references profiles.id
+  targetUserId       String?   // references profiles.id
+  targetDonationId   String?   // references donations.id
+  processedByAdminId String?   // references profiles.id
+  filedAt            DateTime  @default(now())
+  closedAt           DateTime?
 
-  targetUser     User?     @relation("GovRequestTargetUser", fields: [targetUserId], references: [id])
+  createdByUser Profile? @relation("govRequestsAsCreatedBy", fields: [createdBy], references: [id])
+  targetUser   Profile? @relation("govRequestsAsTarget", fields: [targetUserId], references: [id])
   targetDonation Donation? @relation("GovRequestTargetDonation", fields: [targetDonationId], references: [id])
-  processedBy    User?     @relation("GovRequestAdmin", fields: [processedByAdminId], references: [id])
+  processedBy    Profile?     @relation("govRequestsProcessed", fields: [processedByAdminId], references: [id])
+  auditLogs      AuditLog[]   @relation("govRequestAuditLog")
 
   @@index([status])
   @@map("government_requests")
+}
+
+// Audit Logs
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  actorType AuditActorType
+  actorId   String?   // references profiles.id
+  entityType String
+  entityId  String?
+  action    String
+  metadata  Json     @default("{}")
+  ipAddress String?   // inet type, we store as string
+  requestId String?
+  govRequestId String? // references government_requests.id
+  createdAt DateTime @default(now())
+
+  actor Profile? @relation("auditLogsAsActor", fields: [actorId], references: [id])
+  govRequest GovernmentRequest? @relation("govRequestAuditLog", fields: [govRequestId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([actorType, actorId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
