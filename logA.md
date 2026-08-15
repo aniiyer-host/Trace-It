@@ -78,6 +78,6 @@ This affects Phase 1 because the User model is used for auth.
 - Next action: Record discrepancy in log.md and await instruction on how to proceed.
 
 ## Blockers
-- SQL profiles table lacks password_hash column required for bcrypt authentication (per implementation plan).
-- Cannot proceed with auth implementation without resolving this discrepancy.
-- Blocked on Phase 1 until decision on how to store passwords (add column to SQL, use alternative auth mechanism, etc.).
+- SQL profiles table lacked password_hash column required for bcrypt authentication (per implementation plan).
+- Added password_hash column to profiles table in traceit_backend_sql.sql.
+- Blocker resolved; can proceed with auth implementation.
