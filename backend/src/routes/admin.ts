@@ -2,7 +2,7 @@ import { Request, Response, NextFunction, Router } from "express";
 import { prisma } from "../db/prisma";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireRole } from "../middleware/requireRole";
-import { UserRole, DisbursementStatus, AuditActorType } from "../../generated/prisma/enums";
+import { UserRole, DisbursementStatus, AuditActorType, NgoStatus, CampaignStatus, KycStatus } from "../../generated/prisma/enums";
 import { writeAuditLog } from "../services/auditLogService";
 import { allocateDonation } from "../services/statusService";
 
@@ -136,11 +136,309 @@ export const getDisbursementById = async (req: Request, res: Response, next: Nex
   }
 };
 
+// GET /api/admin/ngos — list all NGOs with status filter
+export const getNgos = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { status } = req.query;
+    const whereClause: any = {
+      role: UserRole.CHARITY,
+    };
+    if (status) {
+      whereClause.ngoStatus = status as NgoStatus;
+    }
+    const ngos = await prisma.profile.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        isVerified: true,
+        ngoStatus: true,
+        kycStatus: true,
+        registrationNo: true,
+        organisationName: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(ngos);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/admin/ngos/:id/approve → ngo_status: ACTIVE, audit log NGO_APPROVED
+export const approveNgo = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const adminId = req.user?.id;
+    const ngoId = req.params.id as string;
+    if (!adminId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+    const ngo = await prisma.profile.findUnique({ where: { id: ngoId } });
+    if (!ngo) {
+      return res.status(404).json({ error: "NGO not found" });
+    }
+    if (ngo.role !== UserRole.CHARITY) {
+      return res.status(400).json({ error: "Profile is not an NGO" });
+    }
+    const updated = await prisma.profile.update({
+      where: { id: ngoId },
+      data: {
+        ngoStatus: NgoStatus.ACTIVE,
+      },
+    });
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: adminId,
+      entityType: 'profile',
+      entityId: ngoId,
+      action: 'NGO_APPROVED',
+      metadata: {},
+    });
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/admin/ngos/:id/reject → ngo_status: REJECTED, audit log NGO_REJECTED
+export const rejectNgo = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const adminId = req.user?.id;
+    const ngoId = req.params.id as string;
+    if (!adminId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+    const ngo = await prisma.profile.findUnique({ where: { id: ngoId } });
+    if (!ngo) {
+      return res.status(404).json({ error: "NGO not found" });
+    }
+    if (ngo.role !== UserRole.CHARITY) {
+      return res.status(400).json({ error: "Profile is not an NGO" });
+    }
+    const updated = await prisma.profile.update({
+      where: { id: ngoId },
+      data: {
+        ngoStatus: NgoStatus.REJECTED,
+      },
+    });
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: adminId,
+      entityType: 'profile',
+      entityId: ngoId,
+      action: 'NGO_REJECTED',
+      metadata: {},
+    });
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/admin/campaigns/pending — PENDING_APPROVAL queue
+export const getPendingCampaigns = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const campaigns = await prisma.campaign.findMany({
+      where: { status: CampaignStatus.PENDING_APPROVAL },
+      include: {
+        ngo: { select: { id: true, organisationName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(campaigns);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/admin/campaigns/:id/approve → status: ACTIVE, approved_by, approved_at
+export const approveCampaign = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const adminId = req.user?.id;
+    const campaignId = req.params.id as string;
+    if (!adminId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+    if (!campaign) {
+      return res.status(404).json({ error: "Campaign not found" });
+    }
+    const updated = await prisma.campaign.update({
+      where: { id: campaignId },
+      data: {
+        status: CampaignStatus.ACTIVE,
+        approvedBy: adminId,
+        approvedAt: new Date(),
+      },
+    });
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: adminId,
+      entityType: 'campaign',
+      entityId: campaignId,
+      action: 'CAMPAIGN_APPROVED',
+      metadata: {},
+    });
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/admin/users — paginated user list with role + kyc_status filters
+export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { role, kycStatus, page = 1, limit = 10 } = req.query;
+    const pageNum = Math.max(parseInt(page as string, 10) || 1, 1);
+    const limitNum = Math.max(parseInt(limit as string, 10) || 10, 1);
+    const skip = (pageNum - 1) * limitNum;
+
+    const whereClause: any = {};
+    if (role) {
+      whereClause.role = role as UserRole;
+    }
+    if (kycStatus) {
+      whereClause.kycStatus = kycStatus as KycStatus;
+    }
+
+    const [users, totalCount] = await prisma.$transaction([
+      prisma.profile.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          role: true,
+          isVerified: true,
+          ngoStatus: true,
+          kycStatus: true,
+          panHash: true,
+          registrationNo: true,
+          organisationName: true,
+          solWalletAddress: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        skip,
+        take: limitNum,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.profile.count({ where: whereClause }),
+    ]);
+
+    res.json({
+      users,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limitNum),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/admin/aml-flags — donations flagged in audit_logs (AML)
+export const getAmlFlags = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const pageNum = Math.max(parseInt(page as string, 10) || 1, 1);
+    const limitNum = Math.max(parseInt(limit as string, 10) || 10, 1);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [auditLogs, totalCount] = await prisma.$transaction([
+      prisma.auditLog.findMany({
+        where: { action: 'AML_FLAG_RAISED' },
+        include: {
+          actor: { select: { id: true, fullName: true } },
+          govRequest: { select: { id: true, requestRef: true } },
+        },
+        skip,
+        take: limitNum,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.auditLog.count({ where: { action: 'AML_FLAG_RAISED' } }),
+    ]);
+
+    res.json({
+      auditLogs,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limitNum),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/admin/audit-logs — full paginated audit log with action + user filters
+export const getAuditLogs = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { action, userId, page = 1, limit = 10 } = req.query;
+    const pageNum = Math.max(parseInt(page as string, 10) || 1, 1);
+    const limitNum = Math.max(parseInt(limit as string, 10) || 10, 1);
+    const skip = (pageNum - 1) * limitNum;
+
+    const whereClause: any = {};
+    if (action) {
+      whereClause.action = action as string;
+    }
+    if (userId) {
+      whereClause.actorId = userId as string;
+    }
+
+    const [auditLogs, totalCount] = await prisma.$transaction([
+      prisma.auditLog.findMany({
+        where: whereClause,
+        include: {
+          actor: { select: { id: true, fullName: true } },
+          govRequest: { select: { id: true, requestRef: true } },
+        },
+        skip,
+        take: limitNum,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.auditLog.count({ where: whereClause }),
+    ]);
+
+    res.json({
+      auditLogs,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limitNum),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 adminRouter.post("/disburse/:id/approve", requireAuth, requireRole(UserRole.ADMIN), approveDisbursement);
 adminRouter.get("/disbursements", requireAuth, requireRole(UserRole.ADMIN), getAllDisbursements);
 adminRouter.get("/disbursements/:id", requireAuth, requireRole(UserRole.ADMIN), getDisbursementById);
+
+// Admin Panel Routes
+adminRouter.get("/ngos", requireAuth, requireRole(UserRole.ADMIN), getNgos);
+adminRouter.post("/ngos/:id/approve", requireAuth, requireRole(UserRole.ADMIN), approveNgo);
+adminRouter.post("/ngos/:id/reject", requireAuth, requireRole(UserRole.ADMIN), rejectNgo);
+adminRouter.get("/campaigns/pending", requireAuth, requireRole(UserRole.ADMIN), getPendingCampaigns);
+adminRouter.post("/campaigns/:id/approve", requireAuth, requireRole(UserRole.ADMIN), approveCampaign);
+adminRouter.get("/users", requireAuth, requireRole(UserRole.ADMIN), getUsers);
+adminRouter.get("/aml-flags", requireAuth, requireRole(UserRole.ADMIN), getAmlFlags);
+adminRouter.get("/audit-logs", requireAuth, requireRole(UserRole.ADMIN), getAuditLogs);
 
 export default adminRouter;

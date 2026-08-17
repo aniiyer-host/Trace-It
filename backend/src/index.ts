@@ -13,6 +13,11 @@ import donorRoutes from "./routes/donor";
 import charityRoutes from "./routes/charity";
 import adminRoutes from "./routes/admin";
 import webhookRoutes from "./routes/webhooks/razorpay";
+// Patch BigInt to be serializable by JSON.stringify
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
 

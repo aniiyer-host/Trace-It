@@ -2,6 +2,7 @@ import { Request, Response, NextFunction, Router } from 'express';
 import { prisma } from '../db/prisma';
 import { requireAuth } from '../middleware/requireAuth';
 import { requireRole } from '../middleware/requireRole';
+import { kycCheckMiddleware } from '../middleware/kycCheckMiddleware';
 import { UserRole, AuditActorType, PaymentMethod } from '../../generated/prisma/enums';
 import Joi from 'joi';
 import { createRazorpayOrder } from '../services/donationService';
@@ -107,20 +108,6 @@ export const createDonation = async (
     const donorId = req.user?.id;
     if (!donorId) {
       return res.status(401).json({ error: 'User not authenticated' });
-    }
-
-    // --- KYC threshold check ---
-    const donorProfile = await prisma.profile.findUnique({
-      where: { id: donorId },
-      select: { kycStatus: true },
-    });
-
-    if (!donorProfile) {
-      return res.status(404).json({ error: 'Donor profile not found' });
-    }
-
-    if (amount > 10000 && donorProfile.kycStatus !== 'APPROVED') {
-      return res.status(402).json({ requiresKyc: true });
     }
 
     // --- Validate NGO ---
@@ -406,7 +393,7 @@ const donorRouter = Router();
 donorRouter.use(requireAuth); // All donor routes require authentication
 
 donorRouter.get('/dashboard', requireRole(UserRole.DONOR), getDonorDashboard);
-donorRouter.post('/donate', requireRole(UserRole.DONOR), createDonation);
+donorRouter.post('/donate', requireRole(UserRole.DONOR), kycCheckMiddleware, createDonation);
 donorRouter.post('/kyc', requireRole(UserRole.DONOR), kycStub);
 donorRouter.get('/receipt/:donationId', requireRole(UserRole.DONOR), getDonorReceipt);
 donorRouter.get('/donations/:id/timeline', requireRole(UserRole.DONOR), getDonationTimeline);
