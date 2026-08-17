@@ -2,7 +2,14 @@ import { Request, Response, NextFunction, Router } from "express";
 import { prisma } from "../db/prisma";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireRole } from "../middleware/requireRole";
-import { UserRole, DisbursementStatus, AuditActorType, NgoStatus, CampaignStatus, KycStatus } from "../../generated/prisma/enums";
+import {
+  UserRole,
+  DisbursementStatus,
+  AuditActorType,
+  NgoStatus,
+  CampaignStatus,
+  KycStatus,
+} from "../../generated/prisma/enums";
 import { writeAuditLog } from "../services/auditLogService";
 import { allocateDonation } from "../services/statusService";
 
@@ -11,18 +18,25 @@ const adminRouter = Router();
 // ---------------------------------------------------------------------------
 // POST /disburse/:id/approve
 // ---------------------------------------------------------------------------
-export const approveDisbursement = async (req: Request, res: Response, next: NextFunction) => {
+export const approveDisbursement = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const adminId = req.user?.id;
     const disbursementId = req.params.id as string;
-    
-    if (!adminId) return res.status(401).json({ error: "User not authenticated" });
 
-    const disbursement = await prisma.disbursement.findUnique({ where: { id: disbursementId } });
+    if (!adminId)
+      return res.status(401).json({ error: "User not authenticated" });
+
+    const disbursement = await prisma.disbursement.findUnique({
+      where: { id: disbursementId },
+    });
     if (!disbursement) {
       return res.status(404).json({ error: "Disbursement not found" });
     }
-    
+
     if (disbursement.status !== DisbursementStatus.PENDING) {
       return res.status(400).json({ error: "Disbursement is not PENDING" });
     }
@@ -34,7 +48,7 @@ export const approveDisbursement = async (req: Request, res: Response, next: Nex
         status: DisbursementStatus.APPROVED,
         approvedBy: adminId,
         approvedAt: new Date(),
-      }
+      },
     });
 
     // TODO(blockchain-team): Call Disbursement Program here for Solana
@@ -45,23 +59,23 @@ export const approveDisbursement = async (req: Request, res: Response, next: Nex
     const donations = await prisma.donation.findMany({
       where: {
         campaignId: disbursement.campaignId,
-        status: 'SUCCESS'
+        status: "SUCCESS",
       },
-      orderBy: { createdAt: 'asc' }
+      orderBy: { createdAt: "asc" },
     });
 
     let remainingToAllocate = Number(disbursement.amountInr);
 
     for (const donation of donations) {
       if (remainingToAllocate <= 0) break;
-      
+
       const donationAmount = Number(donation.amount);
-      
+
       // Call allocateDonation for each applicable donation
       if (disbursement.cohortId) {
         await allocateDonation(donation.id, disbursement.cohortId);
       }
-      
+
       // Deduct the donation amount from what's remaining to allocate
       remainingToAllocate -= donationAmount;
     }
@@ -70,10 +84,13 @@ export const approveDisbursement = async (req: Request, res: Response, next: Nex
     await writeAuditLog({
       actorType: AuditActorType.USER, // Admin is a user in the system
       actorId: adminId,
-      entityType: 'disbursement',
+      entityType: "disbursement",
       entityId: disbursement.id,
-      action: 'DISBURSEMENT_APPROVED',
-      metadata: { campaignId: disbursement.campaignId, amountInr: Number(disbursement.amountInr) }
+      action: "DISBURSEMENT_APPROVED",
+      metadata: {
+        campaignId: disbursement.campaignId,
+        amountInr: Number(disbursement.amountInr),
+      },
     });
 
     res.json(updated);
@@ -85,7 +102,11 @@ export const approveDisbursement = async (req: Request, res: Response, next: Nex
 // ---------------------------------------------------------------------------
 // GET /disbursements
 // ---------------------------------------------------------------------------
-export const getAllDisbursements = async (req: Request, res: Response, next: NextFunction) => {
+export const getAllDisbursements = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const { status, campaignId, ngoId } = req.query;
 
@@ -100,7 +121,7 @@ export const getAllDisbursements = async (req: Request, res: Response, next: Nex
         campaign: { select: { id: true, title: true } },
         ngo: { select: { id: true, organisationName: true } },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: "desc" },
     });
 
     res.json(disbursements);
@@ -112,7 +133,11 @@ export const getAllDisbursements = async (req: Request, res: Response, next: Nex
 // ---------------------------------------------------------------------------
 // GET /disbursements/:id
 // ---------------------------------------------------------------------------
-export const getDisbursementById = async (req: Request, res: Response, next: NextFunction) => {
+export const getDisbursementById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const id = req.params.id as string;
 
@@ -123,7 +148,7 @@ export const getDisbursementById = async (req: Request, res: Response, next: Nex
         ngo: true,
         cohort: true,
         documents: true,
-      }
+      },
     });
 
     if (!disbursement) {
@@ -137,7 +162,11 @@ export const getDisbursementById = async (req: Request, res: Response, next: Nex
 };
 
 // GET /api/admin/ngos — list all NGOs with status filter
-export const getNgos = async (req: Request, res: Response, next: NextFunction) => {
+export const getNgos = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const { status } = req.query;
     const whereClause: any = {
@@ -161,7 +190,7 @@ export const getNgos = async (req: Request, res: Response, next: NextFunction) =
         createdAt: true,
         updatedAt: true,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
     res.json(ngos);
   } catch (err) {
@@ -170,7 +199,11 @@ export const getNgos = async (req: Request, res: Response, next: NextFunction) =
 };
 
 // POST /api/admin/ngos/:id/approve → ngo_status: ACTIVE, audit log NGO_APPROVED
-export const approveNgo = async (req: Request, res: Response, next: NextFunction) => {
+export const approveNgo = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const adminId = req.user?.id;
     const ngoId = req.params.id as string;
@@ -193,9 +226,9 @@ export const approveNgo = async (req: Request, res: Response, next: NextFunction
     await writeAuditLog({
       actorType: AuditActorType.USER,
       actorId: adminId,
-      entityType: 'profile',
+      entityType: "profile",
       entityId: ngoId,
-      action: 'NGO_APPROVED',
+      action: "NGO_APPROVED",
       metadata: {},
     });
     res.json(updated);
@@ -205,7 +238,11 @@ export const approveNgo = async (req: Request, res: Response, next: NextFunction
 };
 
 // POST /api/admin/ngos/:id/reject → ngo_status: REJECTED, audit log NGO_REJECTED
-export const rejectNgo = async (req: Request, res: Response, next: NextFunction) => {
+export const rejectNgo = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const adminId = req.user?.id;
     const ngoId = req.params.id as string;
@@ -228,9 +265,9 @@ export const rejectNgo = async (req: Request, res: Response, next: NextFunction)
     await writeAuditLog({
       actorType: AuditActorType.USER,
       actorId: adminId,
-      entityType: 'profile',
+      entityType: "profile",
       entityId: ngoId,
-      action: 'NGO_REJECTED',
+      action: "NGO_REJECTED",
       metadata: {},
     });
     res.json(updated);
@@ -240,14 +277,18 @@ export const rejectNgo = async (req: Request, res: Response, next: NextFunction)
 };
 
 // GET /api/admin/campaigns/pending — PENDING_APPROVAL queue
-export const getPendingCampaigns = async (req: Request, res: Response, next: NextFunction) => {
+export const getPendingCampaigns = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const campaigns = await prisma.campaign.findMany({
       where: { status: CampaignStatus.PENDING_APPROVAL },
       include: {
         ngo: { select: { id: true, organisationName: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
     res.json(campaigns);
   } catch (err) {
@@ -256,14 +297,20 @@ export const getPendingCampaigns = async (req: Request, res: Response, next: Nex
 };
 
 // POST /api/admin/campaigns/:id/approve → status: ACTIVE, approved_by, approved_at
-export const approveCampaign = async (req: Request, res: Response, next: NextFunction) => {
+export const approveCampaign = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const adminId = req.user?.id;
     const campaignId = req.params.id as string;
     if (!adminId) {
       return res.status(401).json({ error: "User not authenticated" });
     }
-    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+    });
     if (!campaign) {
       return res.status(404).json({ error: "Campaign not found" });
     }
@@ -278,9 +325,9 @@ export const approveCampaign = async (req: Request, res: Response, next: NextFun
     await writeAuditLog({
       actorType: AuditActorType.USER,
       actorId: adminId,
-      entityType: 'campaign',
+      entityType: "campaign",
       entityId: campaignId,
-      action: 'CAMPAIGN_APPROVED',
+      action: "CAMPAIGN_APPROVED",
       metadata: {},
     });
     res.json(updated);
@@ -290,7 +337,11 @@ export const approveCampaign = async (req: Request, res: Response, next: NextFun
 };
 
 // GET /api/admin/users — paginated user list with role + kyc_status filters
-export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
+export const getUsers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const { role, kycStatus, page = 1, limit = 10 } = req.query;
     const pageNum = Math.max(parseInt(page as string, 10) || 1, 1);
@@ -325,7 +376,7 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
         },
         skip,
         take: limitNum,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       prisma.profile.count({ where: whereClause }),
     ]);
@@ -345,7 +396,11 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
 };
 
 // GET /api/admin/aml-flags — donations flagged in audit_logs (AML)
-export const getAmlFlags = async (req: Request, res: Response, next: NextFunction) => {
+export const getAmlFlags = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const { page = 1, limit = 10 } = req.query;
     const pageNum = Math.max(parseInt(page as string, 10) || 1, 1);
@@ -354,16 +409,16 @@ export const getAmlFlags = async (req: Request, res: Response, next: NextFunctio
 
     const [auditLogs, totalCount] = await prisma.$transaction([
       prisma.auditLog.findMany({
-        where: { action: 'AML_FLAG_RAISED' },
+        where: { action: "AML_FLAG_RAISED" },
         include: {
           actor: { select: { id: true, fullName: true } },
           govRequest: { select: { id: true, requestRef: true } },
         },
         skip,
         take: limitNum,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
-      prisma.auditLog.count({ where: { action: 'AML_FLAG_RAISED' } }),
+      prisma.auditLog.count({ where: { action: "AML_FLAG_RAISED" } }),
     ]);
 
     res.json({
@@ -381,7 +436,11 @@ export const getAmlFlags = async (req: Request, res: Response, next: NextFunctio
 };
 
 // GET /api/admin/audit-logs — full paginated audit log with action + user filters
-export const getAuditLogs = async (req: Request, res: Response, next: NextFunction) => {
+export const getAuditLogs = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const { action, userId, page = 1, limit = 10 } = req.query;
     const pageNum = Math.max(parseInt(page as string, 10) || 1, 1);
@@ -405,7 +464,7 @@ export const getAuditLogs = async (req: Request, res: Response, next: NextFuncti
         },
         skip,
         take: limitNum,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       prisma.auditLog.count({ where: whereClause }),
     ]);
@@ -425,20 +484,317 @@ export const getAuditLogs = async (req: Request, res: Response, next: NextFuncti
 };
 
 // ---------------------------------------------------------------------------
+// POST /government-requests
+// ---------------------------------------------------------------------------
+export const createGovernmentRequest = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const adminId = req.user?.id;
+    if (!adminId)
+      return res.status(401).json({ error: "User not authenticated" });
+
+    const {
+      requestRef,
+      requestingBody,
+      legalBasis,
+      scope,
+      targetUserId,
+      targetDonationId,
+    } = req.body;
+
+    // Create government request
+    const govRequest = await prisma.governmentRequest.create({
+      data: {
+        requestRef,
+        requestingBody,
+        legalBasis,
+        scope: scope || {},
+        targetUserId: targetUserId || null,
+        targetDonationId: targetDonationId || null,
+        createdBy: adminId,
+        status: "OPEN",
+      },
+    });
+
+    // Write audit log
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: adminId,
+      entityType: "government_request",
+      entityId: govRequest.id,
+      action: "GOVERNMENT_REQUEST_CREATED",
+      metadata: { requestingBody, legalBasis, targetUserId, targetDonationId },
+    });
+
+    res.status(201).json(govRequest);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// POST /government-requests/:id/hold
+// ---------------------------------------------------------------------------
+export const holdGovernmentRequestDocuments = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const adminId = req.user?.id;
+    if (!adminId)
+      return res.status(401).json({ error: "User not authenticated" });
+
+    const requestId = req.params.id as string;
+    const { documentIds } = req.body;
+
+    // Validate documentIds
+    if (!documentIds || !Array.isArray(documentIds) || documentIds.length === 0) {
+      return res.status(400).json({ error: "documentIds array is required" });
+    }
+
+    // Filter out null/undefined/invalid IDs
+    const validDocumentIds = documentIds
+      .filter((id): id is string => id != null && typeof id === "string" && id.trim() !== "")
+      .map(id => id.trim());
+
+    if (validDocumentIds.length === 0) {
+      return res.status(400).json({ error: "No valid document IDs provided" });
+    }
+
+    // Verify government request exists and is open
+    const govRequest = await prisma.governmentRequest.findUnique({
+      where: { id: requestId },
+    });
+
+    if (!govRequest) {
+      return res.status(404).json({ error: "Government request not found" });
+    }
+
+    if (govRequest.status !== "OPEN") {
+      return res.status(400).json({ error: "Government request is not OPEN" });
+    }
+
+    // Build WHERE conditions for document update
+    const whereConditions: any = {
+      id: { in: validDocumentIds },
+    };
+
+    // Add ownership/relationship conditions if targetUserId is provided
+    if (govRequest.targetUserId) {
+      whereConditions.OR = [
+        { ownerId: govRequest.targetUserId },
+        { disbursement: { ngoId: govRequest.targetUserId } },
+        { campaign: { ngoId: govRequest.targetUserId } },
+      ];
+    }
+
+    // Place legal hold on specified documents
+    const updatedDocs = await prisma.document.updateMany({
+      where: whereConditions,
+      data: {
+        legalHold: true,
+        status: "LEGAL_HOLD" as const,
+      },
+    });
+
+    // Update government request status
+    await prisma.governmentRequest.update({
+      where: { id: requestId },
+      data: {
+        processedByAdminId: adminId,
+      },
+    });
+
+    // Write audit log
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: adminId,
+      entityType: "government_request",
+      entityId: requestId,
+      action: "GOVERNMENT_REQUEST_DOCUMENTS_HELD",
+      metadata: { documentIds: validDocumentIds, count: updatedDocs.count },
+    });
+
+    res.json({
+      message: `Legal hold placed on ${updatedDocs.count} documents`,
+      governmentRequestId: requestId,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// POST /government-requests/:id/export
+// ---------------------------------------------------------------------------
+export const exportGovernmentRequestDocuments = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const adminId = req.user?.id;
+    if (!adminId)
+      return res.status(401).json({ error: "User not authenticated" });
+
+    const requestId = req.params.id as string;
+
+    // Verify government request exists
+    const govRequest = await prisma.governmentRequest.findUnique({
+      where: { id: requestId },
+    });
+
+    if (!govRequest) {
+      return res.status(404).json({ error: "Government request not found" });
+    }
+
+    // Build WHERE conditions for document search
+    const whereConditionsExport: any = {
+      legalHold: true,
+    };
+
+    // Add ownership/relationship conditions if targetUserId is provided
+    if (govRequest.targetUserId) {
+      whereConditionsExport.OR = [
+        { ownerId: govRequest.targetUserId },
+        { disbursement: { ngoId: govRequest.targetUserId } },
+        { campaign: { ngoId: govRequest.targetUserId } },
+      ];
+    }
+
+    // Get documents under legal hold for this request
+    const heldDocuments = await prisma.document.findMany({
+      where: whereConditionsExport,
+      select: {
+        id: true,
+        documentType: true,
+        originalFilename: true,
+        sha512Hash: true,
+        ipfsCid: true,
+        storagePath: true,
+        legalHold: true,
+      },
+    });
+
+    // In a real implementation, this would generate a secure export package
+    // For now, we'll return metadata about the documents to be exported
+    const exportData = {
+      governmentRequestId: requestId,
+      requestedBy: govRequest.requestingBody,
+      legalBasis: govRequest.legalBasis,
+      filedAt: govRequest.filedAt,
+      exportedAt: new Date(),
+      documentCount: heldDocuments.length,
+      documents: heldDocuments.map((doc) => ({
+        id: doc.id,
+        type: doc.documentType,
+        filename: doc.originalFilename,
+        hash: doc.sha512Hash,
+        ipfsCid: doc.ipfsCid,
+        legalHold: doc.legalHold,
+      })),
+    };
+
+    // Write audit log
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: adminId,
+      entityType: "government_request",
+      entityId: requestId,
+      action: "GOVERNMENT_REQUEST_DOCUMENTS_EXPORTED",
+      metadata: { documentCount: heldDocuments.length },
+    });
+
+    res.json(exportData);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
-adminRouter.post("/disburse/:id/approve", requireAuth, requireRole(UserRole.ADMIN), approveDisbursement);
-adminRouter.get("/disbursements", requireAuth, requireRole(UserRole.ADMIN), getAllDisbursements);
-adminRouter.get("/disbursements/:id", requireAuth, requireRole(UserRole.ADMIN), getDisbursementById);
+adminRouter.post(
+  "/disburse/:id/approve",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  approveDisbursement,
+);
+adminRouter.get(
+  "/disbursements",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getAllDisbursements,
+);
+adminRouter.get(
+  "/disbursements/:id",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getDisbursementById,
+);
 
 // Admin Panel Routes
 adminRouter.get("/ngos", requireAuth, requireRole(UserRole.ADMIN), getNgos);
-adminRouter.post("/ngos/:id/approve", requireAuth, requireRole(UserRole.ADMIN), approveNgo);
-adminRouter.post("/ngos/:id/reject", requireAuth, requireRole(UserRole.ADMIN), rejectNgo);
-adminRouter.get("/campaigns/pending", requireAuth, requireRole(UserRole.ADMIN), getPendingCampaigns);
-adminRouter.post("/campaigns/:id/approve", requireAuth, requireRole(UserRole.ADMIN), approveCampaign);
+adminRouter.post(
+  "/ngos/:id/approve",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  approveNgo,
+);
+adminRouter.post(
+  "/ngos/:id/reject",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  rejectNgo,
+);
+adminRouter.get(
+  "/campaigns/pending",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getPendingCampaigns,
+);
+adminRouter.post(
+  "/campaigns/:id/approve",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  approveCampaign,
+);
 adminRouter.get("/users", requireAuth, requireRole(UserRole.ADMIN), getUsers);
-adminRouter.get("/aml-flags", requireAuth, requireRole(UserRole.ADMIN), getAmlFlags);
-adminRouter.get("/audit-logs", requireAuth, requireRole(UserRole.ADMIN), getAuditLogs);
+adminRouter.get(
+  "/aml-flags",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getAmlFlags,
+);
+adminRouter.get(
+  "/audit-logs",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getAuditLogs,
+);
+
+// Government Request Endpoints
+adminRouter.post(
+  "/government-requests",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  createGovernmentRequest,
+);
+adminRouter.post(
+  "/government-requests/:id/hold",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  holdGovernmentRequestDocuments,
+);
+adminRouter.post(
+  "/government-requests/:id/export",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  exportGovernmentRequestDocuments,
+);
 
 export default adminRouter;
