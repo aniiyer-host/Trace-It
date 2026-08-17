@@ -8,6 +8,10 @@ const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "access_secret";
 
 import crypto from "crypto";
 
+// Mock storage service to avoid AWS calls in tests
+import { StorageService } from "../src/services/storageService";
+jest.spyOn(StorageService.prototype, "uploadFile").mockResolvedValue(undefined);
+
 describe("Admin API Integration Tests", () => {
   let adminToken: string;
   let adminUserId: string;
@@ -23,7 +27,9 @@ describe("Admin API Integration Tests", () => {
       },
     });
     adminUserId = admin.id;
-    adminToken = jwt.sign({ userId: admin.id }, JWT_ACCESS_SECRET, { expiresIn: "1h" });
+    adminToken = jwt.sign({ userId: admin.id }, JWT_ACCESS_SECRET, {
+      expiresIn: "1h",
+    });
 
     // Create a mock NGO
     const ngo = await prisma.profile.create({
@@ -50,9 +56,12 @@ describe("Admin API Integration Tests", () => {
 
   afterAll(async () => {
     // Clean up
+    await prisma.governmentRequest.deleteMany({});
     await prisma.campaign.deleteMany({ where: { id: campaignId } });
     await prisma.auditLog.deleteMany({ where: { actorId: adminUserId } });
-    await prisma.profile.deleteMany({ where: { id: { in: [adminUserId, ngoUserId] } } });
+    await prisma.profile.deleteMany({
+      where: { id: { in: [adminUserId, ngoUserId] } },
+    });
   });
 
   it("GET /api/admin/ngos - should list NGOs", async () => {
@@ -94,5 +103,150 @@ describe("Admin API Integration Tests", () => {
       .set("Authorization", `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.auditLogs)).toBe(true);
+  });
+
+  it("POST /api/admin/government-requests - should create government request", async () => {
+    const res = await request(app)
+      .post("/api/admin/government-requests")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        requestRef: `GR-REF-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        requestingBody: "Ministry of Home Affairs",
+        legalBasis: "FCRA Act 2010",
+        scope: { type: "donation_investigation" },
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty("id");
+    expect(res.body.requestingBody).toBe("Ministry of Home Affairs");
+    expect(res.body.status).toBe("OPEN");
+  });
+
+  it("POST /api/admin/government-requests/:id/hold - should place legal hold on documents", async () => {
+    let docRes = null;
+    // Create a charity user for token
+    const charityUser = await prisma.profile.create({
+      data: {
+        email: `charity-${Date.now()}@example.com`,
+        role: UserRole.CHARITY,
+        ngoStatus: NgoStatus.ACTIVE,
+      },
+    });
+
+    const charityToken = jwt.sign(
+      { userId: charityUser.id },
+      JWT_ACCESS_SECRET,
+      { expiresIn: "1h" },
+    );
+
+    // First create a document to hold
+    docRes = await request(app)
+      .post("/api/charity/documents/upload")
+      .set("Authorization", `Bearer ${charityToken}`) // Need charity token for this
+      .attach("file", Buffer.from("dummy doc content"), "test.pdf");
+
+    const documentId = docRes.body.documentId;
+
+    // Create government request targeting this charity
+    const govReqRes = await request(app)
+      .post("/api/admin/government-requests")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        requestRef: "GR-HOLD-TEST",
+        requestingBody: "Income Tax Department",
+        legalBasis: "Section 133 of Income Tax Act",
+        targetUserId: charityUser.id,
+      });
+
+    const govRequestId = govReqRes.body.id;
+
+    // Place legal hold on the document
+    const holdRes = await request(app)
+      .post(`/api/admin/government-requests/${govRequestId}/hold`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        documentIds: [documentId],
+      });
+
+    expect(holdRes.status).toBe(200);
+    expect(holdRes.body.message).toContain("Legal hold placed");
+
+    // Cleanup documents owned by the charity user
+    await prisma.document.deleteMany({
+      where: { ownerId: charityUser.id },
+    });
+
+    // Cleanup charity user
+    await prisma.profile.delete({
+      where: { id: charityUser.id },
+    });
+  });
+
+  it("POST /api/admin/government-requests/:id/export - should export held documents", async () => {
+    // Create a charity user for token
+    const charityUser = await prisma.profile.create({
+      data: {
+        email: `charity-${Date.now()}@example.com`,
+        role: UserRole.CHARITY,
+        ngoStatus: NgoStatus.ACTIVE,
+      },
+    });
+    const charityToken = jwt.sign(
+      { userId: charityUser.id },
+      JWT_ACCESS_SECRET,
+      { expiresIn: "1h" },
+    );
+
+    // Create government request targeting this charity
+    const govReqRes = await request(app)
+      .post("/api/admin/government-requests")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        requestRef: "GR-EXPORT-TEST",
+        requestingBody: "Enforcement Directorate",
+        legalBasis: "FEMA 1999",
+        targetUserId: charityUser.id,
+      });
+
+    const govRequestId = govReqRes.body.id;
+
+    // Create a document to export
+    let docRes = await request(app)
+      .post("/api/charity/documents/upload")
+      .set("Authorization", `Bearer ${charityToken}`)
+      .attach("file", Buffer.from("dummy doc content"), "test.pdf");
+
+    expect(docRes.status).toBe(201);
+    expect(docRes.body).toHaveProperty("documentId");
+
+    const documentId = docRes.body.documentId;
+
+    // Place legal hold on the document (required for export)
+    await request(app)
+      .post(`/api/admin/government-requests/${govRequestId}/hold`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        documentIds: [documentId],
+      });
+
+    // Export documents
+    const exportRes = await request(app)
+      .post(`/api/admin/government-requests/${govRequestId}/export`)
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(exportRes.status).toBe(200);
+    expect(exportRes.body).toHaveProperty("governmentRequestId", govRequestId);
+    expect(exportRes.body).toHaveProperty("documentCount");
+    expect(exportRes.body.documents).toBeDefined();
+
+    // Cleanup documents first
+    await prisma.document.deleteMany({
+      where: { ownerId: charityUser.id },
+    });
+
+    // Cleanup charity user
+    await prisma.profile.delete({
+      where: { id: charityUser.id },
+    });
   });
 });

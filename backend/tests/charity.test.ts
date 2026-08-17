@@ -154,4 +154,26 @@ describe("Charity API Integration Tests", () => {
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.length).toBeGreaterThanOrEqual(2); // One upload, one proof
   });
+
+  test("GET /api/charity/reports/fcra - FCRA report", async () => {
+    const res = await request(app)
+      .get("/api/charity/reports/fcra")
+      .set("Authorization", `Bearer ${charityToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("ngoId", charityUserId);
+    expect(res.body).toHaveProperty("totalDonations");
+    expect(res.body).toHaveProperty("donationsDetails");
+  });
+
+  test("GET /api/charity/reports/80g - 80G report", async () => {
+    const res = await request(app)
+      .get("/api/charity/reports/80g")
+      .set("Authorization", `Bearer ${charityToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("ngoId", charityUserId);
+    expect(res.body).toHaveProperty("totalDonations");
+    expect(res.body).toHaveProperty("donationsDetails");
+  });
 });
