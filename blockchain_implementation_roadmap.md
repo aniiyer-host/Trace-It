@@ -1520,7 +1520,3 @@ blockchain/node_modules/
 
 ---
 
-> **Next Steps:**
-> 1. Resolve the [Memo Program vs Custom Anchor Program decision](#⚠️-critical-discrepancy-memo-program-vs-custom-anchor-programs) with the team
-> 2. Resolve the [Beneficiary role question](#⚠️-discrepancy-beneficiary-role-missing-from-prisma-userrole-enum)
-> 3. Once decisions are made, begin Phase 1 implementation
