@@ -201,13 +201,14 @@ export const razorpayWebhookHandler = async (
       try {
         const blockchainService = await getBlockchainService();
 
+        
         // Prepare donation data for on-chain recording
         const donationData = {
           donationId: donation.id, // UUID from Postgres
           donorUserId: donation.donorId, // Raw user ID (will be hashed by service)
           ngoId: donation.ngoId,
-          campaignId: donation.campaignId,
-          amountInr: donation.amount, // Amount in INR
+          campaignId: donation.campaignId ?? '',
+          amountInr: donation.amount.toNumber(), // Amount in INR
           currency: 'INR',
           timestamp: new Date() // Current timestamp
         };
@@ -243,7 +244,7 @@ export const razorpayWebhookHandler = async (
           // Add to retry queue for later processing
           await addToBlockchainRetryQueue({
             donationId: donation.id,
-            error: blockchainResult.error,
+            error: blockchainResult.error ?? 'Unknown error',
             retryCount: 0
           });
 
@@ -262,12 +263,13 @@ export const razorpayWebhookHandler = async (
         }
       } catch (error) {
         // Handle service initialization or other unexpected errors
+        const errorMessage = error instanceof Error ? error.message : String(error);
         console.error(`Blockchain service error for donation ${donation.id}:`, error);
 
         // Add to retry queue
         await addToBlockchainRetryQueue({
           donationId: donation.id,
-          error: error.message,
+          error: errorMessage,
           retryCount: 0
         });
 
@@ -278,7 +280,7 @@ export const razorpayWebhookHandler = async (
           action: 'BLOCKCHAIN_SERVICE_ERROR',
           metadata: {
             donationId: donation.id,
-            error: error.message
+            error: errorMessage
           },
           ipAddress: req.ip,
         });

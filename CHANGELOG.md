@@ -6,6 +6,29 @@ Format: [Semantic Versioning](https://semver.org/) — `Added | Changed | Fixed 
 
 ---
 
+## [0.3.0] — 2026-08-18
+### Added
+- Blockchain integration for recording donations on-chain after successful Razorpay payments
+- Blockchain status update integration for disbursement approvals (updating donation status to ALLOCATED on-chain)
+- Blockchain retry processor for failed on-chain recording attempts with exponential backoff
+- Environment variable validation for required blockchain configuration (SOLANA_RPC_URL, SOLANA_WALLET_KEYPAIR_PATH, SOLANA_PROGRAM_ID)
+- Database model for blockchain retry queue (BlockchainRetryQueue)
+- Automatic startup of blockchain retry processor in non-test environments
+
+### Changed
+- Updated admin disbursement approval to trigger blockchain status updates (non-blocking)
+- Updated Razorpay webhook handler to record donations on-chain after successful payment
+- Updated backend initialization to start blockchain retry processor
+- Modified donation schema to include solanaTxHash field for storing on-chain transaction references
+
+### Fixed
+- TypeScript errors related to nullable campaignId fields (converted to empty string for on-chain storage)
+- TypeScript errors related to Decimal to number conversion for amounts
+- Fixed error handling for unknown error types in blockchain service calls
+- Resolved scoping issue in admin routes where blockchain function was called outside its definition block
+
+---
+
 ## [0.2.0] — 2026-08-15
 
 ### Added

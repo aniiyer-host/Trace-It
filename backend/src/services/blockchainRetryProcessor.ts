@@ -53,6 +53,7 @@ export class BlockchainRetryProcessor {
 
     const blockchainService = await getBlockchainService();
 
+    
     for (const item of retryItems) {
       try {
         // Fetch the donation to get current data
@@ -81,8 +82,8 @@ export class BlockchainRetryProcessor {
           donationId: donation.id,
           donorUserId: donation.donorId,
           ngoId: donation.ngoId,
-          campaignId: donation.campaignId,
-          amountInr: donation.amount,
+          campaignId: donation.campaignId ?? '',
+          amountInr: donation.amount.toNumber(),
           currency: 'INR',
           timestamp: new Date(donation.createdAt) // Use original donation timestamp
         };
@@ -129,10 +130,11 @@ export class BlockchainRetryProcessor {
         }
       } catch (error) {
         // Handle unexpected errors
+        const errorMessage = error instanceof Error ? error.message : String(error);
         await prisma.blockchainRetryQueue.update({
           where: { donationId: item.donationId },
           data: {
-            error: error.message,
+            error: errorMessage,
             retryCount: item.retryCount + 1,
             lastAttempt: new Date(),
             updatedAt: new Date()

@@ -6,10 +6,26 @@ let instance: BlockchainService | null = null;
 export async function getBlockchainService(): Promise<BlockchainService> {
   if (instance) return instance;
 
+  // Validate and extract required environment variables
+  const rpcUrl = process.env.SOLANA_RPC_URL;
+  if (!rpcUrl) {
+    throw new Error('Missing required environment variable: SOLANA_RPC_URL');
+  }
+
+  const walletKeypairPath = process.env.SOLANA_WALLET_KEYPAIR_PATH;
+  if (!walletKeypairPath) {
+    throw new Error('Missing required environment variable: SOLANA_WALLET_KEYPAIR_PATH');
+  }
+
+  const programId = process.env.SOLANA_PROGRAM_ID;
+  if (!programId) {
+    throw new Error('Missing required environment variable: SOLANA_PROGRAM_ID');
+  }
+
   const service = new BlockchainService({
-    rpcUrl: process.env.SOLANA_RPC_URL,
-    walletKeypairPath: process.env.SOLANA_WALLET_KEYPAIR_PATH,
-    programId: process.env.SOLANA_PROGRAM_ID!,
+    rpcUrl,
+    walletKeypairPath,
+    programId,
     hmacSecret: process.env.BLOCKCHAIN_HMAC_SECRET || 'default_blockchain_hmac_secret',
     commitment: 'confirmed',
   });

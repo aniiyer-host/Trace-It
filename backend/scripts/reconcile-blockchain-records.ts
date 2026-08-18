@@ -2,6 +2,7 @@
 import { getBlockchainService } from '../src/services/blockchainInstance';
 import { prisma } from '../src/db/prisma';
 import { writeAuditLog } from '../src/services/auditLogService';
+import { DonationStatus } from '../generated/prisma/enums';
 
 async function main() {
   console.log('Starting blockchain reconciliation process...');
@@ -11,7 +12,14 @@ async function main() {
   // Find donations that are SUCCESS or higher but missing solanaTxHash
   const donationsNeedingRecording = await prisma.donation.findMany({
     where: {
-      status: { in: [1, 2, 3, 4] }, // SUCCESS or higher
+      status: {
+        in: [
+          DonationStatus.SUCCESS,
+          DonationStatus.ALLOCATED,
+          DonationStatus.DISBURSED,
+          DonationStatus.DELIVERED,
+        ],
+      },
       solanaTxHash: null
     },
     include: {
@@ -25,12 +33,17 @@ async function main() {
     try {
       console.log(`Processing donation ${donation.id}...`);
 
+      if (!donation.campaignId) {
+        console.warn(`Skipping donation ${donation.id}: missing campaignId`);
+        continue;
+      }
+
       const donationData = {
         donationId: donation.id,
         donorUserId: donation.donorId,
         ngoId: donation.ngoId,
         campaignId: donation.campaignId,
-        amountInr: donation.amount,
+        amountInr: Number(donation.amount),
         currency: 'INR',
         timestamp: new Date(donation.createdAt)
       };
@@ -82,7 +95,7 @@ async function main() {
         action: 'BLOCKCHAIN_RECONCILE_ERROR',
         metadata: {
           donationId: donation.id,
-          error: error.message
+          error: error instanceof Error ? error.message : String(error)
         },
         ipAddress: 'system',
       });
@@ -95,7 +108,13 @@ async function main() {
   // Also check for donations that need status updates
   const donationsNeedingStatusUpdate = await prisma.donation.findMany({
     where: {
-      status: { in: [2, 3, 4] }, // ALLOCATED or higher
+      status: {
+        in: [
+          DonationStatus.ALLOCATED,
+          DonationStatus.DISBURSED,
+          DonationStatus.DELIVERED,
+        ],
+      },
       solanaTxHash: { not: null }
     }
   });
@@ -106,13 +125,13 @@ async function main() {
     try {
       const onChainData = await blockchainService.getDonationRecord(donation.id);
 
-      if (onChainData && onChainData.status !== donation.status) {
+      if (onChainData && String(onChainData.status) !== String(donation.status)) {
         console.log(`Donation ${donation.id} status mismatch: DB=${donation.status}, Chain=${onChainData.status}`);
 
         // Update on-chain status to match DB (assuming DB is source of truth)
         const result = await blockchainService.updateDonationStatus(
           donation.id,
-          donation.status
+          Number(donation.status) // Convert string to number
         );
 
         if (result.success) {

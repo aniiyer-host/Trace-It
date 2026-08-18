@@ -115,8 +115,6 @@ export const approveDisbursement = async (
 	  };
 	}
 
-// Trigger the blockchain status update (non-blocking)
-updateDonationStatusOnChain().catch(console.error);
 
 // Allocate donations up to the disbursed amount
 // First, find all SUCCESS donations for this campaign
