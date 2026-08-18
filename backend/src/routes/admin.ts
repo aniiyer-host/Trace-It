@@ -469,7 +469,7 @@ export const getAmlFlags = async (
     const limitNum = Math.max(parseInt(limit as string, 10) || 10, 1);
     const skip = (pageNum - 1) * limitNum;
 
-    const [auditLogs, totalCount] = await prisma.$transaction([
+    const [auditLogsResult, totalCount] = await prisma.$transaction([
       prisma.auditLog.findMany({
         where: { action: "AML_FLAG_RAISED" },
         include: {
@@ -482,6 +482,12 @@ export const getAmlFlags = async (
       }),
       prisma.auditLog.count({ where: { action: "AML_FLAG_RAISED" } }),
     ]);
+
+    // Convert BigInt id to string for JSON serialization
+    const auditLogs = auditLogsResult.map(log => ({
+      ...log,
+      id: log.id.toString(),
+    }));
 
     res.json({
       auditLogs,
@@ -517,7 +523,7 @@ export const getAuditLogs = async (
       whereClause.actorId = userId as string;
     }
 
-    const [auditLogs, totalCount] = await prisma.$transaction([
+    const [auditLogsResult, totalCount] = await prisma.$transaction([
       prisma.auditLog.findMany({
         where: whereClause,
         include: {
@@ -530,6 +536,12 @@ export const getAuditLogs = async (
       }),
       prisma.auditLog.count({ where: whereClause }),
     ]);
+
+    // Convert BigInt id to string for JSON serialization
+    const auditLogs = auditLogsResult.map(log => ({
+      ...log,
+      id: log.id.toString(),
+    }));
 
     res.json({
       auditLogs,
