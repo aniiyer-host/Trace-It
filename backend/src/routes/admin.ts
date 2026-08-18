@@ -12,6 +12,7 @@ import {
 } from "../../generated/prisma/enums";
 import { writeAuditLog } from "../services/auditLogService";
 import { allocateDonation } from "../services/statusService";
+import { getBlockchainService } from "../services/blockchainInstance";
 
 const adminRouter = Router();
 
@@ -51,49 +52,112 @@ export const approveDisbursement = async (
       },
     });
 
-    // TODO(blockchain-team): Call Disbursement Program here for Solana
-    // For now, this is a placeholder where they will inject the logic to transfer SPL tokens.
+    // BLOCKCHAIN INTEGRATION: Update donation status to ALLOCATED on-chain (non-blocking)
+// We don't await this to avoid slowing down the disbursement approval process
+// Only run in non-test environments to avoid initialization errors during testing
+	if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
+	  const updateDonationStatusOnChain = async () => {
+	    try {
+	      const blockchainService = await getBlockchainService();
 
-    // Allocate donations up to the disbursed amount
-    // First, find all SUCCESS donations for this campaign
-    const donations = await prisma.donation.findMany({
-      where: {
-        campaignId: disbursement.campaignId,
-        status: "SUCCESS",
-      },
-      orderBy: { createdAt: "asc" },
-    });
+	      // Find associated donations for this disbursement
+	      const donations = await prisma.donation.findMany({
+	        where: {
+	          campaignId: disbursement.campaignId,
+	          status: "SUCCESS",
+	        },
+	        include: {
+	          ngo: true
+	        }
+	      });
 
-    let remainingToAllocate = Number(disbursement.amountInr);
+	      // Update each donation in the campaign to ALLOCATED status
+	      for (const donation of donations) {
+	        if (donation.solanaTxHash) { // Only update if already recorded on-chain
+	          const result = await blockchainService.updateDonationStatus(
+	            donation.id,
+	            2 // ALLOCATED status
+	          );
 
-    for (const donation of donations) {
-      if (remainingToAllocate <= 0) break;
+	          if (result.success) {
+	            await writeAuditLog({
+	              actorType: AuditActorType.USER,
+	              actorId: adminId,
+	              entityType: "donation",
+	              entityId: donation.id,
+	              action: "BLOCKCHAIN_STATUS_UPDATE",
+	              metadata: {
+	                donationId: donation.id,
+	                transactionHash: result.txHash,
+	                newStatus: "ALLOCATED"
+	              },
+	            });
+	          } else {
+	            console.error(`Failed to update donation ${donation.id} status on-chain: ${result.error}`);
 
-      const donationAmount = Number(donation.amount);
+	            // Add to retry queue for status updates
+	            await addToBlockchainRetryQueue({
+	              donationId: donation.id,
+	              error: result.error ?? 'Unknown blockchain error',
+	              retryCount: 0,
+	              type: 'STATUS_UPDATE',
+	              targetStatus: 2
+	            });
+	          }
+	        } else {
+	          console.warn(`Donation ${donation.id} not yet recorded on-chain, skipping status update`);
+	        }
+	      }
+	    } catch (error) {
+	      console.error('Error in blockchain status update integration:', error);
+	      // Don't fail the disbursement approval if blockchain integration fails
+	    }
+	  };
+	}
 
-      // Call allocateDonation for each applicable donation
-      if (disbursement.cohortId) {
-        await allocateDonation(donation.id, disbursement.cohortId);
-      }
+// Trigger the blockchain status update (non-blocking)
+updateDonationStatusOnChain().catch(console.error);
 
-      // Deduct the donation amount from what's remaining to allocate
-      remainingToAllocate -= donationAmount;
-    }
+// Allocate donations up to the disbursed amount
+// First, find all SUCCESS donations for this campaign
+const donationAllocations = await prisma.donation.findMany({
+  where: {
+    campaignId: disbursement.campaignId,
+    status: "SUCCESS",
+  },
+  orderBy: { createdAt: "asc" },
+});
 
-    // Write audit log
-    await writeAuditLog({
-      actorType: AuditActorType.USER, // Admin is a user in the system
-      actorId: adminId,
-      entityType: "disbursement",
-      entityId: disbursement.id,
-      action: "DISBURSEMENT_APPROVED",
-      metadata: {
-        campaignId: disbursement.campaignId,
-        amountInr: Number(disbursement.amountInr),
-      },
-    });
+let remainingToAllocate = Number(disbursement.amountInr);
 
-    res.json(updated);
+for (const donation of donationAllocations) {
+  if (remainingToAllocate <= 0) break;
+
+  const donationAmount = Number(donation.amount);
+
+  // Call allocateDonation for each applicable donation
+  if (disbursement.cohortId) {
+    await allocateDonation(donation.id, disbursement.cohortId);
+  }
+
+  // Deduct the donation amount from what's remaining to allocate
+  remainingToAllocate -= donationAmount;
+}
+
+// Write audit log
+await writeAuditLog({
+  actorType: AuditActorType.USER, // Admin is a user in the system
+  actorId: adminId,
+  entityType: "disbursement",
+  entityId: disbursement.id,
+  action: "DISBURSEMENT_APPROVED",
+  metadata: {
+    campaignId: disbursement.campaignId,
+    amountInr: Number(disbursement.amountInr),
+  },
+});
+
+res.json(updated);
   } catch (err) {
     next(err);
   }
@@ -776,6 +840,44 @@ adminRouter.get(
   requireRole(UserRole.ADMIN),
   getAuditLogs,
 );
+
+// Helper function for retry queue
+async function addToBlockchainRetryQueue(data: {
+  donationId: string;
+  error: string;
+  retryCount: number;
+  type?: string;
+  targetStatus?: number;
+}): Promise<void> {
+  try {
+    // Import Prisma client
+    const { prisma } = require('../db/prisma');
+
+    // Create or update retry queue entry
+    await prisma.blockchainRetryQueue.upsert({
+      where: { donationId: data.donationId },
+      update: {
+        error: data.error,
+        retryCount: data.retryCount + 1,
+        lastAttempt: new Date(),
+        updatedAt: new Date()
+      },
+      create: {
+        donationId: data.donationId,
+        error: data.error,
+        retryCount: data.retryCount + 1,
+        lastAttempt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    });
+
+    console.log(`Added donation ${data.donationId} to blockchain retry queue (attempt ${data.retryCount + 1})`);
+  } catch (queueError) {
+    console.error(`Failed to add to retry queue:`, queueError);
+    // Don't fail the operation if queue fails
+  }
+}
 
 // Government Request Endpoints
 adminRouter.post(

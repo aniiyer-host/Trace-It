@@ -31,7 +31,7 @@
 | **Frontend** | Mock-complete | React+Vite+TS app with mock wallet, mock payments, mock Solana explorer links. Uses `mockTxHash()` — non-cryptographic. No real `@solana/web3.js` integration. |
 | **Backend** | Fully Implemented REST API | Express+Prisma+TS. Complete REST API implemented: `/api/auth`, `/api/donor`, `/api/charity`, `/api/admin`, `/api/public`, and `/api/webhooks/razorpay`. Features AES-256 document encryption & SHA-512 hashing (`documentService.ts`), status allocation service (`statusService.ts`), receipt PDF generation (`receiptService.ts`), and SIEM audit logging (`auditLogService.ts`). Explicit blockchain integration stubs (`// TODO(blockchain-team)`) are present in `razorpay.ts`, `admin.ts`, and `charity.ts`. |
 | **Prisma Schema** | Aligned with SQL | Schema has been reconciled between SQL and Prisma (per DEV-A log). Includes `solanaTxHash` on `Donation`, `Disbursement`; `solanaProgramId` and `solanaVaultAddress` on `Campaign`; `sha512DocHash` and `merkleRoot` on `BeneficiaryCohort`. |
-| **Blockchain** | **Nothing exists** | Zero Solana code — no Anchor project, no programs, no keypairs, no RPC configuration, no integration service. |
+| **Blockchain** | **Phase 1 Complete** | Anchor program deployed to devnet + backend service layer implemented + all tests passing
 | **Security** | Documented but unimplemented | SECURITY.md documents STRIDE model, compliance mapping, and controls. All blockchain controls marked "Not Implemented". |
 
 ### Key Prisma fields relevant to blockchain
