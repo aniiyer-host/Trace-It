@@ -11,6 +11,8 @@ import {
 
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "access_secret";
 
+import crypto from "crypto";
+
 describe("Disbursement API Integration Tests", () => {
   let adminToken: string;
   let adminUserId: string;
@@ -26,7 +28,7 @@ describe("Disbursement API Integration Tests", () => {
     // 1. Create a mock admin
     const adminUser = await prisma.profile.create({
       data: {
-        email: `admin-${Date.now()}@example.com`,
+        email: `admin-${crypto.randomUUID()}@example.com`,
         role: UserRole.ADMIN,
       },
     });
@@ -38,7 +40,7 @@ describe("Disbursement API Integration Tests", () => {
     // 2. Create a mock NGO
     const ngoUser = await prisma.profile.create({
       data: {
-        email: `charity-${Date.now()}@example.com`,
+        email: `charity-${crypto.randomUUID()}@example.com`,
         role: UserRole.CHARITY,
         ngoStatus: NgoStatus.ACTIVE,
       },
