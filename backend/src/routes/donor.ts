@@ -379,11 +379,18 @@ export const getDonationTimeline = async (
       },
     });
 
-    res.json({ timeline: auditLogs });
+    // Serialize BigInt id fields to string for JSON compatibility
+    const serialized = auditLogs.map((log) => ({
+      ...log,
+      id: log.id.toString(),
+    }));
+
+    res.json(serialized);
   } catch (err) {
     next(err);
   }
-};;
+};
+
 
 // ---------------------------------------------------------------------------
 // Router

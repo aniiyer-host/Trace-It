@@ -16,8 +16,10 @@ describe("Charity API Integration Tests", () => {
 
   beforeAll(async () => {
     // Mock the AWS S3 upload so it doesn't attempt to make real network requests
-    jest.spyOn(StorageService.prototype, "uploadFile").mockResolvedValue(undefined);
-    
+    jest
+      .spyOn(StorageService.prototype, "uploadFile")
+      .mockResolvedValue(undefined);
+
     // Create a mock charity user
     const user = await prisma.profile.create({
       data: {
@@ -118,7 +120,7 @@ describe("Charity API Integration Tests", () => {
       .send({
         campaignId,
         name: "Turtle Rescuers",
-        count: 50,
+        beneficiaryCount: 50,
       });
 
     expect(res.status).toBe(201);

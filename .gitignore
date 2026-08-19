@@ -2,6 +2,7 @@ CLAUDE.md
 **/node_modules/
 **/dist/
 **/.*
+!.github/
 **/skills-lock.json
 **/generated
 
