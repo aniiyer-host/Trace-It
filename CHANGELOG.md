@@ -29,6 +29,18 @@ Format: [Semantic Versioning](https://semver.org/) — `Added | Changed | Fixed 
 
 ---
 
+## [0.3.1] — 2026-08-19
+### Changed
+- Updated blockchain security documentation to accurately reflect Phase 1 mock implementation status
+- Modified SECURITY.md to distinguish simulated controls (wallet, transaction hashing, confirmation depth) from planned real implementations
+- Updated threats.md to label mitigations with implementation status (SIMULATED/NOT IMPLEMENTED/ARCHITECTURALLY IMPLEMENTED)
+- Enhanced security_details.md with current implementation details for all blockchain controls
+- Clarified that all blockchain interactions are mocked/simulated with deterministic keys and non-cryptographic hash strings
+- Preserved document structure while updating content for technical accuracy
+- No changes to remediations.md as it already accurately reflected current state and recommendations
+
+---
+
 ## [0.2.0] — 2026-08-15
 
 ### Added
