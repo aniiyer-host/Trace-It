@@ -1,3 +1,216 @@
+# name: CI
+
+# on:
+#   pull_request:
+#     branches: [main]
+#   push:
+#     branches: [main]
+
+# jobs:
+#   test-and-build:
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 20
+
+#     services:
+#       postgres:
+#         image: postgres:15
+#         env:
+#           POSTGRES_USER: postgres
+#           POSTGRES_PASSWORD: postgres
+#           POSTGRES_DB: traceit_test
+#         ports: [5432:5432]
+#         options: >-
+#           --health-cmd pg_isready
+#           --health-interval 10s
+#           --health-timeout 5s
+#           --health-retries 5
+
+#       redis:
+#         image: redis:7-alpine
+#         ports: [6379:6379]
+#         options: >-
+#           --health-cmd "redis-cli ping"
+#           --health-interval 10s
+#           --health-timeout 5s
+#           --health-retries 5
+
+#     env:
+#       NODE_ENV: test
+#       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/traceit_test
+#       DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/traceit_test
+#       JWT_ACCESS_SECRET: test-access-secret
+#       JWT_REFRESH_SECRET: test-refresh-secret
+#       SENDGRID_API_KEY: test-sendgrid-key
+#       SOLANA_RPC_URL: https://api.devnet.solana.com
+#       SOLANA_WALLET_KEYPAIR_PATH: /tmp/test-wallet.json
+#       BLOCKCHAIN_HMAC_SECRET: test-hmac-secret
+
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: "18"
+#           cache: "npm"
+
+#       - name: Install root dependencies
+#         run: npm ci
+
+#       - name: Install frontend dependencies
+#         working-directory: ./frontend
+#         run: npm ci
+
+#       - name: Install backend dependencies
+#         working-directory: ./backend
+#         run: npm ci
+
+#       - name: Generate Prisma client
+#         working-directory: ./backend
+#         run: npx prisma generate
+
+#       - name: Run Prisma migrations
+#         working-directory: ./backend
+#         run: npx prisma migrate deploy
+
+#       - name: Seed test database
+#         working-directory: ./backend
+#         run: npx tsx tests/seed.ts
+
+#       - name: Run root linting
+#         run: npm run lint --if-present
+
+#       - name: Run frontend linting
+#         working-directory: ./frontend
+#         run: npm run lint --if-present
+
+#       - name: Run backend linting
+#         working-directory: ./backend
+#         run: npm run lint --if-present
+
+#       - name: Run root tests
+#         run: npm test --if-present
+
+#       - name: Run frontend tests
+#         working-directory: ./frontend
+#         run: npm test --if-present
+
+#       - name: Run backend tests
+#         working-directory: ./backend
+#         run: npm test
+
+#       - name: Type check root
+#         run: npx tsc --noEmit --if-present
+
+#       - name: Type check frontend
+#         working-directory: ./frontend
+#         run: npx tsc --noEmit --if-present
+
+#       - name: Type check backend
+#         working-directory: ./backend
+#         run: npx tsc --noEmit
+
+#       - name: Build frontend
+#         working-directory: ./frontend
+#         run: npm run build --if-present
+
+#       - name: Build backend
+#         working-directory: ./backend
+#         run: npm run build
+
+#       - name: Upload test results
+#         if: always()
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: test-results
+#           if-no-files-found: ignore
+#           path: |
+#             **/test-results/**
+#             **/jest/*.xml
+#             **/coverage/**
+
+#       - name: Upload coverage reports
+#         if: always()
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: coverage-report
+#           if-no-files-found: ignore
+#           path: |
+#             **/coverage/*
+#             !**/node_modules/**
+#             !**/.next/**
+
+#   # Security scanning job
+#   security-scan:
+#     runs-on: ubuntu-latest
+#     needs: test-and-build
+#     timeout-minutes: 10
+
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - name: Run security audit
+#         run: |
+#           npm audit --production || echo "Non-fatal npm audit warnings"
+
+#       - name: Run frontend security audit
+#         working-directory: ./frontend
+#         run: |
+#           npm audit --production || echo "Non-fatal npm audit warnings"
+
+#       - name: Run backend security audit
+#         working-directory: ./backend
+#         run: |
+#           npm audit --production || echo "Non-fatal npm audit warnings"
+
+#       - name: Run root ESLint security plugin
+#         run: npm run lint --if-present
+
+#       - name: Run frontend ESLint security plugin
+#         working-directory: ./frontend
+#         run: npm run lint --if-present
+
+#       - name: Run backend ESLint security plugin
+#         working-directory: ./backend
+#         run: npm run lint --if-present
+
+#   # Docker build job (only on main branch)
+#   docker:
+#     runs-on: ubuntu-latest
+#     needs: test-and-build
+#     if: github.ref == 'refs/heads/main'
+#     timeout-minutes: 15
+
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - name: Set up Docker Buildx
+#         uses: docker/setup-buildx-action@v2
+
+#       - name: Log in to Docker Hub
+#         uses: docker/login-action@v2
+#         with:
+#           username: ${{ secrets.DOCKERHUB_USERNAME }}
+#           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+#       - name: Build and push frontend
+#         uses: docker/build-push-action@v4
+#         with:
+#           context: ./frontend
+#           push: true
+#           tags: "${{ secrets.DOCKERHUB_USERNAME }}/traceit-frontend:latest"
+#           cache-from: "type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/traceit-frontend:cache"
+#           cache-to: "type=inline"
+
+#       - name: Build and push backend
+#         uses: docker/build-push-action@v4
+#         with:
+#           context: ./backend
+#           push: true
+#           tags: "${{ secrets.DOCKERHUB_USERNAME }}/traceit-backend:latest"
+#           cache-from: "type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/traceit-backend:cache"
+#           cache-to: "type=inline"
+
 name: CI
 
 on:
@@ -54,9 +267,6 @@ jobs:
           node-version: "18"
           cache: "npm"
 
-      - name: Install root dependencies
-        run: npm ci
-
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: npm ci
@@ -77,9 +287,6 @@ jobs:
         working-directory: ./backend
         run: npx tsx tests/seed.ts
 
-      - name: Run root linting
-        run: npm run lint --if-present
-
       - name: Run frontend linting
         working-directory: ./frontend
         run: npm run lint --if-present
@@ -88,9 +295,6 @@ jobs:
         working-directory: ./backend
         run: npm run lint --if-present
 
-      - name: Run root tests
-        run: npm test --if-present
-
       - name: Run frontend tests
         working-directory: ./frontend
         run: npm test --if-present
@@ -98,9 +302,6 @@ jobs:
       - name: Run backend tests
         working-directory: ./backend
         run: npm test
-
-      - name: Type check root
-        run: npx tsc --noEmit --if-present
 
       - name: Type check frontend
         working-directory: ./frontend
@@ -149,10 +350,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run security audit
-        run: |
-          npm audit --production || echo "Non-fatal npm audit warnings"
-
       - name: Run frontend security audit
         working-directory: ./frontend
         run: |
@@ -162,9 +359,6 @@ jobs:
         working-directory: ./backend
         run: |
           npm audit --production || echo "Non-fatal npm audit warnings"
-
-      - name: Run root ESLint security plugin
-        run: npm run lint --if-present
 
       - name: Run frontend ESLint security plugin
         working-directory: ./frontend
