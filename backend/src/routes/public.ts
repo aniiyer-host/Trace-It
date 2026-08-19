@@ -7,7 +7,7 @@ import Joi from 'joi';
 const paginationSchema = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(10),
   cursor: Joi.string().optional(),
-});
+}).unknown(false);
 
 // ---------------------------------------------------------------------------
 // GET /api/public/campaigns

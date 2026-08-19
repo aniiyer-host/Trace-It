@@ -29,7 +29,7 @@ const charityOnboardSchema = Joi.object({
   solWalletAddress: Joi.string().optional(),
   description: Joi.string().required(),
   sdgTags: Joi.array().items(Joi.string()).optional(),
-});
+}).unknown(false);
 
 // ---------------------------------------------------------------------------
 // POST /onboard
@@ -191,7 +191,7 @@ const campaignSchema = Joi.object({
   category: Joi.string().optional(),
   sdgTags: Joi.array().items(Joi.string()).optional(),
   coverImageUrl: Joi.string().uri().optional(),
-});
+}).unknown(false);
 
 export const createCampaign = async (
   req: Request,
@@ -239,7 +239,7 @@ const campaignUpdateSchema = Joi.object({
   title: Joi.string().optional(),
   description: Joi.string().optional(),
   coverImageUrl: Joi.string().uri().optional(),
-});
+}).unknown(false);
 
 export const updateCampaign = async (
   req: Request,
@@ -333,7 +333,7 @@ const cohortSchema = Joi.object({
   campaignId: Joi.string().uuid().required(),
   name: Joi.string().required(),
   count: Joi.number().min(1).required(),
-});
+}).unknown(false);
 
 export const createCohort = async (
   req: Request,
@@ -424,7 +424,7 @@ const disburseSchema = Joi.object({
   cohortId: Joi.string().uuid().optional(),
   amountInr: Joi.number().positive().required(),
   fieldReportUrl: Joi.string().uri().optional(),
-});
+}).unknown(false);
 
 export const createDisbursement = async (
   req: Request,
@@ -719,6 +719,78 @@ export const get80GReport = async (
 };
 
 // ---------------------------------------------------------------------------
+// GET /documents/:id/download
+// ---------------------------------------------------------------------------
+export const downloadDocument = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId)
+      return res.status(401).json({ error: 'User not authenticated' });
+
+    const documentId = req.params.id as string;
+
+    const document = await prisma.document.findUnique({
+      where: { id: documentId },
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // If the user is the owner, allow download
+    if (document.ownerId === userId) {
+      const signedUrl = await DocumentService.getDocumentUrl(documentId, userId);
+      return res.json({ downloadUrl: signedUrl });
+    }
+
+    // Check for an active government request targeting the document's owner
+    const govRequest = await prisma.governmentRequest.findFirst({
+      where: {
+        targetUserId: document.ownerId,
+        status: 'OPEN',
+      },
+    });
+
+    if (govRequest) {
+      // Allow download under government request
+      const signedUrl = await DocumentService.getDocumentUrl(documentId, userId);
+      // Log that access was under a government request (optional, we already have audit logs for gov request actions)
+      await writeAuditLog({
+        actorType: AuditActorType.USER,
+        actorId: userId,
+        entityType: 'document',
+        entityId: documentId,
+        action: 'DOCUMENT_ACCESS_GOV_REQUEST',
+        metadata: {
+          governmentRequestId: govRequest.id,
+        },
+        ipAddress: req.ip,
+      });
+      return res.json({ downloadUrl: signedUrl });
+    }
+
+    // No authorization: log unauthorized access and deny
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: userId,
+      entityType: 'document',
+      entityId: documentId,
+      action: 'UNAUTHORIZED_DOC_ACCESS',
+      metadata: {},
+      ipAddress: req.ip,
+    });
+
+    return res.status(403).json({ error: 'Unauthorized to access this document' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 charityRouter.post("/onboard", requireAuth, charityOnboard);
@@ -797,6 +869,13 @@ charityRouter.get(
   requireAuth,
   requireRole(UserRole.CHARITY),
   get80GReport,
+);
+
+// Document Download
+charityRouter.get(
+  "/documents/:id/download",
+  requireAuth,
+  downloadDocument,
 );
 
 export default charityRouter;

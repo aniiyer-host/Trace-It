@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import mongoSanitize from "express-mongo-sanitize";
 import { config as dotenvConfig } from "dotenv";
 
 dotenvConfig();
@@ -24,6 +25,13 @@ const PORT = process.env.PORT || 3000;
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
+// Removed mongoSanitize as Prisma parameterizes queries, and express-mongo-sanitize crashes Express 5
+// Request ID middleware
+import { requestIdMiddleware } from './middleware/requestIdMiddleware';
+app.use(requestIdMiddleware);
+// Request logging middleware
+import { requestLogger } from './middleware/requestLogger';
+app.use(requestLogger);
 
 // Rate limiting
 const limiter = rateLimit({
