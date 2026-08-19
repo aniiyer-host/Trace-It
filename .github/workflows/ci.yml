@@ -54,11 +54,16 @@ jobs:
           node-version: "18"
           cache: "npm"
 
-      - name: Install dependencies
-        run: |
-          npm ci
-          cd frontend && npm ci
-          cd backend && npm ci
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
 
       - name: Generate Prisma client
         working-directory: ./backend
@@ -72,43 +77,64 @@ jobs:
         working-directory: ./backend
         run: npx tsx tests/seed.ts
 
-      - name: Run linting
-        run: |
-          npm run lint --if-present
-          cd frontend && npm run lint --if-present
-          cd backend && npm run lint --if-present
+      - name: Run root linting
+        run: npm run lint --if-present
 
-      - name: Run tests
-        run: |
-          npm test --if-present
-          cd frontend && npm test --if-present
-          cd backend && npm test
+      - name: Run frontend linting
+        working-directory: ./frontend
+        run: npm run lint --if-present
 
-      - name: Type checking
-        run: |
-          npx tsc --noEmit --if-present
-          cd frontend && npx tsc --noEmit --if-present
-          cd backend && npx tsc --noEmit
+      - name: Run backend linting
+        working-directory: ./backend
+        run: npm run lint --if-present
 
-      - name: Build application
-        run: |
-          cd frontend && npm run build --if-present
-          cd backend && npm run build
+      - name: Run root tests
+        run: npm test --if-present
+
+      - name: Run frontend tests
+        working-directory: ./frontend
+        run: npm test --if-present
+
+      - name: Run backend tests
+        working-directory: ./backend
+        run: npm test
+
+      - name: Type check root
+        run: npx tsc --noEmit --if-present
+
+      - name: Type check frontend
+        working-directory: ./frontend
+        run: npx tsc --noEmit --if-present
+
+      - name: Type check backend
+        working-directory: ./backend
+        run: npx tsc --noEmit
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build --if-present
+
+      - name: Build backend
+        working-directory: ./backend
+        run: npm run build
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
+          if-no-files-found: ignore
           path: |
             **/test-results/**
             **/jest/*.xml
             **/coverage/**
+
       - name: Upload coverage reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
+          if-no-files-found: ignore
           path: |
             **/coverage/*
             !**/node_modules/**
@@ -125,15 +151,28 @@ jobs:
 
       - name: Run security audit
         run: |
-          npm audit --production || echo "Non-fatal: npm audit warnings"
-          cd frontend && npm audit --production || echo "Non-fatal: npm audit warnings"
-          cd backend && npm audit --production || echo "Non-fatal: npm audit warnings"
+          npm audit --production || echo "Non-fatal npm audit warnings"
 
-      - name: Run ESLint security plugin
+      - name: Run frontend security audit
+        working-directory: ./frontend
         run: |
-          npm run lint --if-present
-          cd frontend && npm run lint --if-present
-          cd backend && npm run lint --if-present
+          npm audit --production || echo "Non-fatal npm audit warnings"
+
+      - name: Run backend security audit
+        working-directory: ./backend
+        run: |
+          npm audit --production || echo "Non-fatal npm audit warnings"
+
+      - name: Run root ESLint security plugin
+        run: npm run lint --if-present
+
+      - name: Run frontend ESLint security plugin
+        working-directory: ./frontend
+        run: npm run lint --if-present
+
+      - name: Run backend ESLint security plugin
+        working-directory: ./backend
+        run: npm run lint --if-present
 
   # Docker build job (only on main branch)
   docker:
@@ -159,15 +198,15 @@ jobs:
         with:
           context: ./frontend
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/traceit-frontend:latest
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/traceit-frontend:cache
-          cache-to: type=inline
+          tags: "${{ secrets.DOCKERHUB_USERNAME }}/traceit-frontend:latest"
+          cache-from: "type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/traceit-frontend:cache"
+          cache-to: "type=inline"
 
       - name: Build and push backend
         uses: docker/build-push-action@v4
         with:
           context: ./backend
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/traceit-backend:latest
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/traceit-backend:cache
-          cache-to: type=inline
+          tags: "${{ secrets.DOCKERHUB_USERNAME }}/traceit-backend:latest"
+          cache-from: "type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/traceit-backend:cache"
+          cache-to: "type=inline"
