@@ -1,7 +1,10 @@
 import { Router } from 'express';
-import { signupSchema, verifyEmailSchema } from '../utils/validation';
+import { signupSchema, verifyEmailSchema, loginSchema } from '../utils/validation';
 import { signup, verifyEmail, login, refreshToken, logout } from '../services/authService';
 import { authLimiter } from '../middleware/strictLimiter';
+import { writeAuditLog } from '../services/auditLogService';
+import { AuditActorType } from '../../generated/prisma/enums';
+import { prisma } from '../db/prisma';
 
 const router = Router();
 
@@ -77,14 +80,34 @@ router.post('/verify-email', async (req, res) => {
  */
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-
-    // Simple validation
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+    // Validate input
+    const { error, value } = loginSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({ error: error.details[0].message });
     }
 
+    const { email, password } = value;
+
     const tokens = await login(email, password);
+
+    // Get user ID for audit log
+    const user = await prisma.profile.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
+    // Log successful login
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: user?.id ?? undefined,
+      entityType: 'auth',
+      entityId: undefined,
+      action: 'LOGIN_SUCCESS',
+      metadata: {
+        email,
+      },
+      ipAddress: req.ip,
+    });
 
     // Set refresh token as HttpOnly cookie
     res.cookie('refreshToken', tokens.refreshToken, {
@@ -100,6 +123,19 @@ router.post('/login', async (req, res) => {
     });
   } catch (err: any) {
     if (err.message === 'Invalid credentials') {
+      // Log failed login
+      await writeAuditLog({
+        actorType: AuditActorType.USER,
+        actorId: undefined,
+        entityType: 'auth',
+        entityId: undefined,
+        action: 'LOGIN_FAILED',
+        metadata: {
+          email: req.body.email, // Use the email from request body (might be invalid, but we log for audit)
+          reason: 'Invalid credentials',
+        },
+        ipAddress: req.ip,
+      });
       return res.status(401).json({ error: err.message });
     }
     console.error(err);

@@ -76,7 +76,7 @@ const donateSchema = Joi.object({
   paymentMethod: Joi.string()
     .valid('UPI', 'CARD', 'NETBANKING', 'WALLET', 'SOLANA_STUB')
     .required(),
-});
+}).unknown(false);
 
 /**
  * Create a donation:
@@ -191,7 +191,7 @@ const kycSchema = Joi.object({
     .messages({
       'string.pattern.base': 'PAN must be in the format AAAAA9999A',
     }),
-});
+}).unknown(false);
 
 /**
  * KYC stub:
