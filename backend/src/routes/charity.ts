@@ -63,11 +63,9 @@ export const charityOnboard = async (
       profile.ngoStatus !== NgoStatus.PENDING &&
       profile.ngoStatus !== NgoStatus.REJECTED
     ) {
-      return res
-        .status(400)
-        .json({
-          error: "NGO profile is already active or suspended. Cannot update.",
-        });
+      return res.status(400).json({
+        error: "NGO profile is already active or suspended. Cannot update.",
+      });
     }
 
     // Since Profile schema doesn't have description and sdgTags, we need to handle them.
@@ -138,12 +136,10 @@ export const uploadDocument = async (
       metadata: { sha512HashSnippet: document.sha512Hash.substring(0, 8) },
     });
 
-    res
-      .status(201)
-      .json({
-        documentId: document.id,
-        message: "Document uploaded successfully",
-      });
+    res.status(201).json({
+      documentId: document.id,
+      message: "Document uploaded successfully",
+    });
   } catch (err) {
     next(err);
   }
@@ -329,10 +325,18 @@ export const getCampaigns = async (
 // ---------------------------------------------------------------------------
 // POST /cohorts
 // ---------------------------------------------------------------------------
+
+// const cohortSchema = Joi.object({
+//   campaignId: Joi.string().uuid().required(),
+//   name: Joi.string().required(),
+//   count: Joi.number().min(1).required(),
+// }).unknown(false);
+
 const cohortSchema = Joi.object({
   campaignId: Joi.string().uuid().required(),
   name: Joi.string().required(),
-  count: Joi.number().min(1).required(),
+  beneficiaryCount: Joi.number().min(1).required(),
+  description: Joi.string().optional(),
 }).unknown(false);
 
 export const createCohort = async (
@@ -348,12 +352,22 @@ export const createCohort = async (
     const { error, value } = cohortSchema.validate(req.body);
     if (error) return res.status(400).json({ error: error.details[0].message });
 
+    // const cohort = await prisma.beneficiaryCohort.create({
+    //   data: {
+    //     campaignId: value.campaignId,
+    //     ngoId: userId,
+    //     name: value.name,
+    //     beneficiaryCount: value.count,
+    //   },
+    // });
+
     const cohort = await prisma.beneficiaryCohort.create({
       data: {
         campaignId: value.campaignId,
         ngoId: userId,
         name: value.name,
-        beneficiaryCount: value.count,
+        beneficiaryCount: value.beneficiaryCount,
+        description: value.description,
       },
     });
 
@@ -405,12 +419,10 @@ export const uploadCohortProof = async (
       data: { sha512DocHash: document.sha512Hash },
     });
 
-    res
-      .status(201)
-      .json({
-        id: updatedCohort.id,
-        sha512DocHash: updatedCohort.sha512DocHash,
-      });
+    res.status(201).json({
+      id: updatedCohort.id,
+      sha512DocHash: updatedCohort.sha512DocHash,
+    });
   } catch (err) {
     next(err);
   }
@@ -420,11 +432,13 @@ export const uploadCohortProof = async (
 // POST /disburse
 // ---------------------------------------------------------------------------
 const disburseSchema = Joi.object({
-  campaignId: Joi.string().uuid().required(),
+  campaignId: Joi.string().uuid().optional(),
   cohortId: Joi.string().uuid().optional(),
   amountInr: Joi.number().positive().required(),
   fieldReportUrl: Joi.string().uri().optional(),
-}).unknown(false);
+})
+  .unknown(false)
+  .or('campaignId', 'cohortId');
 
 export const createDisbursement = async (
   req: Request,
@@ -439,7 +453,25 @@ export const createDisbursement = async (
     const { error, value } = disburseSchema.validate(req.body);
     if (error) return res.status(400).json({ error: error.details[0].message });
 
-    const { campaignId, cohortId, amountInr, fieldReportUrl } = value;
+    let { campaignId, cohortId, amountInr, fieldReportUrl } = value;
+
+    // When only cohortId is provided, resolve campaignId from the cohort
+    if (!campaignId && cohortId) {
+      const cohort = await prisma.beneficiaryCohort.findUnique({
+        where: { id: cohortId },
+      });
+      if (!cohort || cohort.ngoId !== userId) {
+        return res
+          .status(404)
+          .json({ error: "Cohort not found or doesn't belong to this NGO" });
+      }
+      if (!cohort.sha512DocHash) {
+        return res
+          .status(400)
+          .json({ error: "Cohort proof has not been uploaded yet" });
+      }
+      campaignId = cohort.campaignId;
+    }
 
     // Verify campaign belongs to NGO
     const campaign = await prisma.campaign.findUnique({
@@ -451,7 +483,8 @@ export const createDisbursement = async (
         .json({ error: "Campaign not found or doesn't belong to this NGO" });
     }
 
-    if (cohortId) {
+    // If cohortId was also provided alongside campaignId, validate it belongs to the campaign
+    if (cohortId && campaignId === value.campaignId) {
       const cohort = await prisma.beneficiaryCohort.findUnique({
         where: { id: cohortId },
       });
@@ -664,12 +697,11 @@ export const get80GReport = async (
         .json({ error: "Only active NGOs can access 80G reports" });
     }
 
-    // Get all SUCCESS donations with tax receipts for this NGO
+    // Get all SUCCESS donations for this NGO (with or without tax receipt emailed)
     const donations = await prisma.donation.findMany({
       where: {
         ngoId: userId,
         status: DonationStatus.SUCCESS,
-        taxReceiptEmailed: true,
       },
       include: {
         donor: {
@@ -729,7 +761,7 @@ export const downloadDocument = async (
   try {
     const userId = req.user?.id;
     if (!userId)
-      return res.status(401).json({ error: 'User not authenticated' });
+      return res.status(401).json({ error: "User not authenticated" });
 
     const documentId = req.params.id as string;
 
@@ -738,12 +770,15 @@ export const downloadDocument = async (
     });
 
     if (!document) {
-      return res.status(404).json({ error: 'Document not found' });
+      return res.status(404).json({ error: "Document not found" });
     }
 
     // If the user is the owner, allow download
     if (document.ownerId === userId) {
-      const signedUrl = await DocumentService.getDocumentUrl(documentId, userId);
+      const signedUrl = await DocumentService.getDocumentUrl(
+        documentId,
+        userId,
+      );
       return res.json({ downloadUrl: signedUrl });
     }
 
@@ -751,20 +786,23 @@ export const downloadDocument = async (
     const govRequest = await prisma.governmentRequest.findFirst({
       where: {
         targetUserId: document.ownerId,
-        status: 'OPEN',
+        status: "OPEN",
       },
     });
 
     if (govRequest) {
       // Allow download under government request
-      const signedUrl = await DocumentService.getDocumentUrl(documentId, userId);
+      const signedUrl = await DocumentService.getDocumentUrl(
+        documentId,
+        userId,
+      );
       // Log that access was under a government request (optional, we already have audit logs for gov request actions)
       await writeAuditLog({
         actorType: AuditActorType.USER,
         actorId: userId,
-        entityType: 'document',
+        entityType: "document",
         entityId: documentId,
-        action: 'DOCUMENT_ACCESS_GOV_REQUEST',
+        action: "DOCUMENT_ACCESS_GOV_REQUEST",
         metadata: {
           governmentRequestId: govRequest.id,
         },
@@ -777,14 +815,16 @@ export const downloadDocument = async (
     await writeAuditLog({
       actorType: AuditActorType.USER,
       actorId: userId,
-      entityType: 'document',
+      entityType: "document",
       entityId: documentId,
-      action: 'UNAUTHORIZED_DOC_ACCESS',
+      action: "UNAUTHORIZED_DOC_ACCESS",
       metadata: {},
       ipAddress: req.ip,
     });
 
-    return res.status(403).json({ error: 'Unauthorized to access this document' });
+    return res
+      .status(403)
+      .json({ error: "Unauthorized to access this document" });
   } catch (err) {
     next(err);
   }
@@ -872,10 +912,6 @@ charityRouter.get(
 );
 
 // Document Download
-charityRouter.get(
-  "/documents/:id/download",
-  requireAuth,
-  downloadDocument,
-);
+charityRouter.get("/documents/:id/download", requireAuth, downloadDocument);
 
 export default charityRouter;
