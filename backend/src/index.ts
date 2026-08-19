@@ -4,7 +4,6 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { config as dotenvConfig } from "dotenv";
 
-// Load environment variables
 dotenvConfig();
 
 import authRoutes from "./routes/auth";
@@ -13,13 +12,10 @@ import donorRoutes from "./routes/donor";
 import charityRoutes from "./routes/charity";
 import adminRoutes from "./routes/admin";
 import webhookRoutes from "./routes/webhooks/razorpay";
-// Patch BigInt to be serializable by JSON.stringify
-(BigInt.prototype as any).toJSON = function () {
-  return this.toString();
-};
 
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
+import BlockchainRetryProcessor from "./services/blockchainRetryProcessor";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -55,6 +51,23 @@ app.use(notFound);
 
 // Error handler
 app.use(errorHandler);
+
+// Start blockchain retry processor (only in non-test environments)
+if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
+  const retryProcessor = new BlockchainRetryProcessor();
+  retryProcessor.start().catch(console.error);
+
+  // Graceful shutdown handling
+  process.on('SIGINT', () => {
+    retryProcessor.stop();
+    // ... existing shutdown code ...
+  });
+
+  process.on('SIGTERM', () => {
+    retryProcessor.stop();
+    // ... existing shutdown code ...
+  });
+}
 
 // app.listen(PORT, () => {
 //   console.log(`Server is running on port ${PORT}`);

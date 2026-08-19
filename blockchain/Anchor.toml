@@ -1,0 +1,20 @@
+[toolchain]
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.devnet]
+traceit = "5AFcU61X6LoQSNTcCFeEKauVsfCwfvtUDXY6XhMq7oCM"
+
+[programs.localnet]
+traceit = "5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/devnet-traceit.json"
+
+[scripts]
+test = "cargo test"
+
+[hooks]

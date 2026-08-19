@@ -377,3 +377,17 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+// Blockchain Retry Queue
+model BlockchainRetryQueue {
+  id          String   @id @default(uuid())
+  donationId  String   @unique
+  error       String
+  retryCount  Int      @default(0)
+  lastAttempt DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([lastAttempt])
+  @@map("BlockchainRetryQueue")
+}

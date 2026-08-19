@@ -224,6 +224,10 @@ export const getPublicDonationByPublicId = async (
       ngo?: { organisationName: string | null } | null;
     };
 
+    const explorerUrl = typedDonation.solanaTxHash
+      ? `https://explorer.solana.com/tx/${typedDonation.solanaTxHash}?cluster=devnet`
+      : null;
+
     res.json({
       publicId: typedDonation.publicId,
       amount: typedDonation.amount,
@@ -231,6 +235,7 @@ export const getPublicDonationByPublicId = async (
       paymentMethod: typedDonation.paymentMethod,
       status: typedDonation.status,
       solanaTxHash: typedDonation.solanaTxHash,
+      explorerUrl,
       createdAt: typedDonation.createdAt,
       campaign: typedDonation.project
         ? { id: typedDonation.project.id, title: typedDonation.project.title }

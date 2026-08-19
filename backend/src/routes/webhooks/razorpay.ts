@@ -6,6 +6,7 @@ import { writeAuditLog } from '../../services/auditLogService';
 import { AuditActorType } from '../../../generated/prisma/enums';
 import { generateAndStoreReceipt } from '../../services/receiptService';
 import { notifyAdmin } from '../../services/emailService';
+import { getBlockchainService } from '../../services/blockchainInstance';
 
 interface RawRequest extends Request {
   rawBody: Buffer;
@@ -196,8 +197,94 @@ export const razorpayWebhookHandler = async (
           });
         });
 
-      // TODO(blockchain-team): after webhook success, call Donation Registry Program with donor_id_hash
-      // This is a blockchain stub as mentioned in the implementation plan
+      // BLOCKCHAIN INTEGRATION: Record donation on-chain after successful payment
+      try {
+        const blockchainService = await getBlockchainService();
+
+        
+        // Prepare donation data for on-chain recording
+        const donationData = {
+          donationId: donation.id, // UUID from Postgres
+          donorUserId: donation.donorId, // Raw user ID (will be hashed by service)
+          ngoId: donation.ngoId,
+          campaignId: donation.campaignId ?? '',
+          amountInr: donation.amount.toNumber(), // Amount in INR
+          currency: 'INR',
+          timestamp: new Date() // Current timestamp
+        };
+
+        // Record on-chain (idempotent - safe to call multiple times)
+        const blockchainResult = await blockchainService.recordDonation(donationData);
+
+        if (blockchainResult.success) {
+          // Store transaction hash in donation record
+          await prisma.donation.update({
+            where: { id: donation.id },
+            data: { solanaTxHash: blockchainResult.txHash }
+          });
+
+          // Log success to audit trail
+          await writeAuditLog({
+            actorType: AuditActorType.SYSTEM,
+            entityType: 'donation',
+            entityId: donation.id,
+            action: 'BLOCKCHAIN_RECORD_SUCCESS',
+            metadata: {
+              donationId: donation.id,
+              transactionHash: blockchainResult.txHash
+            },
+            ipAddress: req.ip,
+          });
+
+          console.info(`Blockchain recording successful for donation ${donation.id}: ${blockchainResult.txHash}`);
+        } else {
+          // Handle recording failure
+          console.error(`Blockchain recording failed for donation ${donation.id}: ${blockchainResult.error}`);
+
+          // Add to retry queue for later processing
+          await addToBlockchainRetryQueue({
+            donationId: donation.id,
+            error: blockchainResult.error ?? 'Unknown error',
+            retryCount: 0
+          });
+
+          // Log failure to audit trail
+          await writeAuditLog({
+            actorType: AuditActorType.SYSTEM,
+            entityType: 'donation',
+            entityId: donation.id,
+            action: 'BLOCKCHAIN_RECORD_FAILED',
+            metadata: {
+              donationId: donation.id,
+              error: blockchainResult.error
+            },
+            ipAddress: req.ip,
+          });
+        }
+      } catch (error) {
+        // Handle service initialization or other unexpected errors
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`Blockchain service error for donation ${donation.id}:`, error);
+
+        // Add to retry queue
+        await addToBlockchainRetryQueue({
+          donationId: donation.id,
+          error: errorMessage,
+          retryCount: 0
+        });
+
+        await writeAuditLog({
+          actorType: AuditActorType.SYSTEM,
+          entityType: 'donation',
+          entityId: donation.id,
+          action: 'BLOCKCHAIN_SERVICE_ERROR',
+          metadata: {
+            donationId: donation.id,
+            error: errorMessage
+          },
+          ipAddress: req.ip,
+        });
+      }
 
       return res.status(200).json({ received: true });
     }
@@ -347,6 +434,42 @@ export const razorpayRefundWebhookHandler = async (
     next(err);
   }
 };
+
+// Helper function for retry queue
+async function addToBlockchainRetryQueue(data: {
+  donationId: string;
+  error: string;
+  retryCount: number;
+}): Promise<void> {
+  try {
+    // Import Prisma client
+    const { prisma } = require('../db/prisma');
+
+    // Create or update retry queue entry
+    await prisma.blockchainRetryQueue.upsert({
+      where: { donationId: data.donationId },
+      update: {
+        error: data.error,
+        retryCount: data.retryCount + 1,
+        lastAttempt: new Date(),
+        updatedAt: new Date()
+      },
+      create: {
+        donationId: data.donationId,
+        error: data.error,
+        retryCount: data.retryCount + 1,
+        lastAttempt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    });
+
+    console.info(`Added donation ${data.donationId} to blockchain retry queue (attempt ${data.retryCount + 1})`);
+  } catch (queueError) {
+    console.error(`Failed to add to retry queue:`, queueError);
+    // Don't fail the webhook if queue fails - the donation is already recorded in DB
+  }
+}
 
 // Router setup
 const razorpayRouter = Router();
