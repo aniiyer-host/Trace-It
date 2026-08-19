@@ -8,6 +8,8 @@ import { StorageService } from "../src/services/storageService";
 
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "access_secret";
 
+import crypto from "crypto";
+
 describe("Charity API Integration Tests", () => {
   let charityToken: string;
   let charityUserId: string;
@@ -19,7 +21,7 @@ describe("Charity API Integration Tests", () => {
     // Create a mock charity user
     const user = await prisma.profile.create({
       data: {
-        email: `charity-${Date.now()}@example.com`,
+        email: `charity-${crypto.randomUUID()}@example.com`,
         role: UserRole.CHARITY,
         ngoStatus: NgoStatus.ACTIVE,
       },
