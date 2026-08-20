@@ -72,6 +72,7 @@ jobs:
         run: npx prisma migrate deploy
 
       - name: Create valid test wallet
+        working-directory: ./backend
         run: |
           node -e "
             const { Keypair } = require('@solana/web3.js');
