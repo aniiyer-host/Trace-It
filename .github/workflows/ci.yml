@@ -98,7 +98,7 @@ jobs:
 
       - name: Type check frontend
         working-directory: ./frontend
-        run: npx tsc --noEmit --if-present
+        run: npx tsc --noEmit
 
       - name: Type check backend
         working-directory: ./backend
