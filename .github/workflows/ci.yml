@@ -44,6 +44,7 @@ jobs:
       SOLANA_RPC_URL: https://api.devnet.solana.com
       SOLANA_WALLET_KEYPAIR_PATH: /tmp/test-wallet.json
       BLOCKCHAIN_HMAC_SECRET: test-hmac-secret
+      AES_DOCUMENT_KEY: b23b691cc49adf7bfb6ac6b7cd5a8ea6bb33c49f42047380e1891ce1dc95dc85
 
     steps:
       - uses: actions/checkout@v4
@@ -69,6 +70,10 @@ jobs:
       - name: Run Prisma migrations
         working-directory: ./backend
         run: npx prisma migrate deploy
+
+      - name: Create dummy test wallet
+        run: |
+          echo '[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64]' > /tmp/test-wallet.json
 
       - name: Seed test database
         working-directory: ./backend
