@@ -29,4 +29,9 @@ TraceIt—ComprehensiveSystemArchitecture.docx
 #Aaditya space
 phase-1-summary.txt
 PHASE_1_COMPLETION_SUMMARY.md
-/blockchain/target/
+/blockchain/target/*
+
+# For Blockchain integration test
+
+!/blockchain/target/idl/
+!/blockchain/target/idl/traceit.json

@@ -1,0 +1,266 @@
+{
+  "address": "5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3",
+  "metadata": {
+    "name": "traceit",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "record_donation",
+      "discriminator": [
+        154,
+        48,
+        126,
+        97,
+        74,
+        123,
+        36,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "donation_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  111,
+                  110,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "donation_id.replace(\"-\", \"\")"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "donation_id",
+          "type": "string"
+        },
+        {
+          "name": "donor_id_hash",
+          "type": "string"
+        },
+        {
+          "name": "ngo_id",
+          "type": "string"
+        },
+        {
+          "name": "campaign_id",
+          "type": "string"
+        },
+        {
+          "name": "amount_paisa",
+          "type": "u64"
+        },
+        {
+          "name": "currency",
+          "type": "string"
+        },
+        {
+          "name": "timestamp",
+          "type": "i64"
+        },
+        {
+          "name": "record_hash",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "update_donation_status",
+      "discriminator": [
+        200,
+        246,
+        228,
+        119,
+        227,
+        52,
+        211,
+        174
+      ],
+      "accounts": [
+        {
+          "name": "donation_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  111,
+                  110,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "donation_id.replace(\"-\", \"\")"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "donation_id",
+          "type": "string"
+        },
+        {
+          "name": "new_status",
+          "type": "u8"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "DonationRecord",
+      "discriminator": [
+        219,
+        64,
+        180,
+        111,
+        72,
+        70,
+        71,
+        0
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidInput",
+      "msg": "Invalid input: field exceeds maximum length"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidAmount",
+      "msg": "Invalid amount: must be greater than zero"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidStatusTransition",
+      "msg": "Invalid status transition"
+    },
+    {
+      "code": 6003,
+      "name": "Unauthorized",
+      "msg": "Unauthorized: only the program authority can perform this action"
+    }
+  ],
+  "types": [
+    {
+      "name": "DonationRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "donation_id",
+            "docs": [
+              "The off-chain donation UUID (stored as 36 bytes)"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "donor_id_hash",
+            "docs": [
+              "SHA-512 hash of (userId + secret) — never store raw userId"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "ngo_id",
+            "docs": [
+              "NGO profile ID"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "campaign_id",
+            "docs": [
+              "Campaign/project ID"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "amount_paisa",
+            "docs": [
+              "Donation amount in paisa (INR * 100)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "currency",
+            "docs": [
+              "Currency code (always \"INR\")"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Unix timestamp of the donation"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Current status: 0=Initiated, 1=Success, 2=Allocated, 3=Disbursed, 4=Delivered"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "record_hash",
+            "docs": [
+              "SHA-512 hash of the full donation record for tamper detection"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA derivation"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
