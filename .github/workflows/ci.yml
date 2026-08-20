@@ -78,7 +78,7 @@ jobs:
 
       - name: Seed test database
         working-directory: ./backend
-        run: npx tsx tests/seed.ts
+        run: npx prisma db seed
 
       - name: Run frontend linting
         working-directory: ./frontend

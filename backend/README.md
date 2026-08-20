@@ -47,7 +47,9 @@ This is the backend for the Trace-It donation tracking platform.
 5. **Seed the database (recommended for development)**:
 
    ```bash
-   npx tsx tests/seed.ts
+   npx prisma db seed
+   # or
+   npm run seed
    ```
 
    This populates the database with initial data (admin, NGO, donors, campaigns, etc.).

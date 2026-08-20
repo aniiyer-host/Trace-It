@@ -78,7 +78,7 @@ VITE_SOLANA_NETWORK="mainnet-beta"
    cd backend
    npx prisma generate
    npx prisma migrate deploy
-   npx tsx tests/seed.ts
+   npx prisma db seed
    ```
 7. Access application: http://localhost:5173
 
