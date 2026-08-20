@@ -79,9 +79,13 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
   });
 }
 
-// app.listen(PORT, () => {
-//   console.log(`Server is running on port ${PORT}`);
-// });
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "healthy" });
+});
 
 if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
   app.listen(PORT, () => {
