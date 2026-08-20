@@ -4,12 +4,17 @@
   "description": "",
   "main": "index.js",
   "type": "module",
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "scripts": {
     "dev": "ts-node-dev src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --forceExit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seed": "prisma db seed",
+    "db:seed": "prisma db seed"
   },
   "keywords": [],
   "author": "",
@@ -34,6 +39,7 @@
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.12",
     "ts-node-dev": "^2.0.0",
+    "tsx": "^4.19.3",
     "typescript": "^7.0.2",
     "uuid": "^14.0.2"
   },
