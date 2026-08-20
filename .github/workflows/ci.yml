@@ -71,15 +71,10 @@ jobs:
         working-directory: ./backend
         run: npx prisma migrate deploy
 
-      - name: Create valid test wallet
-        working-directory: ./backend
+      - name: Create test wallet from persistent funded key
         run: |
-          node -e "
-            const { Keypair } = require('@solana/web3.js');
-            const fs = require('fs');
-            const kp = Keypair.generate();
-            fs.writeFileSync('/tmp/test-wallet.json', JSON.stringify(Array.from(kp.secretKey)));
-          "
+          echo '${{ secrets.SOLANA_TEST_WALLET_SECRET }}' > /tmp/test-wallet.json
+          node -e "JSON.parse(require('fs').readFileSync('/tmp/test-wallet.json', 'utf-8'))" && echo "Wallet file is valid JSON"
 
       - name: Seed test database
         working-directory: ./backend
