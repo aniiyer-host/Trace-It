@@ -180,7 +180,7 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     needs: test-and-build
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/Aarush-system'
     timeout-minutes: 15
 
     steps:
