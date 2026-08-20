@@ -12,7 +12,6 @@ security_docs/*
 templates/*
 traceit-siem
 DEPLOYMENT_SUMMARY.MD
-Dockerfile
 Jenkinsfile
 
 
