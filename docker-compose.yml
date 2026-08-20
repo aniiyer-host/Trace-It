@@ -82,6 +82,7 @@ services:
     env_file:
       - .env
     environment:
+      PORT: 3001
       DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/traceit?pgbouncer=true"
       DIRECT_DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/traceit"
       REDIS_URL: "redis://redis:6379"
