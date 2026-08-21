@@ -81,8 +81,12 @@ export class DocumentService {
 
   /**
    * Generates a signed URL for a document after checking ownership.
+   * @param documentId The ID of the document
+   * @param requesterId The ID of the user requesting access
+   * @param ttlSeconds Time to live for the signed URL in seconds (default: 900)
+   * @param bypassOwnershipCheck If true, skips ownership check for authorized users (e.g., government requests)
    */
-  static async getDocumentUrl(documentId: string, requesterId: string, ttlSeconds: number = 900): Promise<string> {
+  static async getDocumentUrl(documentId: string, requesterId: string, ttlSeconds: number = 900, bypassOwnershipCheck: boolean = false): Promise<string> {
     const document = await prisma.document.findUnique({
       where: { id: documentId },
     });
@@ -91,8 +95,8 @@ export class DocumentService {
       throw new Error('Document not found');
     }
 
-    // Basic ownership check. Admins might need bypass in the future.
-    if (document.ownerId !== requesterId) {
+    // Basic ownership check. Can be bypassed for authorized users (e.g., government requests).
+    if (!bypassOwnershipCheck && document.ownerId !== requesterId) {
       throw new Error('Unauthorized to access this document');
     }
 

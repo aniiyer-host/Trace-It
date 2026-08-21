@@ -860,9 +860,6 @@ async function addToBlockchainRetryQueue(data: {
   targetStatus?: number;
 }): Promise<void> {
   try {
-    // Import Prisma client
-    const { prisma } = require('../db/prisma');
-
     // Create or update retry queue entry
     await prisma.blockchainRetryQueue.upsert({
       where: { donationId: data.donationId },

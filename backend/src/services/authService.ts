@@ -3,8 +3,16 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { generateOTP, sendOTP } from "./emailService";
 
-const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "access_secret";
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "refresh_secret";
+const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+
+// Validate required environment variables
+if (!JWT_ACCESS_SECRET) {
+  throw new Error("JWT_ACCESS_SECRET environment variable is required");
+}
+if (!JWT_REFRESH_SECRET) {
+  throw new Error("JWT_REFRESH_SECRET environment variable is required");
+}
 const JWT_ACCESS_EXPIRES_IN = "15m";
 const JWT_REFRESH_EXPIRES_IN = "7d";
 
@@ -185,24 +193,36 @@ export const refreshToken = async (oldRefreshToken: string) => {
 };
 
 export const logout = async (refreshToken: string) => {
-  // Find users with a non-null refreshTokenHash
-  const users = await prisma.profile.findMany({
-    where: { refreshTokenHash: { not: null } },
+  let userId: string;
+  try {
+    // Verify and decode the refresh token to get userId
+    const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as { userId: string };
+    userId = decoded.userId;
+  } catch (error) {
+    throw new Error("Invalid refresh token");
+  }
+
+  // Find the specific user by ID
+  const user = await prisma.profile.findUnique({
+    where: { id: userId },
     select: { id: true, refreshTokenHash: true },
   });
 
-  for (const u of users) {
-    // Since we know refreshTokenHash is not null due to the where clause, we can use non-null assertion
-    const isValid = await bcrypt.compare(refreshToken, u.refreshTokenHash!);
-    if (isValid) {
-      // Found the user
-      await prisma.profile.update({
-        where: { id: u.id },
-        data: { refreshTokenHash: null },
-      });
-      return { success: true };
-    }
+  if (!user || !user.refreshTokenHash) {
+    throw new Error("Invalid refresh token");
   }
 
-  throw new Error("Invalid refresh token");
+  // Verify the token hash
+  const isValid = await bcrypt.compare(refreshToken, user.refreshTokenHash);
+  if (!isValid) {
+    throw new Error("Invalid refresh token");
+  }
+
+  // Found the user
+  await prisma.profile.update({
+    where: { id: user.id },
+    data: { refreshTokenHash: null },
+  });
+
+  return { success: true };
 };

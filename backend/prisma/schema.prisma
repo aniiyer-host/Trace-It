@@ -78,6 +78,13 @@ enum DisbursementStatus {
   FAILED
 }
 
+enum GovernmentRequestStatus {
+  OPEN
+  PROCESSING
+  COMPLETED
+  EXPIRED
+}
+
 enum PaymentMethod {
   UPI
   CARD
@@ -334,7 +341,7 @@ model GovernmentRequest {
   requestingBody     String
   legalBasis         String
   scope              Json     @default("{}")
-  status             String   @default("OPEN") // Note: SQL uses text, not enum
+  status             GovernmentRequestStatus @default(OPEN)
   createdBy          String?   // references profiles.id
   targetUserId       String?   // references profiles.id
   targetDonationId   String?   // references donations.id
