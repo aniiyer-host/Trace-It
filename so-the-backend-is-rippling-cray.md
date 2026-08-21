@@ -4,6 +4,19 @@
 
 The Trace-It backend has accumulated various bugs and issues that impact functionality, security, and maintainability. Based on analysis of `backend_bugs_and_errors.md` and `backend_debugging.md`, along with direct code inspection, this plan outlines the critical issues that need immediate attention and provides a structured approach to remediation.
 
+## Current Overall Status (2026-08-21)
+
+- **Implemented:** BUG-P2-01, BUG-P2-02, BUG-P2-03, and BUG-P2-04 are implemented in the current backend source.
+- **Validated:** The focused suites for the environment validator, donation secret configuration, retry backoff, and government request enum pass: 4 suites, 14 tests.
+- **Partially validated:** PostgreSQL is running locally on `localhost:5432`; Prisma reports the database schema is up to date. The four API/e2e suites no longer hit the former 5-second lifecycle-hook timeouts after `.env.test` was corrected, but a current combined rerun reaches Prisma and reports `PrismaClientKnownRequestError` failures. The full Jest suite is not green.
+- **Blocked by environment/infrastructure:** Blockchain integration still depends on the developer-specific wallet path `/home/aarus/.config/solana/devnet-traceit.json`, which is absent on the current machine.
+- **Still unresolved:** TypeScript reports exactly two Razorpay errors at `src/routes/webhooks/razorpay.ts:52` and `src/routes/webhooks/razorpay.ts:372`, where `RAZORPAY_WEBHOOK_SECRET` remains typed as `string | undefined` for `crypto.createHmac()`.
+- **Known baseline errors:** The Razorpay type errors and the missing Solana wallet configuration remain baseline blockers. No claim is made that the entire Jest suite passes.
+
+## Developer Handoff
+
+The database/test-environment work is separate from application-code remediation. Local PostgreSQL 18 is running on `localhost:5432`, Prisma connectivity has been verified, and `npx prisma migrate status` reports all four migrations applied. `.env.test` now uses the reachable local database and contains test-only `JWT_REFRESH_SECRET` and `RAZORPAY_WEBHOOK_SECRET` values; the missing-secret failures are resolved. Continue with blockchain environment setup and integration validation, then resume the remaining P2/P3 work in the phase plan below.
+
 ## Critical Issues Requiring Immediate Attention (P0)
 
 These issues prevent proper functioning of the system and must be addressed first:
@@ -112,17 +125,19 @@ These issues impact code quality, maintainability, or are nice-to-have improveme
 - **Issue**: Status field lacks validation as String instead of Enum
 - **Impact**: Invalid status values can be stored
 - **Fix**: Define GovernmentRequestStatus enum and use it
-- **Status**: ✅ COMPLETED - Added GovernmentRequestStatus enum and updated GovernmentRequest model to use it
+- **Status**: ✅ COMPLETED - The schema already defines `GovernmentRequestStatus`; migration `20260821180000_add_government_request_enum` was added and applied, the generated Prisma enum is synchronized, and `admin.ts` / `charity.ts` use `GovernmentRequestStatus.OPEN`.
 
 ### 13. Flawed OR Query Logic in Retry Processor
 - **Location**: src/services/blockchainRetryProcessor.ts:38-43
 - **Issue**: OR condition causes premature retries and ignores backoff timing
 - **Impact**: Retry processor doesn't respect exponential backoff correctly
-- **Fix**: Changed to use exponential backoff with proper retry count and time-based conditions:
+- **Fix**: Changed to use one time-based branch per retry count and exclude exhausted retries:
   ```typescript
   where: {
     retryCount: { lt: this.maxRetries },
-    lastAttempt: { lte: new Date(Date.now() - (this.delayMs * Math.pow(2, Math.min(this.maxRetries, 5)))) }
+    OR: [
+      // retryCount 0..4 use delayMs * 2 ** retryCount
+    ]
   }
   ```
 - **Status**: ✅ COMPLETED - Fixed retry logic to use exponential backoff and proper conditions
@@ -184,7 +199,7 @@ These issues impact code quality, maintainability, or are nice-to-have improveme
 4. ✅ Fix double logging in request logger
 5. ✅ Update TypeScript to modern version
 6. ⚠️ Audit and lock dependency versions
-7. ⚠️ Add startup validation for required environment variables
+7. ✅ Add startup validation for required environment variables
 8. ⚠️ Standardize error handling patterns
 9. ⚠️ Add JSDoc documentation to public APIs
 10. ⚠️ Break down long functions (especially razorpay webhook handler)
@@ -225,3 +240,100 @@ Critical files requiring changes:
 - prisma/schema.prisma (government request status enum)
 - package.json (TypeScript version update)
 - src/middleware/ (cookie-parser installation and setup)
+
+## Current Bug Register
+
+### BUG-P2-04 — Startup Environment Validator
+
+- **Implementation status:** ✅ Implemented.
+- **Files changed:** `backend/src/utils/envValidator.ts`, `backend/src/index.ts`, `backend/tests/envValidator.test.ts`.
+- **What changed:** Production startup validates `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, and `RAZORPAY_WEBHOOK_SECRET`, reporting all missing variables together. `requireEnvironmentVariable()` supplies strict lookup for security-sensitive values.
+- **Validation performed:** Focused environment-validator tests.
+- **Validation result:** ✅ 5 focused tests pass as part of the 4-suite, 14-test focused run.
+- **Caveats/blockers:** `RAZORPAY_WEBHOOK_SECRET` still has a TypeScript narrowing issue at the two known Razorpay call sites; that is not fixed by this validator.
+
+### BUG-P2-03 — Remove Secondary Weak Secrets
+
+- **Implementation status:** ✅ Implemented.
+- **Files changed:** `backend/src/routes/donor.ts`, `backend/src/services/blockchainInstance.ts`, `backend/src/services/donationService.ts`, `backend/src/utils/envValidator.ts`, `backend/tests/donationServiceSecrets.test.ts`, and the focused validator tests.
+- **What changed:** Weak fallback secrets were removed from KYC, blockchain HMAC, and Razorpay signature verification. `requireEnvironmentVariable()` is used instead, and the unused Razorpay key-ID fallback was removed.
+- **Validation performed:** Focused configuration tests and a source search under `backend/src` for weak fallback patterns.
+- **Validation result:** ✅ Donation secret tests pass; no weak fallback secrets were found under `backend/src`.
+- **Caveats/blockers:** The Razorpay webhook handler still has the two known `string | undefined` TypeScript errors.
+
+### BUG-P2-02 — Blockchain Retry Processor Backoff
+
+- **Implementation status:** ✅ Implemented.
+- **Files changed:** `backend/src/services/blockchainRetryProcessor.ts`, `backend/tests/blockchainRetryProcessor.test.ts`.
+- **What changed:** Retry eligibility uses exponential thresholds: retry 0 = 30s, retry 1 = 60s, retry 2 = 120s, retry 3 = 240s, retry 4 = 480s; retry count 5 remains excluded.
+- **Validation performed:** Focused retry processor tests.
+- **Validation result:** ✅ 2 focused tests pass.
+- **Caveats/blockers:** On-chain integration remains blocked by local Solana wallet configuration; the backoff logic itself is unit-tested.
+
+### BUG-P2-01 — Government Request Status Enum
+
+- **Implementation status:** ✅ Implemented and applied locally.
+- **Files changed:** `backend/prisma/schema.prisma`, `backend/prisma/migrations/20260821180000_add_government_request_enum/migration.sql`, generated Prisma enum output, `backend/src/routes/admin.ts`, `backend/src/routes/charity.ts`, and `backend/tests/governmentRequestStatus.test.ts`.
+- **What changed:** `GovernmentRequestStatus` contains `OPEN`, `PROCESSING`, `COMPLETED`, and `EXPIRED`; the model uses the enum with `OPEN` as the default; routes use the generated enum instead of raw `"OPEN"` literals.
+- **Validation performed:** Focused enum test and `npx prisma migrate status` against local PostgreSQL.
+- **Validation result:** ✅ 5 focused enum tests pass; Prisma reports the database schema is up to date.
+- **Caveats/blockers:** The current API/e2e rerun reaches PostgreSQL but reports Prisma known-request errors; this is separate from migration status and needs follow-up before calling those suites fully green.
+
+## Implementation Log
+
+- **P0/P1 historical fixes:** Retained above as historical remediation records; no prior findings were removed.
+- **BUG-P2-04:** Added `envValidator.ts`, wired production validation at startup, and restored the missing `cookie-parser` dependency during environment setup with `npm ci`.
+- **BUG-P2-03:** Replaced secondary secret fallbacks with explicit environment lookups and added focused configuration coverage.
+- **BUG-P2-02:** Replaced premature retry selection with retry-count-specific exponential backoff branches.
+- **BUG-P2-01:** Added and applied the append-only government request enum migration and synchronized route/generated enum usage.
+- **Environment setup:** PostgreSQL 18 was installed/configured locally; `.env.test` was corrected from the inaccessible `172.17.160.1:5432` address to `localhost:5432`, and test-only refresh/webhook secrets were added. This is environment configuration, not an application-code fix.
+
+## Session Log
+
+- The initial full-suite failure was caused by API/e2e `beforeAll` and `afterAll` hooks waiting on Prisma operations against the inaccessible test database address. After the database URL correction, those hooks no longer time out.
+- The current focused validation run passes 4 suites and 14 tests.
+- A current API/e2e rerun reaches the local database but fails with Prisma known-request errors in setup/cleanup operations; the full suite must not be marked green from this evidence.
+- The blockchain integration suite still fails while reading the missing developer-specific wallet file; no Solana configuration change has been made.
+
+## Regression / Validation Matrix
+
+| Area | Validation | Result | Status |
+|---|---|---:|---|
+| Environment validator | `envValidator.test.ts` | 5/5 | ✅ Passed |
+| Donation secret configuration | `donationServiceSecrets.test.ts` | 2/2 | ✅ Passed |
+| Retry backoff | `blockchainRetryProcessor.test.ts` | 2/2 | ✅ Passed |
+| Government request enum | `governmentRequestStatus.test.ts` | 5/5 | ✅ Passed |
+| Prisma migrations | `npx prisma migrate status` | Up to date | ✅ Passed |
+| API/e2e timeout regression | Individual API/e2e runs after local `DATABASE_URL` correction | Former timeout removed; current rerun has Prisma errors | ⚠️ Partially validated |
+| TypeScript | `npm run typecheck` | 2 known Razorpay errors | ⚠️ Baseline failure |
+| Blockchain integration | `blockchainIntegration.test.ts` | Missing `/home/aarus/.config/solana/devnet-traceit.json` | 🚫 Environment-blocked |
+| Full Jest suite | `npm test` | Not fully green | ⚠️ Unresolved |
+
+## Phase Status
+
+- **Phase 1 (P0):** ✅ Historical fixes remain completed.
+- **Phase 2 (P1):** ✅ Previously recorded fixes remain completed; Razorpay TypeScript errors remain a known baseline issue associated with the webhook work.
+- **Phase 3 (P2/P3):** BUG-P2-01 through BUG-P2-04 are ✅ completed. Dependency auditing, error-handling standardization, public API documentation, and long-function refactoring remain pending.
+- **Phase 4 (Testing/Validation):** ⚠️ Partial. Focused regression coverage passes; database-backed API/e2e validation and blockchain integration still require follow-up.
+
+## Remaining Work
+
+1. Set up a valid local Solana wallet/keypair path for the current developer machine and rerun blockchain integration validation. Do not treat the developer-specific `/home/aarus/...` path as portable configuration.
+2. Investigate the Prisma known-request errors now surfaced by the API/e2e suites after database connectivity was restored.
+3. Fix the two Razorpay TypeScript errors at lines 52 and 372 before claiming typecheck/build completion.
+4. Continue the existing P2/P3 phase plan: dependency audit/version locking, error-handling consistency, API documentation, webhook decomposition, and test isolation/cleanup improvements.
+
+## Next Steps
+
+1. Complete blockchain environment setup and validate the integration suite without modifying Solana configuration as a workaround.
+2. Capture the full Prisma error details from an individual API suite and reconcile them with the already-up-to-date migration state.
+3. Address the known Razorpay type errors, then rerun typecheck and the focused/full validation suites.
+4. Resume remaining P2/P3 work according to the existing plan.
+
+## Current Handoff State
+
+1. **Completed P2 bugs:** BUG-P2-04, BUG-P2-03, BUG-P2-02, and BUG-P2-01.
+2. **Current baseline issue:** Razorpay TypeScript errors at `src/routes/webhooks/razorpay.ts:52` and `src/routes/webhooks/razorpay.ts:372`.
+3. **Current active work:** Solana/blockchain environment setup and integration validation.
+4. **Database state:** Local PostgreSQL is running, Prisma migrations are applied, and API/e2e database connectivity has been verified. The former timeout condition is resolved, but current API/e2e runs still need Prisma error investigation.
+5. **Next developer:** Continue with blockchain environment setup, then resume the remaining P2/P3 work according to the existing phase plan.

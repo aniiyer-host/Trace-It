@@ -9,6 +9,7 @@ import {
   CampaignStatus,
   DisbursementStatus,
   DonationStatus,
+  GovernmentRequestStatus,
 } from "../../generated/prisma/enums";
 import Joi from "joi";
 import { uploadSingle } from "../middleware/multerMiddleware";
@@ -786,7 +787,7 @@ export const downloadDocument = async (
     const govRequest = await prisma.governmentRequest.findFirst({
       where: {
         targetUserId: document.ownerId,
-        status: "OPEN",
+        status: GovernmentRequestStatus.OPEN,
       },
     });
 

@@ -9,6 +9,7 @@ import {
   NgoStatus,
   CampaignStatus,
   KycStatus,
+  GovernmentRequestStatus,
 } from "../../generated/prisma/enums";
 import { writeAuditLog } from "../services/auditLogService";
 import { allocateDonation } from "../services/statusService";
@@ -589,7 +590,7 @@ export const createGovernmentRequest = async (
         targetUserId: targetUserId || null,
         targetDonationId: targetDonationId || null,
         createdBy: adminId,
-        status: "OPEN",
+        status: GovernmentRequestStatus.OPEN,
       },
     });
 
@@ -648,7 +649,7 @@ export const holdGovernmentRequestDocuments = async (
       return res.status(404).json({ error: "Government request not found" });
     }
 
-    if (govRequest.status !== "OPEN") {
+    if (govRequest.status !== GovernmentRequestStatus.OPEN) {
       return res.status(400).json({ error: "Government request is not OPEN" });
     }
 

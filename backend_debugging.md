@@ -165,6 +165,143 @@
 
 # Implementation Log
 
+## P2/P3 Implementation Status
+
+### BUG-P2-04 — Startup Environment Validator
+
+- **Status:** IMPLEMENTED
+- **Date/session:** 2026-08-21, Codex backend P2/P3 implementation session
+- **Files changed:**
+  - `backend/src/utils/envValidator.ts`
+  - `backend/src/index.ts`
+  - `backend/tests/envValidator.test.ts`
+  - `backend/.env.example`
+- **What changed:** Added a production-only startup validator for `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, and `RAZORPAY_WEBHOOK_SECRET`; invoked it after dotenv initialization in the application entry point; added focused unit coverage; documented the required production variables in the example environment file.
+- **Why:** Required secrets must be explicitly configured before a production instance accepts traffic, instead of relying only on scattered module-level checks.
+- **Tests/typechecks executed:**
+  - `npm test -- envValidator.test.ts`
+  - `npm run typecheck`
+  - `npm run build`
+  - `npm test`
+- **Test results:** The focused validator suite passed (3/3). After restoring locked dependencies on 2026-08-21, typecheck and build reach only the two pre-existing `RAZORPAY_WEBHOOK_SECRET` `string | undefined` errors in `src/routes/webhooks/razorpay.ts`. The full suite was not rerun after dependency recovery; its prior run was also blocked by an unavailable Solana keypair for `blockchainIntegration.test.ts`.
+- **Remaining concerns:** Full-project validation cannot pass until the pre-existing P1 Razorpay type errors and blockchain integration environment dependency are resolved. No migrations or schema files were modified.
+
+### BUG-P2-03 — Remove Secondary Weak Secrets
+
+- **Status:** IMPLEMENTED
+- **Date/session:** 2026-08-21, Codex backend P2/P3 implementation session
+- **Files changed:**
+  - `backend/src/utils/envValidator.ts`
+  - `backend/src/routes/donor.ts`
+  - `backend/src/services/blockchainInstance.ts`
+  - `backend/src/services/donationService.ts`
+  - `backend/tests/envValidator.test.ts`
+  - `backend/tests/donationServiceSecrets.test.ts`
+  - `backend/.env.example`
+- **What changed:** Removed the fallback values `default_hmac_key_change_in_production`, `default_blockchain_hmac_secret`, `test_key_id`, and `test_key_secret`. Added `requireEnvironmentVariable` to the existing environment-validation utility. KYC PAN hashing, blockchain service initialization, and Razorpay signature verification now require their respective configured secret when that operation is used. The unused Razorpay key-ID fallback was removed rather than made required because the current mock order implementation does not use it.
+- **Why:** Secondary fallback secrets made security-sensitive HMAC and payment-signature operations predictable when configuration was absent. Explicit configuration prevents insecure operation without changing configured request, blockchain, or database behavior.
+- **Startup validation:** Preserved unchanged. BUG-P2-04 continues to validate the existing production startup secrets; the secondary operation-specific secrets fail with a clear error only when their relevant functionality is invoked.
+- **Tests/typechecks executed:**
+  - `npm test -- envValidator.test.ts`
+  - `npm test -- envValidator.test.ts donationServiceSecrets.test.ts`
+  - Static scan for removed fallback literals under `backend/src`
+  - `npm run typecheck`
+  - `npm run build`
+- **Test results:** Focused tests passed: 2 suites / 7 tests. The fallback literal scan found no remaining occurrences under `backend/src`. Typecheck and build are blocked only by the documented pre-existing P1 errors in `src/routes/webhooks/razorpay.ts:52` and `:372`; no new compiler errors were introduced.
+- **Known baseline exceptions:** Full blockchain integration validation was not run because it requires an unavailable developer-specific Solana keypair. The Razorpay P1 type errors were not modified.
+- **Remaining concerns:** Secondary secrets must be provisioned in environments that invoke KYC hashing, blockchain service initialization, or Razorpay signature verification. No migrations or schema files were modified.
+
+### BUG-P2-02 — Fix Retry Processor Backoff Query
+
+- **Status:** IMPLEMENTED
+- **Date/session:** 2026-08-21, Codex backend P2/P3 implementation session
+- **Files changed:**
+  - `backend/src/services/blockchainRetryProcessor.ts`
+  - `backend/tests/blockchainRetryProcessor.test.ts`
+- **What changed:** Replaced the single maximum-delay threshold with a retry-count-aware Prisma filter. The query retains `retryCount < maxRetries` and adds one eligibility branch per retry count, with `lastAttempt` constrained to that count's exponential delay (`delayMs * 2^retryCount`).
+- **Why:** The existing query had already removed the original broad `OR`, but it calculated every row's threshold from `maxRetries`. That delayed low-count retries by the maximum backoff period instead of honoring their individual retry schedule.
+- **Schema review:** `BlockchainRetryQueue` has the required `retryCount` and indexed `lastAttempt` fields; no Prisma schema or migration change was necessary.
+- **Tests/typechecks executed:**
+  - `npm test -- blockchainRetryProcessor.test.ts`
+  - `npm run typecheck`
+  - `npm run build`
+- **Test results:** Focused retry-query tests passed: 1 suite / 2 tests. They verify the 30s, 60s, 120s, 240s, and 480s thresholds for retry counts 0–4 and confirm count 5 is excluded. Typecheck and build are blocked only by the documented pre-existing P1 errors in `src/routes/webhooks/razorpay.ts:52` and `:372`; no new compiler errors were introduced.
+- **Known baseline exceptions:** The Razorpay P1 errors were not modified. Full blockchain integration validation was not run because it requires an unavailable developer-specific Solana keypair.
+- **Remaining concerns:** The focused unit test verifies the generated Prisma eligibility filter without a live PostgreSQL database. No migrations or schema files were modified.
+
+### BUG-P2-01 — Apply Government Request Status Enum
+
+- **Status:** IMPLEMENTED
+- **Date/session:** 2026-08-21, Antigravity backend P2/P3 implementation session
+- **Files changed:**
+  - `backend/prisma/migrations/20260821180000_add_government_request_enum/migration.sql` (created)
+  - `backend/generated/prisma/enums.ts`
+  - `backend/src/routes/admin.ts`
+  - `backend/src/routes/charity.ts`
+  - `backend/tests/governmentRequestStatus.test.ts` (created)
+- **What changed:**
+  - Created append-only SQL migration `20260821180000_add_government_request_enum/migration.sql` to define PostgreSQL enum `GovernmentRequestStatus` (`'OPEN'`, `'PROCESSING'`, `'COMPLETED'`, `'EXPIRED'`), drop the text default, alter/cast column `government_requests.status` to the enum type, and reinstate `DEFAULT 'OPEN'`.
+  - Synchronized generated Prisma client (`generated/prisma/enums.ts`) by exporting `GovernmentRequestStatus` object and type matching the schema definition.
+  - Replaced raw string `"OPEN"` literals in `admin.ts` (create request, hold check) and `charity.ts` (download authorization check) with type-safe `GovernmentRequestStatus.OPEN`.
+- **Migration & Live DB verification status:**
+  - Migration script created as an append-only migration.
+  - Migration has **not been applied** to a live database because no live `DATABASE_URL` was available in the current environment.
+  - Full live DB migration application and DB-backed runtime verification remain pending live database connectivity.
+- **Tests/typechecks executed:**
+  - `NODE_OPTIONS=--experimental-vm-modules NODE_ENV=test JWT_ACCESS_SECRET=test_access JWT_REFRESH_SECRET=test_refresh npx jest --runInBand --forceExit tests/governmentRequestStatus.test.ts` -> **5/5 passed** (1 suite, 5 tests in 0.059s).
+  - `npm run typecheck` (`tsc --noEmit`) -> Blocked only by the 2 known baseline pre-existing Razorpay P1 errors at `src/routes/webhooks/razorpay.ts:52` and `:372`. No new errors introduced.
+  - `npm run build` (`tsc`) -> Blocked only by the same 2 known baseline pre-existing Razorpay P1 errors at `src/routes/webhooks/razorpay.ts:52` and `:372`. No new errors introduced.
+- **Known baseline exceptions:**
+  - Pre-existing Razorpay webhook secret typing errors (`src/routes/webhooks/razorpay.ts:52`, `:372`) left unchanged.
+  - Full Solana integration test requires unavailable local keypair.
+- **Remaining concerns:** Live database migration execution is pending database availability.
+
+### Remaining Work
+
+- **Completed P2/P3 bugs:** BUG-P2-04, BUG-P2-03, BUG-P2-02, and BUG-P2-01 (targeted validation passed).
+- **Currently in progress:** None.
+- **Not yet implemented:** BUG-P2-05, BUG-P2-06, BUG-P3-03, BUG-P3-04, BUG-P3-06, BUG-P3-05.
+- **Blockers discovered:** `src/routes/webhooks/razorpay.ts` has two pre-existing optional-secret type errors; integration tests require a missing local Solana keypair.
+
+### Validation Recovery — Locked Dependency Restore (2026-08-21)
+
+- **Action:** Ran `npm ci` from `backend/` to restore the existing `package-lock.json` dependency tree. No manifest, lockfile, source, test, or migration files were modified.
+- **Result:** `cookie-parser`, `@types/cookie-parser`, and the TypeScript compiler were restored in `backend/node_modules`.
+- **Validation:**
+  - `npm run typecheck` — blocked only by the two pre-existing P1 Razorpay optional-secret errors at `src/routes/webhooks/razorpay.ts:52` and `:372`.
+  - `npm run build` — blocked by the same two pre-existing P1 errors.
+  - `npm test -- envValidator.test.ts` — passed: 1 suite, 3 tests.
+- **Remaining blockers:** The P1 Razorpay type errors remain intentionally unfixed; full blockchain integration validation remains blocked by the unavailable developer-specific Solana keypair. `npm ci` reported 12 dependency audit vulnerabilities (1 low, 8 moderate, 3 high), which were not acted on because dependency changes are out of scope.
+
+### Validation Blocker Investigation — 2026-08-21
+
+#### Missing `cookie-parser` installation
+
+- **Status:** IMPLEMENTED
+- **Root cause:** `backend/src/index.ts` imports and mounts `cookie-parser`, while `backend/node_modules` contains neither `cookie-parser` nor `@types/cookie-parser`. Both packages are already declared in `backend/package.json` and resolved in `backend/package-lock.json`.
+- **Pre-existing:** Yes. The import, middleware mount, manifest entries, and lockfile entries are all present in `HEAD`; BUG-P2-04 did not add them.
+- **Task-file coverage:** Yes. `so-the-backend-is-rippling-cray.md` identifies the missing installation as part of the completed P0 auth-refresh fix, but the current installation state contradicts that completed status.
+- **Minimal safe resolution:** Restored the declared lockfile dependencies with `npm ci` executed in `backend/`. This changed no manifest, lockfile, or application behavior.
+- **Effect on next work:** No longer blocks repository-wide typecheck/build or app-importing Jest suites.
+
+#### Razorpay optional-secret TypeScript errors
+
+- **Status:** BLOCKED
+- **Root cause:** `backend/src/routes/webhooks/razorpay.ts` declares `RAZORPAY_WEBHOOK_SECRET` as `string | undefined` and only throws for an unset value in production. The two `crypto.createHmac` calls at lines 52 and 372 require a defined key, so TypeScript correctly rejects both calls.
+- **Pre-existing:** Yes. The unchanged `HEAD` version has the same declaration, production-only guard, and both failing call sites.
+- **Task-file coverage:** Partially. `so-the-backend-is-rippling-cray.md` documents the P1 requirement to require `RAZORPAY_WEBHOOK_SECRET`, but does not identify the resulting TypeScript errors.
+- **Minimal safe resolution:** A P1 webhook-secret handling change must establish a defined secret at each HMAC call without introducing a weak fallback. This is outside the current P2/P3-only scope and was not implemented.
+- **Effect on next work:** Blocks clean repository-wide typecheck/build, but is a documented baseline exception and does not by itself stop scoped P2/P3 implementation work.
+
+#### Blockchain integration test keypair
+
+- **Status:** BLOCKED
+- **Root cause:** `backend/tests/blockchainIntegration.test.ts` requires a live devnet wallet during `beforeAll`. It falls back to `/home/aaditya/.config/solana/devnet-traceit.json`, while the untracked local `backend/.env.test` points to `/home/aarus/.config/solana/devnet-traceit.json`; neither file exists in this environment. The suite has no configuration gate, mock, or skip path.
+- **Pre-existing:** Yes. The hardcoded fallback is in `HEAD`, and the local `.env.test` override existed before BUG-P2-04; `.env.test` is not tracked in `HEAD`.
+- **Task-file coverage:** No. The authoritative task file only requires blockchain initialization verification and does not document this developer-specific test-keypair dependency.
+- **Minimal safe resolution:** Address it with the planned dynamic-fixture/test-cleanup work (BUG-P2-05/BUG-P2-06), or supply a configured funded devnet keypair for explicitly enabled integration runs. No test behavior was changed during this investigation.
+- **Effect on next work:** Blocks the full Jest suite, but is a documented baseline exception and does not by itself stop scoped P2/P3 implementation work.
+
 | Date | Developer | Phase | Task | Files Changed | Change | Reason | Validation | Result |
 |---|---|---|---|---|---|---|---|---|
 | *2026-08-21* | *Antigravity AI* | *Phase 0* | *Read-only repository audit & debugging roadmap creation* | `backend_debugging.md` (Created) | *Created roadmap, bug register, disproven register, and handoff guide* | *Audit & planning* | *Read-only inspection & typecheck* | *Complete (No source implementation performed during this audit)* |

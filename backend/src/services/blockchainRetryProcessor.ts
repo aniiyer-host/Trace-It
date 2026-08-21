@@ -2,6 +2,22 @@ import { getBlockchainService } from './blockchainInstance';
 import { writeAuditLog } from './auditLogService';
 import { prisma } from '../db/prisma';
 
+export function getRetryEligibilityFilter(
+  now: Date,
+  maxRetries: number,
+  delayMs: number,
+) {
+  return {
+    retryCount: { lt: maxRetries },
+    OR: Array.from({ length: maxRetries }, (_, retryCount) => ({
+      retryCount,
+      lastAttempt: {
+        lte: new Date(now.getTime() - delayMs * Math.pow(2, retryCount)),
+      },
+    })),
+  };
+}
+
 export class BlockchainRetryProcessor {
   private readonly batchSize = 10;
   private readonly delayMs = 30000; // 30 seconds between batches
@@ -35,10 +51,11 @@ export class BlockchainRetryProcessor {
   private async processRetryQueue(): Promise<void> {
     // Get failed attempts that are ready for retry (exponential backoff)
     const retryItems = await prisma.blockchainRetryQueue.findMany({
-      where: {
-        retryCount: { lt: this.maxRetries },
-        lastAttempt: { lte: new Date(Date.now() - (this.delayMs * Math.pow(2, Math.min(this.maxRetries, 5)))) } // Exponential backoff: delay increases with retry count
-      },
+      where: getRetryEligibilityFilter(
+        new Date(),
+        this.maxRetries,
+        this.delayMs,
+      ),
       orderBy: { lastAttempt: 'asc' },
       take: this.batchSize
     });

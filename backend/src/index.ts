@@ -3,9 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import mongoSanitize from "express-mongo-sanitize";
-import { config as dotenvConfig } from "dotenv";
-
-dotenvConfig();
+import "dotenv/config";
 
 import cookieParser from "cookie-parser";
 import authRoutes from "./routes/auth";
@@ -18,7 +16,9 @@ import webhookRoutes from "./routes/webhooks/razorpay";
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
 import BlockchainRetryProcessor from "./services/blockchainRetryProcessor";
+import { validateEnvironment } from "./utils/envValidator";
 
+validateEnvironment();
 const app = express();
 const PORT = process.env.PORT || 3000;
 

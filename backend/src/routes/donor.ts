@@ -9,6 +9,7 @@ import { createRazorpayOrder } from '../services/donationService';
 import { writeAuditLog } from '../services/auditLogService';
 import { generateAndStoreReceipt, getReceiptSignedUrl } from '../services/receiptService';
 import { allocateDonation, markDisbursed, markDelivered } from '../services/statusService';
+import { requireEnvironmentVariable } from '../utils/envValidator';
 
 // ---------------------------------------------------------------------------
 // GET /api/donor/dashboard
@@ -229,7 +230,7 @@ export const kycStub = async (
 
     // HMAC-SHA512 of PAN using key from env (Vault integration in Phase 5)
     const { createHmac } = await import('crypto');
-    const hmacKey = process.env.KYC_HMAC_KEY ?? 'default_hmac_key_change_in_production';
+    const hmacKey = requireEnvironmentVariable('KYC_HMAC_KEY');
     const panHash = createHmac('sha512', hmacKey).update(pan).digest('hex');
 
     // Persist pan_hash + approve KYC
