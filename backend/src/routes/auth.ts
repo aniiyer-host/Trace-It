@@ -150,12 +150,12 @@ router.post('/login', async (req, res) => {
  */
 router.post('/refresh', async (req, res) => {
   try {
-    const refreshToken = req.cookies.refreshToken;
-    if (!refreshToken) {
+    const tokenCookie = req.cookies.refreshToken;
+    if (!tokenCookie) {
       return res.status(401).json({ error: 'Refresh token not provided' });
     }
 
-    const tokens = await refreshToken(refreshToken);
+    const tokens = await refreshToken(tokenCookie);
 
     // Set new refresh token as HttpOnly cookie
     res.cookie('refreshToken', tokens.refreshToken, {

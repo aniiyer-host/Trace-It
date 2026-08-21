@@ -12,7 +12,11 @@ interface RawRequest extends Request {
   rawBody: Buffer;
 }
 
-const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || 'your_webhook_secret_change_in_production';
+const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
+
+if (!RAZORPAY_WEBHOOK_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('RAZORPAY_WEBHOOK_SECRET is required in production');
+}
 
 /**
  * Razorpay webhook handler for payment events
@@ -442,9 +446,6 @@ async function addToBlockchainRetryQueue(data: {
   retryCount: number;
 }): Promise<void> {
   try {
-    // Import Prisma client
-    const { prisma } = require('../db/prisma');
-
     // Create or update retry queue entry
     await prisma.blockchainRetryQueue.upsert({
       where: { donationId: data.donationId },

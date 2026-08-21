@@ -177,8 +177,10 @@ export class BlockchainService {
       return { success: true, txHash: tx };
     } catch (error: any) {
       if (error.message?.includes('already in use')) {
+        // Use cleanId (without dashes) to match on-chain program derivation
+        const cleanId = params.donationId.replace(/-/g, '');
         const [donationPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from('donation'), Buffer.from(params.donationId)],
+          [Buffer.from('donation'), Buffer.from(cleanId)],
           this.programId
         );
         return {

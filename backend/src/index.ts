@@ -7,6 +7,7 @@ import { config as dotenvConfig } from "dotenv";
 
 dotenvConfig();
 
+import cookieParser from "cookie-parser";
 import authRoutes from "./routes/auth";
 import publicRoutes from "./routes/public";
 import donorRoutes from "./routes/donor";
@@ -24,7 +25,8 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(helmet());
 app.use(cors());
-app.use(express.json());
+app.use(cookieParser());
+app.use(express.json({ verify: (req, res, buf) => { (req as any).rawBody = buf; } }));
 // Removed mongoSanitize as Prisma parameterizes queries, and express-mongo-sanitize crashes Express 5
 // Request ID middleware
 import { requestIdMiddleware } from "./middleware/requestIdMiddleware";
@@ -79,17 +81,29 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
-
+// Health check endpoint (placed before 404 handler for orchestrator compatibility)
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "healthy" });
 });
 
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
+// Start blockchain retry processor (only in non-test environments)
 if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+  const retryProcessor = new BlockchainRetryProcessor();
+  retryProcessor.start().catch(console.error);
+
+  // Graceful shutdown handling
+  process.on("SIGINT", () => {
+    retryProcessor.stop();
+    // ... existing shutdown code ...
+  });
+
+  process.on("SIGTERM", () => {
+    retryProcessor.stop();
+    // ... existing shutdown code ...
   });
 }
 

@@ -36,10 +36,8 @@ export class BlockchainRetryProcessor {
     // Get failed attempts that are ready for retry (exponential backoff)
     const retryItems = await prisma.blockchainRetryQueue.findMany({
       where: {
-        OR: [
-          { retryCount: { lt: this.maxRetries } },
-          { lastAttempt: { lt: new Date(Date.now() - (this.delayMs * Math.pow(2, 5))) } } // Give up after 5 attempts with backoff
-        ]
+        retryCount: { lt: this.maxRetries },
+        lastAttempt: { lte: new Date(Date.now() - (this.delayMs * Math.pow(2, Math.min(this.maxRetries, 5)))) } // Exponential backoff: delay increases with retry count
       },
       orderBy: { lastAttempt: 'asc' },
       take: this.batchSize
