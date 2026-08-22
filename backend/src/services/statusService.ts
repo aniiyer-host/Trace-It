@@ -1,6 +1,6 @@
-import { prisma } from '../db/prisma';
-import { writeAuditLog } from './auditLogService';
-import { AuditActorType } from '../../generated/prisma/enums';
+import { prisma } from '../db/prisma.js';
+import { writeAuditLog } from './auditLogService.js';
+import { AuditActorType } from '../../generated/prisma/enums.js';
 
 /**
  * Allocate a donation to a beneficiary cohort.

@@ -1,6 +1,6 @@
 import request from "supertest";
-import app from "../src/index";
-import { prisma } from "../src/db/prisma";
+import app from "../src/index.js";
+import { prisma } from "../src/db/prisma.js";
 import jwt from "jsonwebtoken";
 import {
   UserRole,

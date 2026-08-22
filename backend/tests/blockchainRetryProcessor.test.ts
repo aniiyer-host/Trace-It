@@ -1,4 +1,4 @@
-import { getRetryEligibilityFilter } from "../src/services/blockchainRetryProcessor";
+import { getRetryEligibilityFilter } from "../src/services/blockchainRetryProcessor.js";
 
 describe("getRetryEligibilityFilter", () => {
   it("requires both an available retry count and that retry count's backoff interval", () => {

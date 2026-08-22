@@ -1,12 +1,12 @@
 import express from 'express';
 import { Request, Response, NextFunction, Router } from 'express';
-import { prisma } from '../../db/prisma';
+import { prisma } from '../../db/prisma.js';
 import crypto from 'crypto';
-import { writeAuditLog } from '../../services/auditLogService';
-import { AuditActorType } from '../../../generated/prisma/enums';
-import { generateAndStoreReceipt } from '../../services/receiptService';
-import { notifyAdmin } from '../../services/emailService';
-import { getBlockchainService } from '../../services/blockchainInstance';
+import { writeAuditLog } from '../../services/auditLogService.js';
+import { AuditActorType } from '../../../generated/prisma/enums.js';
+import { generateAndStoreReceipt } from '../../services/receiptService.js';
+import { notifyAdmin } from '../../services/emailService.js';
+import { getBlockchainService } from '../../services/blockchainInstance.js';
 
 interface RawRequest extends Request {
   rawBody: Buffer;

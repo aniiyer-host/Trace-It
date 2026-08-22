@@ -14,8 +14,8 @@
  */
 
 import crypto from 'crypto';
-import { prisma } from '../db/prisma';
-import { StorageService } from './storageService';
+import { prisma } from '../db/prisma.js';
+import { StorageService } from './storageService.js';
 
 const taxReceiptStorage = new StorageService('tax-receipts');
 

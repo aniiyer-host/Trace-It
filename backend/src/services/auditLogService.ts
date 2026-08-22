@@ -1,6 +1,6 @@
-import { prisma } from '../db/prisma';
-import { AuditActorType } from '../../generated/prisma/enums';
-import logger from '../utils/logger';
+import { prisma } from '../db/prisma.js';
+import { AuditActorType } from '../../generated/prisma/enums.js';
+import logger from '../utils/logger.js';
 
 export interface AuditLogParams {
   actorType: AuditActorType;

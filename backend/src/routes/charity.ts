@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction, Router } from "express";
-import { prisma } from "../db/prisma";
-import { requireAuth } from "../middleware/requireAuth";
-import { requireRole } from "../middleware/requireRole";
+import { prisma } from "../db/prisma.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { requireRole } from "../middleware/requireRole.js";
 import {
   UserRole,
   NgoStatus,
@@ -10,12 +10,12 @@ import {
   DisbursementStatus,
   DonationStatus,
   GovernmentRequestStatus,
-} from "../../generated/prisma/enums";
+} from "../../generated/prisma/enums.js";
 import Joi from "joi";
-import { uploadSingle } from "../middleware/multerMiddleware";
-import { DocumentService } from "../services/documentService";
-import { writeAuditLog } from "../services/auditLogService";
-import { AuditActorType } from "../../generated/prisma/enums";
+import { uploadSingle } from "../middleware/multerMiddleware.js";
+import { DocumentService } from "../services/documentService.js";
+import { writeAuditLog } from "../services/auditLogService.js";
+import { AuditActorType } from "../../generated/prisma/enums.js";
 
 const charityRouter = Router();
 

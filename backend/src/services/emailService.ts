@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { delay } from '../lib/utils';
+import { delay } from '../lib/utils.js';
 
 // For now, we'll just log the OTP. In production, this would use SendGrid.
 export const sendOTP = async (email: string, otp: string) => {

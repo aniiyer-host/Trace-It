@@ -1,6 +1,6 @@
-import { BlockchainService } from './blockchainService';
+import { BlockchainService } from './blockchainService.js';
 import path from 'path';
-import { requireEnvironmentVariable } from '../utils/envValidator';
+import { requireEnvironmentVariable } from '../utils/envValidator.js';
 
 let instance: BlockchainService | null = null;
 

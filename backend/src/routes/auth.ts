@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { signupSchema, verifyEmailSchema, loginSchema } from '../utils/validation';
-import { signup, verifyEmail, login, refreshToken, logout } from '../services/authService';
-import { authLimiter } from '../middleware/strictLimiter';
-import { writeAuditLog } from '../services/auditLogService';
-import { AuditActorType } from '../../generated/prisma/enums';
-import { prisma } from '../db/prisma';
+import { signupSchema, verifyEmailSchema, loginSchema } from '../utils/validation.js';
+import { signup, verifyEmail, login, refreshToken, logout } from '../services/authService.js';
+import { authLimiter } from '../middleware/strictLimiter.js';
+import { writeAuditLog } from '../services/auditLogService.js';
+import { AuditActorType } from '../../generated/prisma/enums.js';
+import { prisma } from '../db/prisma.js';
 
 const router = Router();
 

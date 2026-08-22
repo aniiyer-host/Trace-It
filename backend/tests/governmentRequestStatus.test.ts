@@ -8,7 +8,7 @@
  *    (confirmed by importing and using the values from the same enum object that routes use).
  */
 
-import { GovernmentRequestStatus } from "../generated/prisma/enums";
+import { GovernmentRequestStatus } from "../generated/prisma/enums.js";
 
 describe("BUG-P2-01 — GovernmentRequestStatus enum", () => {
   it("exports GovernmentRequestStatus from generated client", () => {

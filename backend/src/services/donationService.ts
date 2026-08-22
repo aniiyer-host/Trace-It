@@ -1,6 +1,6 @@
 import crypto from 'crypto';
-import { prisma } from '../db/prisma';
-import { requireEnvironmentVariable } from '../utils/envValidator';
+import { prisma } from '../db/prisma.js';
+import { requireEnvironmentVariable } from '../utils/envValidator.js';
 
 /**
  * Create a Razorpay order for the given amount in INR.

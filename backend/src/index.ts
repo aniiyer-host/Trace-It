@@ -6,17 +6,17 @@ import mongoSanitize from "express-mongo-sanitize";
 import "dotenv/config";
 
 import cookieParser from "cookie-parser";
-import authRoutes from "./routes/auth";
-import publicRoutes from "./routes/public";
-import donorRoutes from "./routes/donor";
-import charityRoutes from "./routes/charity";
-import adminRoutes from "./routes/admin";
-import webhookRoutes from "./routes/webhooks/razorpay";
+import authRoutes from "./routes/auth.js";
+import publicRoutes from "./routes/public.js";
+import donorRoutes from "./routes/donor.js";
+import charityRoutes from "./routes/charity.js";
+import adminRoutes from "./routes/admin.js";
+import webhookRoutes from "./routes/webhooks/razorpay.js";
 
-import { errorHandler } from "./middleware/errorHandler";
-import { notFound } from "./middleware/notFound";
-import BlockchainRetryProcessor from "./services/blockchainRetryProcessor";
-import { validateEnvironment } from "./utils/envValidator";
+import { errorHandler } from "./middleware/errorHandler.js";
+import { notFound } from "./middleware/notFound.js";
+import BlockchainRetryProcessor from "./services/blockchainRetryProcessor.js";
+import { validateEnvironment } from "./utils/envValidator.js";
 
 validateEnvironment();
 const app = express();
@@ -29,10 +29,10 @@ app.use(cookieParser());
 app.use(express.json({ verify: (req, res, buf) => { (req as any).rawBody = buf; } }));
 // Removed mongoSanitize as Prisma parameterizes queries, and express-mongo-sanitize crashes Express 5
 // Request ID middleware
-import { requestIdMiddleware } from "./middleware/requestIdMiddleware";
+import { requestIdMiddleware } from "./middleware/requestIdMiddleware.js";
 app.use(requestIdMiddleware);
 // Request logging middleware
-import { requestLogger } from "./middleware/requestLogger";
+import { requestLogger } from "./middleware/requestLogger.js";
 app.use(requestLogger);
 
 // Rate limiting

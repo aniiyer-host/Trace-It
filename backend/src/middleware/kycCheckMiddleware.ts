@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { prisma } from '../db/prisma';
-import { AuditActorType } from '../../generated/prisma/enums';
-import { writeAuditLog } from '../services/auditLogService';
+import { prisma } from '../db/prisma.js';
+import { AuditActorType } from '../../generated/prisma/enums.js';
+import { writeAuditLog } from '../services/auditLogService.js';
 
 /**
  * Middleware to enforce KYC tier for donations.

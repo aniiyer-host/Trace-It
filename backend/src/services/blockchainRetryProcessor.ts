@@ -1,6 +1,6 @@
-import { getBlockchainService } from './blockchainInstance';
-import { writeAuditLog } from './auditLogService';
-import { prisma } from '../db/prisma';
+import { getBlockchainService } from './blockchainInstance.js';
+import { writeAuditLog } from './auditLogService.js';
+import { prisma } from '../db/prisma.js';
 
 export function getRetryEligibilityFilter(
   now: Date,
