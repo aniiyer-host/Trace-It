@@ -48,6 +48,13 @@ export const razorpayWebhookHandler = async (
       return res.status(401).json({ error: 'Invalid webhook signature' });
     }
 
+    //debug line starts
+    const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!RAZORPAY_WEBHOOK_SECRET) {
+      throw new Error("RAZORPAY_WEBHOOK_SECRET is not configured");
+    }
+    //debug line ends
+
     // Verify Razorpay webhook signature
     const hmac = crypto.createHmac('sha256', RAZORPAY_WEBHOOK_SECRET);
     hmac.update(rawBody);
@@ -368,6 +375,12 @@ export const razorpayRefundWebhookHandler = async (
       return res.status(401).json({ error: 'Invalid webhook signature' });
     }
 
+    //debug line starts
+    const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!RAZORPAY_WEBHOOK_SECRET) {
+      throw new Error("RAZORPAY_WEBHOOK_SECRET is not configured");
+    }
+    //debug line ends
     // Verify Razorpay webhook signature
     const hmac = crypto.createHmac('sha256', RAZORPAY_WEBHOOK_SECRET);
     hmac.update(rawBody);

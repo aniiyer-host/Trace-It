@@ -8,8 +8,8 @@
     "seed": "tsx prisma/seed.ts"
   },
   "scripts": {
-    "dev": "ts-node-dev src/index.ts",
-    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "start": "node --experimental-specifier-resolution=node dist/src/index.js",
     "build": "tsc",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --forceExit",
     "typecheck": "tsc --noEmit",

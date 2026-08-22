@@ -162,21 +162,22 @@ export class BlockchainRetryProcessor {
   }
 }
 
-// Start the processor when the module is imported in a long-running process
-if (require.main === module) {
-  const processor = new BlockchainRetryProcessor();
-  processor.start().catch(console.error);
+// Start the processor when the module is imported in a long-running process 
+// Duplicate Startup
+// if (require.main === module) {
+//   const processor = new BlockchainRetryProcessor();
+//   processor.start().catch(console.error);
 
-  // Graceful shutdown
-  process.on('SIGINT', () => {
-    processor.stop();
-    process.exit(0);
-  });
+//   // Graceful shutdown
+//   process.on('SIGINT', () => {
+//     processor.stop();
+//     process.exit(0);
+//   });
 
-  process.on('SIGTERM', () => {
-    processor.stop();
-    process.exit(0);
-  });
-}
+//   process.on('SIGTERM', () => {
+//     processor.stop();
+//     process.exit(0);
+//   });
+// }
 
 export default BlockchainRetryProcessor;

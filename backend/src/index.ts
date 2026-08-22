@@ -58,6 +58,12 @@ app.use("/api/admin", adminRoutes);
 //app.use("/api/webhooks", webhookRoutes);
 app.use("/api/webhooks/razorpay", webhookRoutes);
 
+//debugging line starts here
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "healthy" });
+});
+//debug line ends here
+
 // 404 handler
 app.use(notFound);
 
@@ -82,9 +88,9 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
 }
 
 // Health check endpoint (placed before 404 handler for orchestrator compatibility)
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "healthy" });
-});
+// app.get("/health", (req, res) => {
+//   res.status(200).json({ status: "healthy" });
+// });
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
