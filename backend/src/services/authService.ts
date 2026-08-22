@@ -1,7 +1,7 @@
-import { prisma } from "../db/prisma";
+import { prisma } from "../db/prisma.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { generateOTP, sendOTP } from "./emailService";
+import { generateOTP, sendOTP } from "./emailService.js";
 
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;

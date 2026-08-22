@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction, Router } from "express";
-import { prisma } from "../db/prisma";
-import { requireAuth } from "../middleware/requireAuth";
-import { requireRole } from "../middleware/requireRole";
+import { prisma } from "../db/prisma.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { requireRole } from "../middleware/requireRole.js";
 import {
   UserRole,
   DisbursementStatus,
@@ -9,10 +9,11 @@ import {
   NgoStatus,
   CampaignStatus,
   KycStatus,
-} from "../../generated/prisma/enums";
-import { writeAuditLog } from "../services/auditLogService";
-import { allocateDonation } from "../services/statusService";
-import { getBlockchainService } from "../services/blockchainInstance";
+  GovernmentRequestStatus,
+} from "../../generated/prisma/enums.js";
+import { writeAuditLog } from "../services/auditLogService.js";
+import { allocateDonation } from "../services/statusService.js";
+import { getBlockchainService } from "../services/blockchainInstance.js";
 
 const adminRouter = Router();
 
@@ -589,7 +590,7 @@ export const createGovernmentRequest = async (
         targetUserId: targetUserId || null,
         targetDonationId: targetDonationId || null,
         createdBy: adminId,
-        status: "OPEN",
+        status: GovernmentRequestStatus.OPEN,
       },
     });
 
@@ -648,7 +649,7 @@ export const holdGovernmentRequestDocuments = async (
       return res.status(404).json({ error: "Government request not found" });
     }
 
-    if (govRequest.status !== "OPEN") {
+    if (govRequest.status !== GovernmentRequestStatus.OPEN) {
       return res.status(400).json({ error: "Government request is not OPEN" });
     }
 

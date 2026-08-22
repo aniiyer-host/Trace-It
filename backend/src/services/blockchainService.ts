@@ -6,7 +6,7 @@ import {
   Commitment,
 } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
-import { HashService } from './hashService';
+import { HashService } from './hashService.js';
 import fs from 'fs';
 
 // ─── Types ───────────────────────────────────────────────────

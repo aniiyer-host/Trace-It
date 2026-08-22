@@ -1,8 +1,8 @@
 import crypto from 'crypto';
-import { prisma } from '../db/prisma';
-import { StorageService } from './storageService';
-import { HashService } from './hashService';
-import { DocumentType } from '../../generated/prisma/enums';
+import { prisma } from '../db/prisma.js';
+import { StorageService } from './storageService.js';
+import { HashService } from './hashService.js';
+import { DocumentType } from '../../generated/prisma/enums.js';
 
 // We use the proof-docs bucket for these uploads per the plan.
 const storageService = new StorageService('proof-docs');

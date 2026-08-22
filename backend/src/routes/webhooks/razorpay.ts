@@ -1,12 +1,12 @@
 import express from 'express';
 import { Request, Response, NextFunction, Router } from 'express';
-import { prisma } from '../../db/prisma';
+import { prisma } from '../../db/prisma.js';
 import crypto from 'crypto';
-import { writeAuditLog } from '../../services/auditLogService';
-import { AuditActorType } from '../../../generated/prisma/enums';
-import { generateAndStoreReceipt } from '../../services/receiptService';
-import { notifyAdmin } from '../../services/emailService';
-import { getBlockchainService } from '../../services/blockchainInstance';
+import { writeAuditLog } from '../../services/auditLogService.js';
+import { AuditActorType } from '../../../generated/prisma/enums.js';
+import { generateAndStoreReceipt } from '../../services/receiptService.js';
+import { notifyAdmin } from '../../services/emailService.js';
+import { getBlockchainService } from '../../services/blockchainInstance.js';
 
 interface RawRequest extends Request {
   rawBody: Buffer;
@@ -47,6 +47,13 @@ export const razorpayWebhookHandler = async (
 
       return res.status(401).json({ error: 'Invalid webhook signature' });
     }
+
+    //debug line starts
+    const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!RAZORPAY_WEBHOOK_SECRET) {
+      throw new Error("RAZORPAY_WEBHOOK_SECRET is not configured");
+    }
+    //debug line ends
 
     // Verify Razorpay webhook signature
     const hmac = crypto.createHmac('sha256', RAZORPAY_WEBHOOK_SECRET);
@@ -368,6 +375,12 @@ export const razorpayRefundWebhookHandler = async (
       return res.status(401).json({ error: 'Invalid webhook signature' });
     }
 
+    //debug line starts
+    const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!RAZORPAY_WEBHOOK_SECRET) {
+      throw new Error("RAZORPAY_WEBHOOK_SECRET is not configured");
+    }
+    //debug line ends
     // Verify Razorpay webhook signature
     const hmac = crypto.createHmac('sha256', RAZORPAY_WEBHOOK_SECRET);
     hmac.update(rawBody);

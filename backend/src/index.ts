@@ -3,22 +3,22 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import mongoSanitize from "express-mongo-sanitize";
-import { config as dotenvConfig } from "dotenv";
-
-dotenvConfig();
+import "dotenv/config";
 
 import cookieParser from "cookie-parser";
-import authRoutes from "./routes/auth";
-import publicRoutes from "./routes/public";
-import donorRoutes from "./routes/donor";
-import charityRoutes from "./routes/charity";
-import adminRoutes from "./routes/admin";
-import webhookRoutes from "./routes/webhooks/razorpay";
+import authRoutes from "./routes/auth.js";
+import publicRoutes from "./routes/public.js";
+import donorRoutes from "./routes/donor.js";
+import charityRoutes from "./routes/charity.js";
+import adminRoutes from "./routes/admin.js";
+import webhookRoutes from "./routes/webhooks/razorpay.js";
 
-import { errorHandler } from "./middleware/errorHandler";
-import { notFound } from "./middleware/notFound";
-import BlockchainRetryProcessor from "./services/blockchainRetryProcessor";
+import { errorHandler } from "./middleware/errorHandler.js";
+import { notFound } from "./middleware/notFound.js";
+import BlockchainRetryProcessor from "./services/blockchainRetryProcessor.js";
+import { validateEnvironment } from "./utils/envValidator.js";
 
+validateEnvironment();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -29,10 +29,10 @@ app.use(cookieParser());
 app.use(express.json({ verify: (req, res, buf) => { (req as any).rawBody = buf; } }));
 // Removed mongoSanitize as Prisma parameterizes queries, and express-mongo-sanitize crashes Express 5
 // Request ID middleware
-import { requestIdMiddleware } from "./middleware/requestIdMiddleware";
+import { requestIdMiddleware } from "./middleware/requestIdMiddleware.js";
 app.use(requestIdMiddleware);
 // Request logging middleware
-import { requestLogger } from "./middleware/requestLogger";
+import { requestLogger } from "./middleware/requestLogger.js";
 app.use(requestLogger);
 
 // Rate limiting
@@ -58,6 +58,12 @@ app.use("/api/admin", adminRoutes);
 //app.use("/api/webhooks", webhookRoutes);
 app.use("/api/webhooks/razorpay", webhookRoutes);
 
+//debugging line starts here
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "healthy" });
+});
+//debug line ends here
+
 // 404 handler
 app.use(notFound);
 
@@ -82,29 +88,32 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
 }
 
 // Health check endpoint (placed before 404 handler for orchestrator compatibility)
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "healthy" });
-});
+// app.get("/health", (req, res) => {
+//   res.status(200).json({ status: "healthy" });
+// });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
-
-// Start blockchain retry processor (only in non-test environments)
 if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
-  const retryProcessor = new BlockchainRetryProcessor();
-  retryProcessor.start().catch(console.error);
-
-  // Graceful shutdown handling
-  process.on("SIGINT", () => {
-    retryProcessor.stop();
-    // ... existing shutdown code ...
-  });
-
-  process.on("SIGTERM", () => {
-    retryProcessor.stop();
-    // ... existing shutdown code ...
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
   });
 }
+
+// Start blockchain retry processor (only in non-test environments)
+//Duplicate block 
+// if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
+//   const retryProcessor = new BlockchainRetryProcessor();
+//   retryProcessor.start().catch(console.error);
+
+//   // Graceful shutdown handling
+//   process.on("SIGINT", () => {
+//     retryProcessor.stop();
+//     // ... existing shutdown code ...
+//   });
+
+//   process.on("SIGTERM", () => {
+//     retryProcessor.stop();
+//     // ... existing shutdown code ...
+//   });
+// }
 
 export default app;

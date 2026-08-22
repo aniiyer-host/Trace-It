@@ -8,7 +8,6 @@ CLAUDE.md
 
 #Anikets space
 scripts/*
-security_docs/*
 templates/*
 traceit-siem
 DEPLOYMENT_SUMMARY.MD
@@ -29,6 +28,7 @@ TraceIt—ComprehensiveSystemArchitecture.docx
 phase-1-summary.txt
 PHASE_1_COMPLETION_SUMMARY.md
 /blockchain/target/*
+/blockchain/runbooks
 
 # For Blockchain integration test
 

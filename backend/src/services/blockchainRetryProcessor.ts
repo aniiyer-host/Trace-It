@@ -1,6 +1,22 @@
-import { getBlockchainService } from './blockchainInstance';
-import { writeAuditLog } from './auditLogService';
-import { prisma } from '../db/prisma';
+import { getBlockchainService } from './blockchainInstance.js';
+import { writeAuditLog } from './auditLogService.js';
+import { prisma } from '../db/prisma.js';
+
+export function getRetryEligibilityFilter(
+  now: Date,
+  maxRetries: number,
+  delayMs: number,
+) {
+  return {
+    retryCount: { lt: maxRetries },
+    OR: Array.from({ length: maxRetries }, (_, retryCount) => ({
+      retryCount,
+      lastAttempt: {
+        lte: new Date(now.getTime() - delayMs * Math.pow(2, retryCount)),
+      },
+    })),
+  };
+}
 
 export class BlockchainRetryProcessor {
   private readonly batchSize = 10;
@@ -35,10 +51,11 @@ export class BlockchainRetryProcessor {
   private async processRetryQueue(): Promise<void> {
     // Get failed attempts that are ready for retry (exponential backoff)
     const retryItems = await prisma.blockchainRetryQueue.findMany({
-      where: {
-        retryCount: { lt: this.maxRetries },
-        lastAttempt: { lte: new Date(Date.now() - (this.delayMs * Math.pow(2, Math.min(this.maxRetries, 5)))) } // Exponential backoff: delay increases with retry count
-      },
+      where: getRetryEligibilityFilter(
+        new Date(),
+        this.maxRetries,
+        this.delayMs,
+      ),
       orderBy: { lastAttempt: 'asc' },
       take: this.batchSize
     });
@@ -145,21 +162,22 @@ export class BlockchainRetryProcessor {
   }
 }
 
-// Start the processor when the module is imported in a long-running process
-if (require.main === module) {
-  const processor = new BlockchainRetryProcessor();
-  processor.start().catch(console.error);
+// Start the processor when the module is imported in a long-running process 
+// Duplicate Startup
+// if (require.main === module) {
+//   const processor = new BlockchainRetryProcessor();
+//   processor.start().catch(console.error);
 
-  // Graceful shutdown
-  process.on('SIGINT', () => {
-    processor.stop();
-    process.exit(0);
-  });
+//   // Graceful shutdown
+//   process.on('SIGINT', () => {
+//     processor.stop();
+//     process.exit(0);
+//   });
 
-  process.on('SIGTERM', () => {
-    processor.stop();
-    process.exit(0);
-  });
-}
+//   process.on('SIGTERM', () => {
+//     processor.stop();
+//     process.exit(0);
+//   });
+// }
 
 export default BlockchainRetryProcessor;

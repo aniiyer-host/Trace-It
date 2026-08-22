@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction, Router } from 'express';
-import { prisma } from '../db/prisma';
-import { CampaignStatus } from '../../generated/prisma/enums';
+import { prisma } from '../db/prisma.js';
+import { CampaignStatus } from '../../generated/prisma/enums.js';
 import Joi from 'joi';
 
 // Cursor-based pagination schema

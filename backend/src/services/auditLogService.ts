@@ -1,5 +1,6 @@
-import { prisma } from '../db/prisma';
-import { AuditActorType } from '../../generated/prisma/enums';
+import { prisma } from '../db/prisma.js';
+import { AuditActorType } from '../../generated/prisma/enums.js';
+import logger from '../utils/logger.js';
 
 export interface AuditLogParams {
   actorType: AuditActorType;
@@ -32,8 +33,24 @@ export const writeAuditLog = async (params: AuditLogParams): Promise<void> => {
         govRequestId: params.govRequestId ?? null,
       },
     });
+
+    // Send security event to SIEM
+    logger.info('Security Event', {
+      eventType: params.action,
+      actorType: params.actorType,
+      actorId: params.actorId ?? null,
+      entityType: params.entityType,
+      entityId: params.entityId ?? null,
+      requestId: params.requestId ?? null,
+      govRequestId: params.govRequestId ?? null,
+      ip: params.ipAddress ?? '',
+      metadata: params.metadata ?? {},
+    });
   } catch (err) {
-    // Audit log failures must never crash the API — log and continue
-    console.error('[AuditLog] Failed to write audit log', { ...params, err });
+    // Audit log failures must never crash the API
+    console.error('[AuditLog] Failed to write audit log', {
+      ...params,
+      err,
+    });
   }
 };

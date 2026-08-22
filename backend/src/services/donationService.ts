@@ -1,8 +1,6 @@
 import crypto from 'crypto';
-import { prisma } from '../db/prisma';
-
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'test_key_id';
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'test_key_secret';
+import { prisma } from '../db/prisma.js';
+import { requireEnvironmentVariable } from '../utils/envValidator.js';
 
 /**
  * Create a Razorpay order for the given amount in INR.
@@ -49,7 +47,8 @@ export const createRazorpayOrder = async (amountInr: number) => {
  * @returns True if signature is valid
  */
 export const verifyRazorpaySignature = (orderId: string, paymentId: string, signature: string) => {
-  const hmac = crypto.createHmac('sha256', RAZORPAY_KEY_SECRET);
+  const razorpayKeySecret = requireEnvironmentVariable('RAZORPAY_KEY_SECRET');
+  const hmac = crypto.createHmac('sha256', razorpayKeySecret);
   hmac.update(`${orderId}|${paymentId}`);
   const generatedSignature = hmac.digest('hex');
   return generatedSignature === signature;
