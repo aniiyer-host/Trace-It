@@ -28,7 +28,11 @@ TraceIt—ComprehensiveSystemArchitecture.docx
 phase-1-summary.txt
 PHASE_1_COMPLETION_SUMMARY.md
 /blockchain/target/*
+<<<<<<< Updated upstream
 /blockchain/runbooks
+=======
+BLOCKCHAIN_SETUP.md
+>>>>>>> Stashed changes
 
 # For Blockchain integration test
 
