@@ -8,7 +8,7 @@ skip-lint = false
 traceit = "5AFcU61X6LoQSNTcCFeEKauVsfCwfvtUDXY6XhMq7oCM"
 
 [programs.localnet]
-traceit = "9Xvmf151deS4w9evjPprynyFTPDxeDjWRbwruGTY22qa"
+traceit = "5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3"
 
 [provider]
 cluster = "localnet"

@@ -6,7 +6,7 @@ pub mod state;
 
 use instructions::*;
 
-declare_id!("9Xvmf151deS4w9evjPprynyFTPDxeDjWRbwruGTY22qa");
+declare_id!("5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3");
 
 #[program]
 pub mod traceit {
