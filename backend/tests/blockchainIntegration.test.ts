@@ -1,5 +1,5 @@
-import { BlockchainService } from '../src/services/blockchainService';
-import { HashService } from '../src/services/hashService';
+import { BlockchainService } from '../src/services/blockchainService.js';
+import { HashService } from '../src/services/hashService.js';
 import { PublicKey, Keypair } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 import path from 'path';

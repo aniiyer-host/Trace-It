@@ -1,8 +1,8 @@
 #!/usr/bin/env ts-node
-import { getBlockchainService } from '../src/services/blockchainInstance';
-import { prisma } from '../src/db/prisma';
-import { writeAuditLog } from '../src/services/auditLogService';
-import { DonationStatus } from '../generated/prisma/enums';
+import { getBlockchainService } from '../src/services/blockchainInstance.js';
+import { prisma } from '../src/db/prisma.js';
+import { writeAuditLog } from '../src/services/auditLogService.js';
+import { DonationStatus } from '../generated/prisma/enums.js';
 
 async function main() {
   console.log('Starting blockchain reconciliation process...');

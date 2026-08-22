@@ -1,5 +1,5 @@
-import { HashService } from '../src/services/hashService';
-import { BlockchainService, OnChainStatus } from '../src/services/blockchainService';
+import { HashService } from '../src/services/hashService.js';
+import { BlockchainService, OnChainStatus } from '../src/services/blockchainService.js';
 import { PublicKey, Keypair } from '@solana/web3.js';
 import fs from 'fs';
 import path from 'path';

@@ -1,0 +1,75 @@
+## Backend Health Summary
+Overall status: NEEDS ATTENTION
+
+### 1. Tests
+- Test command: npm test
+- Result: Passed (74/74) without --detectOpenHandles; with --detectOpenHandles: 1 failed, 73 passed, 1 open handle
+- Suites: 10 passed, 10 total (without flag); with flag: 1 failed, 9 passed, 10 total
+- Warnings/open handles: With --detectOpenHandles: 1 open handle (TCPSERVERWRAP)
+
+### 2. Build
+- Build command: npm run build
+- Result: Success (no output, exit code 0)
+- Errors/warnings: None
+
+### 3. Runtime/Startup
+- Production/start command: npm start
+- Result: We did not run the server in production mode (to avoid leaving it running), but we inspected the code and found that the server would start. However, note the duplicate initialization of the retry processor would occur in non-test environments.
+
+### 4. Confirmed Bugs
+For each:
+- Bug:
+- Evidence:
+- File/line:
+- Is it already documented?
+- Is it already fixed?
+- Severity:
+
+1. Duplicate blockchain retry processor initialization
+   - Two identical blocks starting BlockchainRetryProcessor in src/index.ts
+   - backend/src/index.ts:74-88 and backend/src/index.ts:100-114
+   - Not documented in backend_debugging.md (only BUG-010 related to retry processor found)
+   - No
+   - Medium (could cause duplicate work or unexpected behavior in non-test environments)
+
+2. Server not closing in tests (open handle)
+   - TCPSERVERWRAP open handle pointing to app.listen call when running tests with --detectOpenHandles
+   - backend/src/index.ts:95
+   - Not documented in backend_debugging.md (BUG-001 mentions duplicate app.listen but we have only one)
+   - No
+   - Low (resource leak in test environment)
+
+### 5. Potential Issues
+Same format, but clearly label these as unconfirmed.
+
+1. Flaky test in charity.test.ts (submit campaign)
+   - Test passed in initial test run but failed with --detectOpenHandles (404 on submit campaign)
+   - backend/tests/charity.test.ts:107-114 and backend/src/routes/charity.ts:271-297
+   - Not specifically documented in backend_debugging.md
+   - No
+   - Low (may be related to open handle or test isolation)
+
+### 6. Documentation Cross-Reference
+Create a table:
+
+| Documented Finding | Current Status | Still Reproducible? | Evidence |
+|---|---|---|---|
+| BUG-001: Duplicate `app.listen()` and misplaced `/health` endpoint | Not reproducible (only one app.listen, health endpoint correctly placed before middleware) | No | src/index.ts shows single app.listen at line 95, health endpoint at lines 62-64 before notFound/errorHandler |
+| BUG-010: Flawed `OR` query logic in retry queue backoff | Not verified (requires examining retry processor logic) | Unknown | Would need to inspect src/services/blockchainRetryProcessor.ts lines 38-43 |
+
+### 7. Things That Are Working
+List the important systems that passed validation.
+- TypeScript compilation (tsc) succeeds with no errors
+- Test suite passes completely when run without --detectOpenHandles flag (74/74 tests passing)
+- Build process (npm run build) completes successfully
+- Environment variable validation logic appears to be present
+- Prisma client generation works (as part of build)
+- Basic health endpoint exists and returns 200 OK
+- API routes are properly mounted and accessible
+
+### 8. Recommended Next Steps
+Only list genuinely useful next steps. Do not recommend unnecessary refactoring.
+1. Remove duplicate blockchain retry processor initialization in src/index.ts (keep only one instance, preferably the first one or wrap in a single conditional block)
+2. Modify src/index.ts to conditionally start the server only when not in test environment (e.g., check for process.env.JEST_WORKER_ID || process.env.NODE_ENV === 'test') to prevent open handles during testing
+3. Investigate the flaky test in charity.test.ts after fixing the open handle issue to determine if it resolves or requires additional test isolation improvements
+4. Consider adding a global test teardown to close any open servers if needed

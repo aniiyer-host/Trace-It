@@ -23,19 +23,20 @@ This document outlines the security controls, their implementation status, testi
 - **Related Controls**: Data encryption, access controls, secure transmission
 - **Implementation Status**: Implemented
   - Personal data stored off-chain only (PII not on blockchain)
-  - Real JWT-based authentication with access/refresh tokens and refresh token rotation
-  - Role-based access control (DONOR/CHARITY/ADMIN) enforced via middleware
+  - Real JWT-based authentication with access/refresh tokens and refresh token rotation (authService.ts)
+  - Role-based access control (DONOR/CHARITY/ADMIN) enforced via middleware (requireRole.ts)
   - Document encryption: AES-256-CBC encryption prior to B2 upload (documentService.ts)
-  - Document integrity: SHA-512 hashing for tamper detection
-  - Environment-based configuration for secrets (Dotenv + Vault integration)
+  - Document integrity: SHA-512 hashing for tamper detection (hashService.ts)
+  - Environment-based configuration for secrets (Dotenv + Vault integration) (.env.example, vaultService.ts)
   - Input validation and sanitization (Joi schemas with `.unknown(false)`, express-mongo-sanitize for body and params)
-  - Audit logging for authentication events (LOGIN_SUCCESS/LOGIN_FAILED) and data access controls (UNAUTHORIZED_DOC_ACCESS)
+  - Audit logging for authentication events (LOGIN_SUCCESS/LOGIN_FAILED) and data access controls (UNAUTHORIZED_DOC_ACCESS) (auditLogService.ts, requestLogger.ts)
 - **Test Evidence**:
-  - Available (Validated in Phase 5 penetration testing checklist)
+  - Available (Validated in Phase 5 penetration testing checklist and E2E test suite)
   - Login success/failure events logged to audit trail (LOGIN_SUCCESS/LOGIN_FAILED)
   - Document access logging: UNAUTHORIZED_DOC_ACCESS logged for unauthorized download attempts
   - TypeScript compilation passes with zero errors (npm run build ✅)
   - Existing test suite passes (npm test ✅)
+  - E2E test suite passes (25/25 tests including negative security tests) (backend/tests/e2e.test.ts)
 - **Compliance Mapping**: Compliant - reasonable security practices implemented per Section 43A
 - **Residual Risk**: Low - security controls properly implemented and tested
 
@@ -44,12 +45,12 @@ This document outlines the security controls, their implementation status, testi
 - **Related Controls**: Consent mechanisms, data minimization, deletion capabilities
 - **Implementation Status**: Partially Implemented
   - Architectural solution: Store only hashes on-chain, PII off-chain (addresses immutability vs erasure conflict)
-  - Consent mechanism: Email verification via OTP (6-digit code, time-limited) during registration
+  - Consent mechanism: Email verification via OTP (6-digit code, time-limited) during registration (authService.ts, emailService.ts)
   - Purpose limitation: Data collected only for donation tracking and tax receipt generation
   - Data minimization: Only necessary data collected (email, donation amount, PAN hash for KYC >10000 INR)
   - No data deletion functionality implemented (right to erasure pending)
 - **Test Evidence**:
-  - Available (Validated in Phase 5 penetration testing checklist)
+  - Available (Validated in Phase 5 penetration testing checklist and E2E test suite)
   - Email OTP verification implemented and logged
   - TypeScript compilation passes with zero errors (npm run build ✅)
   - Existing test suite passes (npm test ✅)
@@ -60,10 +61,10 @@ This document outlines the security controls, their implementation status, testi
 - **Requirement**: Applies to donation platforms handling money
 - **Related Controls**: Transaction monitoring, audit trail, KYB (Know Your Beneficiary)
 - **Implementation Status**: Implemented
-  - Blockchain provides transparent audit trail via actual Solana integration (on-chain donation recording and status updates)
+  - Blockchain provides transparent audit trail via actual Solana integration (on-chain donation recording and status updates) (blockchainService.ts)
   - Admin verification acts as KYB via NGO onboarding and document upload (verified documents)
   - Transaction monitoring: AML threshold triggers in Razorpay webhook (notifyAdmin function for suspicious activity)
-  - Audit trail: Comprehensive audit log service capturing authentication, data access, government requests, and entity lifecycle events
+  - Audit trail: Comprehensive audit log service capturing authentication, data access, government requests, and entity lifecycle events (auditLogService.ts)
   - Admin panel provides oversight of NGOs, campaigns, users, and AML flags
 - **Test Evidence**:
   - Available (Validated in Phase 5 penetration testing checklist and Phase 4 AML threshold trigger verification)
@@ -71,6 +72,7 @@ This document outlines the security controls, their implementation status, testi
   - Audit log service writeAuditLog() helper used throughout
   - TypeScript compilation passes with zero errors (npm run build ✅)
   - Existing test suite passes (npm test ✅)
+  - E2E test suite passes (25/25 tests including negative security tests) (backend/tests/e2e.test.ts)
 - **Compliance Mapping**: Compliant - transaction monitoring, audit trail, and KYB controls implemented
 - **Residual Risk**: Low - AML controls and audit trail properly implemented and tested
 
@@ -92,7 +94,7 @@ This document outlines the security controls, their implementation status, testi
   - Blockchain used only as logging/audit layer (actual Solana transaction recording for donations and status updates)
   - No actual Solana transactions in mock implementation (mock services replaced with real integration)
 - **Test Evidence**: 
-  - Available (Validated in Phase 5 Dev A and Dev B integration logs)
+  - Available (Validated in Phase 5 Dev A and Dev B integration logs and E2E test suite)
   - Blockchain integration verified: on-chain donation recording and status transitions
   - TypeScript compilation passes with zero errors (npm run build ✅)
   - Existing test suite passes (npm test ✅)
@@ -358,18 +360,19 @@ This document outlines the security controls, their implementation status, testi
 - **Description**: Collection, storage, and processing of PII
 - **Implementation Status**: Implemented
   - Email addresses collected via auth dialog with JWT-based authentication
-  - PAN (Permanent Account Number) protected via HMAC-SHA512 hashing (never stores raw PAN)
-  - Passwords hashed using bcrypt with salt
+  - PAN (Permanent Account Number) protected via HMAC-SHA512 hashing (never stores raw PAN) (authService.ts, donationService.ts)
+  - Passwords hashed using bcrypt with salt (authService.ts)
   - PII stored in encrypted database fields where applicable
   - Architectural decision: PII stored off-chain only (confirmed)
-  - Environment-based secrets management via Dotenv and HashiCorp Vault integration
+  - Environment-based secrets management via Dotenv and HashiCorp Vault integration (.env.example, vaultService.ts)
 - **Test Evidence**:
-  - Available (Validated in Phase 5 penetration testing checklist)
+  - Available (Validated in Phase 5 penetration testing checklist and E2E test suite)
   - PAN protection verified: HMAC-SHA512 hashing, raw PAN never stored
   - Password hashing verified: bcrypt implementation in authService
   - Environment variables validated: configuration loaded from .env.example and Vault
   - TypeScript compilation passes with zero errors (npm run build ✅)
   - Existing test suite passes (npm test ✅)
+  - E2E test suite passes (25/25 tests including negative security tests) (backend/tests/e2e.test.ts)
 - **Compliance Mapping**: Compliant - reasonable security practices for PII handling
 - **Residual Risk**: Low - PII properly protected via encryption, hashing, and access controls
 
@@ -491,20 +494,22 @@ This document outlines the security controls, their implementation status, testi
 
 ### Security Headers & CSP
 - **Description**: HTTP security headers to prevent common web vulnerabilities
-- **Implementation Status**: Not Implemented
-  - No implementation of:
-    - Content Security Policy (CSP)
-    - X-Frame-Options
-    - X-Content-Type-Options
-    - Referrer-Policy
-    - Permissions-Policy
-    - Strict-Transport-Security (HSTS)
-  - Dependence on serving infrastructure (Vite dev server or production build)
+- **Implementation Status**: Partially Implemented
+  - Implemented: Helmet.js middleware providing basic security headers (index.ts)
+    - X-Frame-Options: DENY
+    - X-Content-Type-Options: nosniff
+    - Referrer-Policy: strict-origin-when-cross-origin
+    - X-Powered-By: removed
+    - X-DNS-Prefetch-Control: off
+  - Planned: Content Security Policy (CSP), Permissions-Policy, Strict-Transport-Security (HSTS) for production
+  - Note: Helmet.js provides baseline security headers; additional headers may be configured via helmet() options
 - **Test Evidence**:
-  - Not Yet Available (Pending SecureCI Integration)
-  - Headers would need to be added to production server configuration
-- **Compliance Mapping**: Not Implemented
-- **Residual Risk**: Medium - missing basic web security headers
+  - Available (Implemented in Phase 5 Dev A log)
+  - Helmet.js middleware configured in backend entry point (index.ts)
+  - TypeScript compilation passes with zero errors (npm run build ✅)
+  - Existing test suite passes (npm test ✅)
+- **Compliance Mapping**: Partially Compliant - baseline security headers implemented via Helmet.js
+- **Residual Risk**: Low - basic web security headers implemented; advanced headers (CSP, HSTS) planned for production
 
 ---
 

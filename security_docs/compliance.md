@@ -18,7 +18,7 @@
 ## PMLA / FATF
 - Applies to donation platforms handling money.
 - TraceIt advantage:
-  - Blockchain provides a transparent audit trail.
+  - Blockchain provides a transparent audit trail via actual Solana integration (on-chain donation recording and status updates) (blockchainService.ts)
 - Admin verification acts as **Know Your Beneficiary (KYB)**.
 
 ## FCRA 2010

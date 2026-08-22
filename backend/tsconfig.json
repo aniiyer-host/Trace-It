@@ -12,7 +12,7 @@
     "declaration": true,
     "emitDeclarationOnly": false,
     "allowImportingTsExtensions": false,
-    // "rewriteRelativeImportExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "types": ["node", "express", "jest", "supertest"]
   },
   // "include": ["src/**/*", "generated/prisma/**/*"]

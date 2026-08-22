@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { signupSchema, verifyEmailSchema, loginSchema } from '../utils/validation';
-import { signup, verifyEmail, login, refreshToken, logout } from '../services/authService';
-import { authLimiter } from '../middleware/strictLimiter';
-import { writeAuditLog } from '../services/auditLogService';
-import { AuditActorType } from '../../generated/prisma/enums';
-import { prisma } from '../db/prisma';
+import { signupSchema, verifyEmailSchema, loginSchema } from '../utils/validation.js';
+import { signup, verifyEmail, login, refreshToken, logout } from '../services/authService.js';
+import { authLimiter } from '../middleware/strictLimiter.js';
+import { writeAuditLog } from '../services/auditLogService.js';
+import { AuditActorType } from '../../generated/prisma/enums.js';
+import { prisma } from '../db/prisma.js';
 
 const router = Router();
 
@@ -150,12 +150,12 @@ router.post('/login', async (req, res) => {
  */
 router.post('/refresh', async (req, res) => {
   try {
-    const refreshToken = req.cookies.refreshToken;
-    if (!refreshToken) {
+    const tokenCookie = req.cookies.refreshToken;
+    if (!tokenCookie) {
       return res.status(401).json({ error: 'Refresh token not provided' });
     }
 
-    const tokens = await refreshToken(refreshToken);
+    const tokens = await refreshToken(tokenCookie);
 
     // Set new refresh token as HttpOnly cookie
     res.cookie('refreshToken', tokens.refreshToken, {

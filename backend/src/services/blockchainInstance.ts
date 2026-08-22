@@ -1,5 +1,6 @@
-import { BlockchainService } from './blockchainService';
+import { BlockchainService } from './blockchainService.js';
 import path from 'path';
+import { requireEnvironmentVariable } from '../utils/envValidator.js';
 
 let instance: BlockchainService | null = null;
 
@@ -26,7 +27,7 @@ export async function getBlockchainService(): Promise<BlockchainService> {
     rpcUrl,
     walletKeypairPath,
     programId,
-    hmacSecret: process.env.BLOCKCHAIN_HMAC_SECRET || 'default_blockchain_hmac_secret',
+    hmacSecret: requireEnvironmentVariable('BLOCKCHAIN_HMAC_SECRET'),
     commitment: 'confirmed',
   });
 

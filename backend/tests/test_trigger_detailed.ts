@@ -1,4 +1,4 @@
-import { prisma } from "../src/db/prisma";
+import { prisma } from "../src/db/prisma.js";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

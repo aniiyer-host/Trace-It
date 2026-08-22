@@ -1,15 +1,15 @@
 import request from "supertest";
-import app from "../src/index";
-import { prisma } from "../src/db/prisma";
+import app from "../src/index.js";
+import { prisma } from "../src/db/prisma.js";
 import jwt from "jsonwebtoken";
-import { UserRole, NgoStatus, CampaignStatus } from "../generated/prisma/enums";
+import { UserRole, NgoStatus, CampaignStatus } from "../generated/prisma/enums.js";
 
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "access_secret";
 
 import crypto from "crypto";
 
 // Mock storage service to avoid AWS calls in tests
-import { StorageService } from "../src/services/storageService";
+import { StorageService } from "../src/services/storageService.js";
 jest.spyOn(StorageService.prototype, "uploadFile").mockResolvedValue(undefined);
 
 describe("Admin API Integration Tests", () => {

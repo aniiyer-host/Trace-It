@@ -1,18 +1,22 @@
 import express from 'express';
 import { Request, Response, NextFunction, Router } from 'express';
-import { prisma } from '../../db/prisma';
+import { prisma } from '../../db/prisma.js';
 import crypto from 'crypto';
-import { writeAuditLog } from '../../services/auditLogService';
-import { AuditActorType } from '../../../generated/prisma/enums';
-import { generateAndStoreReceipt } from '../../services/receiptService';
-import { notifyAdmin } from '../../services/emailService';
-import { getBlockchainService } from '../../services/blockchainInstance';
+import { writeAuditLog } from '../../services/auditLogService.js';
+import { AuditActorType } from '../../../generated/prisma/enums.js';
+import { generateAndStoreReceipt } from '../../services/receiptService.js';
+import { notifyAdmin } from '../../services/emailService.js';
+import { getBlockchainService } from '../../services/blockchainInstance.js';
 
 interface RawRequest extends Request {
   rawBody: Buffer;
 }
 
-const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || 'your_webhook_secret_change_in_production';
+const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
+
+if (!RAZORPAY_WEBHOOK_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('RAZORPAY_WEBHOOK_SECRET is required in production');
+}
 
 /**
  * Razorpay webhook handler for payment events
@@ -43,6 +47,13 @@ export const razorpayWebhookHandler = async (
 
       return res.status(401).json({ error: 'Invalid webhook signature' });
     }
+
+    //debug line starts
+    const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!RAZORPAY_WEBHOOK_SECRET) {
+      throw new Error("RAZORPAY_WEBHOOK_SECRET is not configured");
+    }
+    //debug line ends
 
     // Verify Razorpay webhook signature
     const hmac = crypto.createHmac('sha256', RAZORPAY_WEBHOOK_SECRET);
@@ -364,6 +375,12 @@ export const razorpayRefundWebhookHandler = async (
       return res.status(401).json({ error: 'Invalid webhook signature' });
     }
 
+    //debug line starts
+    const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!RAZORPAY_WEBHOOK_SECRET) {
+      throw new Error("RAZORPAY_WEBHOOK_SECRET is not configured");
+    }
+    //debug line ends
     // Verify Razorpay webhook signature
     const hmac = crypto.createHmac('sha256', RAZORPAY_WEBHOOK_SECRET);
     hmac.update(rawBody);
@@ -442,9 +459,6 @@ async function addToBlockchainRetryQueue(data: {
   retryCount: number;
 }): Promise<void> {
   try {
-    // Import Prisma client
-    const { prisma } = require('../db/prisma');
-
     // Create or update retry queue entry
     await prisma.blockchainRetryQueue.upsert({
       where: { donationId: data.donationId },

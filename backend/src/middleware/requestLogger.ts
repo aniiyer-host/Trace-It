@@ -1,11 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
-import logger from '../utils/logger';
+import logger from '../utils/logger.js';
 
 export const requestLogger = (req: Request, res: Response, next: NextFunction) => {
   const startHrTime = process.hrtime();
+  let hasLogged = false; // Flag to prevent double logging
 
   // We'll log after the response is finished
   const logRequest = () => {
+    if (hasLogged) return; // Prevent double logging
+    hasLogged = true;
+
     const elapsedHrTime = process.hrtime(startHrTime);
     const elapsedMs = elapsedHrTime[0] * 1000 + elapsedHrTime[1] / 1e6; // milliseconds
 
