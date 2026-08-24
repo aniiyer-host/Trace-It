@@ -67,5 +67,22 @@
     "pg": "^8.23.0",
     "winston": "^3.19.0",
     "winston-elasticsearch": "^0.19.0"
+  },
+  "overrides": {
+    "@opentelemetry/core": ">=2.8.0",
+    "cookie": ">=0.7.0",
+    "deepmerge-ts": ">=8.0.0",
+    "jayson": {
+      "uuid": ">=11.1.1"
+    }
+  },
+  "allowScripts": {
+    "@prisma/engines@7.9.1": true,
+    "@swc/core@1.16.0": true,
+    "bufferutil@4.1.0": true,
+    "esbuild@0.28.2": true,
+    "prisma@7.9.1": true,
+    "utf-8-validate@6.0.6": true,
+    "unrs-resolver@1.12.2": true
   }
 }
