@@ -45,6 +45,9 @@ jobs:
       SOLANA_WALLET_KEYPAIR_PATH: /tmp/test-wallet.json
       BLOCKCHAIN_HMAC_SECRET: test-hmac-secret
       AES_DOCUMENT_KEY: b23b691cc49adf7bfb6ac6b7cd5a8ea6bb33c49f42047380e1891ce1dc95dc85
+      B2_ENDPOINT: http://localhost:9000
+      B2_KEY_ID: test-key-id
+      B2_APPLICATION_KEY: test-app-key
 
     steps:
       - uses: actions/checkout@v4
