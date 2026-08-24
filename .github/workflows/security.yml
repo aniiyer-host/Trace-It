@@ -43,3 +43,20 @@ jobs:
         with:
           name: traceit-backend-sbom
           path: sbom-backend.json
+      
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep
+        run: |
+          semgrep scan \
+            --config p/default \
+            --json \
+            --output semgrep-results.json \
+            backend/
+
+      - name: Upload Semgrep results
+        uses: actions/upload-artifact@v4
+        with:
+          name: traceit-semgrep-results
+          path: semgrep-results.json
