@@ -88,14 +88,6 @@ jobs:
         working-directory: ./backend
         run: npm run lint --if-present
 
-      - name: Run frontend tests
-        working-directory: ./frontend
-        run: npm test --if-present
-
-      - name: Run backend tests
-        working-directory: ./backend
-        run: npm test
-
       - name: Type check frontend
         working-directory: ./frontend
         run: npx tsc --noEmit
@@ -111,6 +103,14 @@ jobs:
       - name: Build backend
         working-directory: ./backend
         run: npm run build
+
+      - name: Run frontend tests
+        working-directory: ./frontend
+        run: npm test --if-present
+
+      - name: Run backend tests
+        working-directory: ./backend
+        run: npm test
 
       - name: Upload test results
         if: always()
