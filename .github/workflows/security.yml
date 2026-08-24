@@ -52,8 +52,18 @@ jobs:
           semgrep --version
           semgrep scan --config p/default --json --output semgrep-results.json .
 
+          echo "Semgrep output:"
+          ls -lah
+          
+          if [ -f semgrep-results.json ]; then
+            echo "Semgrep results generated successfully"
+          else
+            echo "ERROR: semgrep-results.json was not generated"
+            exit 1
+          fi
+
       - name: Upload Semgrep results
         uses: actions/upload-artifact@v4
         with:
           name: traceit-semgrep-results
-          path: semgrep-results.json
+          path: backend/semgrep-results.json
