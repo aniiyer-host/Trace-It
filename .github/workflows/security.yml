@@ -1,0 +1,19 @@
+name: DevSecOps Security
+
+on:
+  push:
+    branches: [Aniket-Cyber]
+  pull_request:
+    branches: [Aniket-Cyber]
+  workflow_dispatch:
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: DevSecOps pipeline
+        run: echo "DevSecOps pipeline running on Aniket-Cyber"
