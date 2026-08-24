@@ -49,11 +49,8 @@ jobs:
 
       - name: Run Semgrep
         run: |
-          semgrep scan \
-            --config p/default \
-            --json \
-            --output semgrep-results.json \
-            backend/
+          semgrep --version
+          semgrep scan --config p/default --json --output semgrep-results.json backend/
 
       - name: Upload Semgrep results
         uses: actions/upload-artifact@v4
