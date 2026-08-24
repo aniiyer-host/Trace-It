@@ -11,9 +11,35 @@ jobs:
   security:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: backend
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: DevSecOps pipeline
-        run: echo "DevSecOps pipeline running on Aniket-Cyber"
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+
+      - name: Generate SBOM
+        run: |
+          npx @cyclonedx/cyclonedx-npm \
+            --output-file ../sbom-backend.json \
+            --output-format json
+
+      - name: Upload backend SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: traceit-backend-sbom
+          path: sbom-backend.json
