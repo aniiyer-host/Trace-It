@@ -145,7 +145,7 @@ Below is the step‑by‑step process when a donor makes a contribution.
      ```
      donor_id_hash = sha512( userId || SECRET )
      record_hash   = sha512( concat(donation_id, donor_id_hash, ngo_id, campaign_id,
-                                  amount_paisa, currency, timestamp, status) )
+                                   amount_paisa, currency, timestamp, status) )
      ```
    * Stores `donor_id_hash` and `record_hash` in the row.
 
@@ -184,11 +184,55 @@ Below is the step‑by‑step process when a donor makes a contribution.
 
 ---
 
-## 5. Status Lifecycle & Further On‑Chain Updates
+## 5. Attestation Mechanism
+
+To provide proof that the NGO has received the funds and (optionally) delivered them to the beneficiary, Trace‑It uses **cryptographic attestations** signed by the NGO’s private key. These attestations are stored on‑chain, linked to the donation PDA, and can be verified by anyone using the NGO’s public key.
+
+### 5.1 NGO Receipt Attestation
+
+After the platform records the donation on‑chain and transfers the funds (off‑chain bank transfer or on‑chain token transfer) to the NGO’s verified wallet/account, the platform requests the NGO to sign a short statement:
+
+```
+"I, <NGO‑name>, confirm receipt of INR <amount> for donation <donation_id> from platform <platform‑id> on <timestamp>."
+```
+
+The NGO signs this message with its private key (Ed25519/ECDSA) and returns the signature to the platform. The platform then stores the attestation on‑chain via an instruction such as `store_ngo_attestation`, which writes (or updates) a PDA associated with the donation (e.g., seed `[b"attestation", donation_id_without_hyphens, ngo_id]`) containing:
+
+* The NGO’s public key (or identifier).
+* The signed attestation message.
+* A hash of the attestation for integrity verification.
+
+Anyone can later:
+1. Re‑compute the attestation PDA address from the donation UUID and NGO ID.
+2. Read the stored attestation and its hash, verify the hash matches.
+3. Use the NGO’s public key to verify the signature.
+If the signature validates, the NGO cryptographically attested that it received the funds.
+
+### 5.2 Optional Delivery Attestation
+
+If the platform wishes to prove last‑mile delivery to the beneficiary, it can ask the NGO to sign a second statement after the NGO has disbursed the funds:
+
+```
+"I, <NGO‑name>, confirm that I have delivered INR <amount> from donation <donation_id> to beneficiary <beneficiary‑ID‑hash> on <timestamp>."
+```
+
+The beneficiary identifier is stored as a **keyed hash** (e.g., `SHA512( beneficiary_id || NGO_SECRET )`) to preserve privacy; the NGO’s secret is known only to the NGO. The platform stores this signed statement on‑chain in a similar attestation PDA (or adds it as an extra field to the existing attestation PDA). Verification follows the same steps: anyone can check the NGO’s signature and the hash of the statement.
+
+These attestations give the platform and auditors a tamper‑evident, publicly verifiable trail:
+* Donor payment → Razorpay signature (off‑chain).
+* Donation intent → on‑chain `DonationRecord` PDA (tamper‑evident via `record_hash`).
+* NGO receipt → on‑chain attested signature.
+* (Optional) Beneficiary delivery → on‑chain attested signature.
+
+Because the attestations are stored in PDAs that only the Trace‑It program can modify, they cannot be forged or altered without a valid signature from the authorized party (the NGO).
+
+---
+
+## 6. Status Lifecycle & Further On‑Chain Updates
 
 After the initial success, the donation may progress through additional stages, each triggered by an authorized party (usually the backend acting on behalf of an NGO or admin) calling the `update_donation_status` instruction.
 
-### 5.1 Update Donation Status Instruction
+### 6.1 Update Donation Status Instruction
 
 Defined in `blockchain/programs/traceit/src/instructions/update_status.rs` (excerpt):
 
@@ -213,7 +257,7 @@ pub struct UpdateDonationStatus<'info> {
 
 The handler simply updates `record.status = new_status` after basic validation.
 
-### 5.2 Typical Transitions
+### 6.2 Typical Transitions
 
 | Status | Meaning | Who can trigger |
 |--------|---------|-----------------|
@@ -227,7 +271,7 @@ Each transition results in a new Solana transaction (signed by the authorized au
 
 ---
 
-## 6. How Anonymity Is Preserved
+## 7. How Anonymity Is Preserved
 
 | Element | What is stored on‑chain | Can it be reversed to identify donor? |
 |---------|-------------------------|--------------------------------------|
@@ -242,7 +286,7 @@ The backend holds the secret (as an environment variable) and can map a `donor_i
 
 ---
 
-## 7. How Trust & Traceability Are Ensured
+## 8. How Trust & Traceability Are Ensured
 
 1. **Immutability** – Once a transaction is confirmed on Solana, the data cannot be altered or removed. Anyone can query the PDA at any time and see the exact same fields that the backend originally submitted.
 
@@ -263,7 +307,7 @@ The backend holds the secret (as an environment variable) and can map a `donor_i
 
 ---
 
-## 8. Data Flow Diagram (textual)
+## 9. Data Flow Diagram (textual)
 
 ```
 +----------------+        +-------------------+        +---------------------+
@@ -302,12 +346,17 @@ The backend holds the secret (as an environment variable) and can map a `donor_i
         |                         |                         |
         |                         | 11. UpdateDonationStatus|
         |                         |<------------------------|
+        |                         |                         |
+        |12. NGO attests receipt  |                         |
+        |                         |------------------------>|
+        |                         | 13. StoreAttestation ix |
+        |                         |<------------------------|
         +-------------------------+-------------------------+
 ```
 
 ---
 
-## 9. Summary of Guarantees
+## 10. Summary of Guarantees
 
 | Property | How It Is Achieved |
 |----------|-------------------|
@@ -315,13 +364,14 @@ The backend holds the secret (as an environment variable) and can map a `donor_i
 | **Funds traceability** | Every donation creates an immutable on‑chain record with amount, NGO/campaign IDs, timestamp, and status. The transaction chain shows flow from backend wallet → program → donation PDA. |
 | **Tamper evidence** | `record_hash` lets any observer detect post‑fact alteration of on‑chain fields. |
 | **Auditability** | All transaction signatures are public; backend logs them internally; Reconciliation job detects mismatches. |
+| **Attestation verifiability** | NGO‑signed attestations (receipt and optional delivery) are stored on‑chain; anyone can verify the NGO’s signature with the NGO’s public key and check the attached hash. |
 | **Upgradability with control** | Program upgrade authority is held by a secure wallet (multisig/HSM), preventing unauthorized logic changes. |
 | **Fault tolerance** | `blockchainRetryProcessor` retries failed transactions; off‑chain DB acts as a fallback source of truth. |
 | **Scalability** | Reading donation status from the chain is cheap (single account lookup). Heavy analytics/queries run off‑chain against Postgres. |
 
 ---
 
-## 10. Recommendations for Future Hardening
+## 11. Recommendations for Future Hardening
 
 * **Rotate the donor secret** periodically and re‑hash existing `donor_id_hash` values (requires a migration script that reads all donations, recomputes hash with new secret, and updates both DB and on‑chain via a transaction that updates `donor_id_hash` and `record_hash`).
 * **Use a multi‑sig or threshold wallet** for the program authority in production to avoid a single point of failure.
@@ -331,9 +381,11 @@ The backend holds the secret (as an environment variable) and can map a `donor_i
 
 ---
 
-## 11. Conclusion
+## 12. Conclusion
 
 Trace-It achieves a strong balance between **privacy** (donor anonymity via keyed hashing) and **transparency** (public, immutable ledger of donation facts). The backend acts as the trusted party that knows real identities but only ever commits cryptographic commitments to the chain. Anyone can audit that a donation of a specific amount was recorded for a specific NGO at a specific time, and they can verify the data hasn’t been altered. Meanwhile, the donor’s real identity remains hidden unless the backend’s secret is compromised—a risk mitigated by treating that secret as a highly protected credential and rotating it as needed.
+
+With the attestation mechanism, the platform additionally obtains cryptographic proof that the NGO has received the funds and (optionally) delivered them to the beneficiary, all verifiable on‑chain without exposing sensitive personal data.
 
 This design satisfies the core goals of the platform: donors can give with confidence that their money reaches the intended cause, and they can do so without exposing their personal information to the public blockchain.
 
