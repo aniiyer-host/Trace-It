@@ -389,12 +389,15 @@ model AuditLog {
 model BlockchainRetryQueue {
   id          String   @id @default(uuid())
   donationId  String   @unique
-  error       String
+  error       String?
+  operationType String? // RECORD_DONATION or UPDATE_STATUS
   retryCount  Int      @default(0)
   lastAttempt DateTime
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  metadata    Json?    // extra info like targetStatus, etc.
 
   @@index([lastAttempt])
+  @@index([operationType])
   @@map("BlockchainRetryQueue")
 }

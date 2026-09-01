@@ -139,9 +139,10 @@ export class BlockchainService {
         `${params.donationId}|${amountPaisa}|${unixTimestamp}|${params.ngoId}|${donorIdHash}`
       );
 
-      // 4. Derive the PDA
+      // 4. Derive the PDA (remove dashes from donationId)
+      const cleanDonationId = params.donationId.replace(/-/g, '');
       const [donationPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('donation'), Buffer.from(params.donationId)],
+        [Buffer.from('donation'), Buffer.from(cleanDonationId, 'utf8')],
         this.programId
       );
 
@@ -210,8 +211,10 @@ export class BlockchainService {
     }
 
     try {
+      // 2. Derive the PDA (remove dashes from donationId)
+      const cleanDonationId = donationId.replace(/-/g, '');
       const [donationPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('donation'), Buffer.from(donationId)],
+        [Buffer.from('donation'), Buffer.from(cleanDonationId, 'utf8')],
         this.programId
       );
 
@@ -243,25 +246,35 @@ export class BlockchainService {
     }
 
     try {
+      // Remove dashes from donationId for PDA derivation (must match on-chain program)
+      const cleanDonationId = donationId.replace(/-/g, '');
       const [donationPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('donation'), Buffer.from(donationId)],
+        [Buffer.from('donation'), Buffer.from(cleanDonationId, 'utf8')],
         this.programId
       );
 
-      const account = await this.program.account.donationRecord.fetch(donationPda);
+      // Fetch the account info
+      const accountInfo = await this.connection.getAccountInfo(donationPda);
+      if (!accountInfo) {
+        return null; // Account doesn't exist
+      }
+
+      // Decode the account data using the program's coder
+      const account = this.program.coder.accounts.decode('donationRecord', accountInfo.data);
       return {
         donationId: account.donationId,
         donorIdHash: account.donorIdHash,
         ngoId: account.ngoId,
         campaignId: account.campaignId,
-        amountPaisa: (account.amountPaisa as any).toNumber(),
+        amountPaisa: (account.amountPaisa as anchor.BN).toNumber(),
         currency: account.currency,
-        timestamp: (account.timestamp as any).toNumber(),
+        timestamp: (account.timestamp as anchor.BN).toNumber(),
         status: account.status,
         recordHash: account.recordHash,
       };
-    } catch {
-      return null; // Account doesn't exist
+    } catch (error) {
+      console.error('[BlockchainService] getDonationRecord failed:', error);
+      return null; // Account doesn't exist or failed to decode
     }
   }
 

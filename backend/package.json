@@ -14,7 +14,8 @@
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --forceExit",
     "typecheck": "tsc --noEmit",
     "seed": "prisma db seed",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "reconcile:blockchain": "ts-node backend/scripts/reconcile-blockchain-records.ts"
   },
   "keywords": [],
   "author": "",

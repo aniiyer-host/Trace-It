@@ -98,22 +98,4 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
   });
 }
 
-// Start blockchain retry processor (only in non-test environments)
-//Duplicate block 
-// if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
-//   const retryProcessor = new BlockchainRetryProcessor();
-//   retryProcessor.start().catch(console.error);
-
-//   // Graceful shutdown handling
-//   process.on("SIGINT", () => {
-//     retryProcessor.stop();
-//     // ... existing shutdown code ...
-//   });
-
-//   process.on("SIGTERM", () => {
-//     retryProcessor.stop();
-//     // ... existing shutdown code ...
-//   });
-// }
-
 export default app;
