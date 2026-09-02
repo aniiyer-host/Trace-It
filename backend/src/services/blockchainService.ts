@@ -6,7 +6,8 @@ import {
   Commitment,
 } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
-import { HashService } from './hashService.js';
+import { HashService } from './hashService';
+import path from 'path';
 import fs from 'fs';
 
 // ─── Types ───────────────────────────────────────────────────
@@ -56,7 +57,7 @@ export class BlockchainService {
   private wallet: Keypair;
   private programId: PublicKey;
   private provider: anchor.AnchorProvider;
-  private program: anchor.Program | null = null;
+  private program: anchor.Program | null;
   private hmacSecret: string;
 
   constructor(config: {
@@ -78,13 +79,12 @@ export class BlockchainService {
       this.wallet = Keypair.fromSecretKey(
         Uint8Array.from(config.walletKeypairJson)
       );
-    } else if (config.walletKeypairPath) {
+    } else {
+      // Load from file — in production, use secrets manager
       const keyData = JSON.parse(
-        fs.readFileSync(config.walletKeypairPath, 'utf-8')
+        fs.readFileSync(config.walletKeypairPath!, 'utf-8')
       );
       this.wallet = Keypair.fromSecretKey(Uint8Array.from(keyData));
-    } else {
-      throw new Error('Either walletKeypairPath or walletKeypairJson must be provided');
     }
 
     // Program
@@ -98,29 +98,29 @@ export class BlockchainService {
       walletAdapter,
       { commitment: config.commitment || 'confirmed' }
     );
+
+    // Program will be set after init()
+    this.program = null;
   }
 
   /**
    * Initialize the program instance with the IDL.
    * Call this once after construction.
    */
-  async init(idlPathOrObject: string | anchor.Idl): Promise<void> {
-    let idl: anchor.Idl;
-    if (typeof idlPathOrObject === 'string') {
-      idl = JSON.parse(fs.readFileSync(idlPathOrObject, 'utf-8'));
-    } else {
-      idl = idlPathOrObject;
-    }
+  async init(idlPath: string): Promise<void> {
+    const idl = JSON.parse(fs.readFileSync(idlPath, 'utf-8'));
     this.program = new anchor.Program(idl, this.provider);
   }
 
   /**
    * Record a confirmed donation on-chain.
-   * Idempotent: If the donation already exists on-chain, returns success with existing PDA info.
+   * This is the primary integration point called after Razorpay webhook confirmation.
+   *
+   * Idempotent: If the donation already exists on-chain, returns success with the existing tx.
    */
   async recordDonation(params: RecordDonationParams): Promise<BlockchainResult> {
     if (!this.program) {
-      throw new Error('BlockchainService has not been initialized with IDL. Call init() first.');
+      throw new Error('BlockchainService not initialized. Call init() first.');
     }
 
     try {
@@ -139,16 +139,17 @@ export class BlockchainService {
         `${params.donationId}|${amountPaisa}|${unixTimestamp}|${params.ngoId}|${donorIdHash}`
       );
 
-      // 4. Derive the PDA - remove dashes to match on-chain program
-      const cleanId = params.donationId.replace(/-/g, '');
+      // 4. Derive the PDA (remove dashes from donationId)
+      const cleanDonationId = params.donationId.replace(/-/g, '');
       const [donationPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('donation'), Buffer.from(cleanId)],
+        [Buffer.from('donation'), Buffer.from(cleanDonationId, 'utf8')],
         this.programId
       );
 
       // 5. Check if already exists (idempotency)
       const existingAccount = await this.connection.getAccountInfo(donationPda);
       if (existingAccount) {
+        // Already recorded — return success
         return {
           success: true,
           txHash: `already_recorded:${donationPda.toBase58()}`,
@@ -176,11 +177,10 @@ export class BlockchainService {
 
       return { success: true, txHash: tx };
     } catch (error: any) {
+      // Handle "already in use" as idempotent success
       if (error.message?.includes('already in use')) {
-        // Use cleanId (without dashes) to match on-chain program derivation
-        const cleanId = params.donationId.replace(/-/g, '');
         const [donationPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from('donation'), Buffer.from(cleanId)],
+          [Buffer.from('donation'), Buffer.from(params.donationId)],
           this.programId
         );
         return {
@@ -207,14 +207,14 @@ export class BlockchainService {
     newStatus: number
   ): Promise<BlockchainResult> {
     if (!this.program) {
-      throw new Error('BlockchainService has not been initialized with IDL. Call init() first.');
+      throw new Error('BlockchainService not initialized. Call init() first.');
     }
 
     try {
-      // Remove dashes to match on-chain program PDA derivation
-      const cleanId = donationId.replace(/-/g, '');
+      // 2. Derive the PDA (remove dashes from donationId)
+      const cleanDonationId = donationId.replace(/-/g, '');
       const [donationPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('donation'), Buffer.from(cleanId)],
+        [Buffer.from('donation'), Buffer.from(cleanDonationId, 'utf8')],
         this.programId
       );
 
@@ -242,31 +242,39 @@ export class BlockchainService {
    */
   async getDonationRecord(donationId: string): Promise<DonationOnChainData | null> {
     if (!this.program) {
-      throw new Error('BlockchainService has not been initialized with IDL. Call init() first.');
+      throw new Error('BlockchainService not initialized. Call init() first.');
     }
 
     try {
-      // Remove dashes to match on-chain program PDA derivation
-      const cleanId = donationId.replace(/-/g, '');
+      // Remove dashes from donationId for PDA derivation (must match on-chain program)
+      const cleanDonationId = donationId.replace(/-/g, '');
       const [donationPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('donation'), Buffer.from(cleanId)],
+        [Buffer.from('donation'), Buffer.from(cleanDonationId, 'utf8')],
         this.programId
       );
 
-      const account = await (this.program.account as any)['donationRecord'].fetch(donationPda);
+      // Fetch the account info
+      const accountInfo = await this.connection.getAccountInfo(donationPda);
+      if (!accountInfo) {
+        return null; // Account doesn't exist
+      }
+
+      // Decode the account data using the program's coder
+      const account = this.program.coder.accounts.decode('donationRecord', accountInfo.data);
       return {
-        donationId: account['donationId'] as string,
-        donorIdHash: account['donorIdHash'] as string,
-        ngoId: account['ngoId'] as string,
-        campaignId: account['campaignId'] as string,
-        amountPaisa: (account['amountPaisa'] as any).toNumber(),
-        currency: account['currency'] as string,
-        timestamp: (account['timestamp'] as any).toNumber(),
-        status: account['status'] as number,
-        recordHash: account['recordHash'] as string,
+        donationId: account.donationId,
+        donorIdHash: account.donorIdHash,
+        ngoId: account.ngoId,
+        campaignId: account.campaignId,
+        amountPaisa: (account.amountPaisa as anchor.BN).toNumber(),
+        currency: account.currency,
+        timestamp: (account.timestamp as anchor.BN).toNumber(),
+        status: account.status,
+        recordHash: account.recordHash,
       };
-    } catch {
-      return null;
+    } catch (error) {
+      console.error('[BlockchainService] getDonationRecord failed:', error);
+      return null; // Account doesn't exist or failed to decode
     }
   }
 
@@ -311,6 +319,6 @@ export class BlockchainService {
    */
   async getWalletBalance(): Promise<number> {
     const balance = await this.connection.getBalance(this.wallet.publicKey);
-    return balance / 1e9;
+    return balance / 1e9; // Convert lamports to SOL
   }
 }
