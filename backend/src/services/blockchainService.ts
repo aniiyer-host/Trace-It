@@ -321,4 +321,168 @@ export class BlockchainService {
     const balance = await this.connection.getBalance(this.wallet.publicKey);
     return balance / 1e9; // Convert lamports to SOL
   }
+
+  /**
+   * Register an NGO on-chain.
+   * Called after NGO approval in the backend.
+   */
+  async registerNgo(params: RegisterNgoParams): Promise<BlockchainResult> {
+    if (!this.program) {
+      throw new Error('BlockchainService not initialized. Call init() first.');
+    }
+
+    try {
+      // Derive the PDA (remove dashes from ngoId)
+      const cleanNgoId = params.ngoId.replace(/-/g, '');
+      const [ngoPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('ngo'), Buffer.from(cleanNgoId, 'utf8')],
+        this.programId
+      );
+
+      const tx = await this.program.methods
+        .registerNgo(params.ngoId, params.metadataHash)
+        .accounts({
+          ngoRecord: ngoPda,
+          authority: this.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' });
+
+      return { success: true, txHash: tx };
+    } catch (error: any) {
+      // Check if the error is due to account already existing (idempotency case)
+      if (error instanceof anchor.errors.SendTransactionError &&
+          error.logs?.some(log => log.includes('already in use'))) {
+        console.log('[BlockchainService] registerNgo: Account already exists, treating as success (idempotent)');
+        return { success: true, txHash: null };
+      }
+
+      console.error('[BlockchainService] registerNgo failed:', error);
+      return {
+        success: false,
+        txHash: null,
+        error: error.message || 'Unknown blockchain error',
+      };
+    }
+  }
+
+  /**
+   * Register a cohort on-chain.
+   * Called after NGO uploads proof documents.
+   */
+  async registerCohort(params: RegisterCohortParams): Promise<BlockchainResult> {
+    if (!this.program) {
+      throw new Error('BlockchainService not initialized. Call init() first.');
+    }
+
+    try {
+      // Derive the PDA (remove dashes from cohortId)
+      const cleanCohortId = params.cohortId.replace(/-/g, '');
+      const [cohortPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('cohort'), Buffer.from(cleanCohortId, 'utf8')],
+        this.programId
+      );
+
+      const tx = await this.program.methods
+        .registerCohort(params.cohortId, params.ngoId, params.metadataHash)
+        .accounts({
+          cohortRecord: cohortPda,
+          ngoRecord: await this.getNgoPda(params.ngoId), // Derive NGO PDA for constraint checking
+          authority: this.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' });
+
+      return { success: true, txHash: tx };
+    } catch (error: any) {
+      console.error('[BlockchainService] registerCohort failed:', error);
+      return {
+        success: false,
+        txHash: null,
+        error: error.message || 'Unknown blockchain error',
+      };
+    }
+  }
+
+  /**
+   * Record a disbursement on-chain.
+   * Called after platform sends funds to an NGO.
+   */
+  async recordDisbursement(params: RecordDisbursementParams): Promise<BlockchainResult> {
+    if (!this.program) {
+      throw new Error('BlockchainService not initialized. Call init() first.');
+    }
+
+    try {
+      // Derive the PDA (remove dashes from disbursementId)
+      const cleanDisbursementId = params.disbursementId.replace(/-/g, '');
+      const [disbursementPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('disbursement'), Buffer.from(cleanDisbursementId, 'utf8')],
+        this.programId
+      );
+
+      const tx = await this.program.methods
+        .recordDisbursement(
+          params.disbursementId,
+          params.ngoId,
+          params.cohortId,
+          new anchor.BN(params.amountInr * 100), // Convert to paisa
+          params.currency,
+          new anchor.BN(Math.floor(params.timestamp.getTime() / 1000)),
+          params.transactionHash
+        )
+        .accounts({
+          disbursementRecord: disbursementPda,
+          ngoRecord: await this.getNgoPda(params.ngoId), // Derive NGO PDA for constraint checking
+          authority: this.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' });
+
+      return { success: true, txHash: tx };
+    } catch (error: any) {
+      console.error('[BlockchainService] recordDisbursement failed:', error);
+      return {
+        success: false,
+        txHash: null,
+        error: error.message || 'Unknown blockchain error',
+      };
+    }
+  }
+
+  /**
+   * Helper method to derive NGO PDA for constraint checking in transactions.
+   * Not exposed publicly as it's used internally for account derivation.
+   */
+  private async getNgoPda(ngoId: string): Promise<PublicKey> {
+    const cleanNgoId = ngoId.replace(/-/g, '');
+    const [ngoPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from('ngo'), Buffer.from(cleanNgoId, 'utf8')],
+      this.programId
+    );
+    return ngoPda;
+  }
+}
+
+// ─── New Parameter Interfaces ─────────────────────────────────────
+
+export interface RegisterNgoParams {
+  ngoId: string;           // NGO profile ID (UUID format)
+  metadataHash: string;    // SHA-512 hash of NGO verification documents
+}
+
+export interface RegisterCohortParams {
+  cohortId: string;        // Cohort ID (UUID format)
+  ngoId: string;           // Associated NGO ID
+  metadataHash: string;    // SHA-512 hash of cohort proof document bundle
+}
+
+export interface RecordDisbursementParams {
+  disbursementId: string;  // Disbursement ID (UUID format)
+  ngoId: string;           // Recipient NGO ID
+  cohortId: string;        // Associated cohort ID
+  amountInr: number;       // Amount in INR
+  currency: string;        // Currency code (typically "INR")
+  timestamp: Date;         // When disbursement was made
+  transactionHash: string; // Transaction hash of the actual funds transfer
 }

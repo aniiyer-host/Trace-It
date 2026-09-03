@@ -29,6 +29,8 @@ phase-1-summary.txt
 PHASE_1_COMPLETION_SUMMARY.md
 /blockchain/target/*
 BLOCKCHAIN_SETUP.md
+blockchain_implementation_plan.md
+blockchain_implementation_roadmap.md
 
 # For Blockchain integration test
 

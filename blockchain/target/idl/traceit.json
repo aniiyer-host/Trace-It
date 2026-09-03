@@ -8,6 +8,108 @@
   },
   "instructions": [
     {
+      "name": "record_disbursement",
+      "discriminator": [
+        249,
+        39,
+        225,
+        180,
+        83,
+        171,
+        178,
+        224
+      ],
+      "accounts": [
+        {
+          "name": "disbursement_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  105,
+                  115,
+                  98,
+                  117,
+                  114,
+                  115,
+                  101,
+                  109,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "disbursement_id.replace(\"-\", \"\")"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ngo_record",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  103,
+                  111
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "ngo_id.replace(\"-\", \"\")"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "disbursement_id",
+          "type": "string"
+        },
+        {
+          "name": "ngo_id",
+          "type": "string"
+        },
+        {
+          "name": "cohort_id",
+          "type": "string"
+        },
+        {
+          "name": "amount_paisa",
+          "type": "u64"
+        },
+        {
+          "name": "currency",
+          "type": "string"
+        },
+        {
+          "name": "timestamp",
+          "type": "i64"
+        },
+        {
+          "name": "transaction_hash",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "record_donation",
       "discriminator": [
         154,
@@ -91,6 +193,140 @@
       ]
     },
     {
+      "name": "register_cohort",
+      "discriminator": [
+        101,
+        36,
+        42,
+        53,
+        71,
+        219,
+        248,
+        152
+      ],
+      "accounts": [
+        {
+          "name": "cohort_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  104,
+                  111,
+                  114,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "cohort_id.replace(\"-\", \"\")"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ngo_record",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  103,
+                  111
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "ngo_id.replace(\"-\", \"\")"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "cohort_id",
+          "type": "string"
+        },
+        {
+          "name": "ngo_id",
+          "type": "string"
+        },
+        {
+          "name": "metadata_hash",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "register_ngo",
+      "discriminator": [
+        5,
+        168,
+        204,
+        75,
+        108,
+        93,
+        89,
+        244
+      ],
+      "accounts": [
+        {
+          "name": "ngo_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  103,
+                  111
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "ngo_id.replace(\"-\", \"\")"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "ngo_id",
+          "type": "string"
+        },
+        {
+          "name": "metadata_hash",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "update_donation_status",
       "discriminator": [
         200,
@@ -148,6 +384,32 @@
   ],
   "accounts": [
     {
+      "name": "CohortRecord",
+      "discriminator": [
+        1,
+        24,
+        253,
+        23,
+        85,
+        92,
+        89,
+        20
+      ]
+    },
+    {
+      "name": "DisbursementRecord",
+      "discriminator": [
+        19,
+        91,
+        111,
+        207,
+        88,
+        250,
+        182,
+        118
+      ]
+    },
+    {
       "name": "DonationRecord",
       "discriminator": [
         219,
@@ -158,6 +420,19 @@
         70,
         71,
         0
+      ]
+    },
+    {
+      "name": "NgoRecord",
+      "discriminator": [
+        85,
+        190,
+        215,
+        237,
+        77,
+        252,
+        211,
+        42
       ]
     }
   ],
@@ -179,11 +454,122 @@
     },
     {
       "code": 6003,
+      "name": "NgoNotActive",
+      "msg": "NGO is not active"
+    },
+    {
+      "code": 6004,
       "name": "Unauthorized",
       "msg": "Unauthorized: only the program authority can perform this action"
     }
   ],
   "types": [
+    {
+      "name": "CohortRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "cohort_id",
+            "type": "string"
+          },
+          {
+            "name": "ngo_id",
+            "type": "string"
+          },
+          {
+            "name": "sha512_doc_hash",
+            "docs": [
+              "SHA-512 hash of the cohort proof document bundle"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "beneficiary_count",
+            "docs": [
+              "Beneficiary count"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Unix timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DisbursementRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "disbursement_id",
+            "type": "string"
+          },
+          {
+            "name": "ngo_id",
+            "type": "string"
+          },
+          {
+            "name": "cohort_id",
+            "type": "string"
+          },
+          {
+            "name": "amount_paisa",
+            "docs": [
+              "Amount in paisa"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "currency",
+            "docs": [
+              "Currency code (always \"INR\")"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Unix timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "transaction_hash",
+            "docs": [
+              "Transaction hash on Solana"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "0=Pending, 1=Approved, 2=Sent, 3=Settled, 4=Failed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
     {
       "name": "DonationRecord",
       "type": {
@@ -256,6 +642,46 @@
             "name": "bump",
             "docs": [
               "Bump seed for PDA derivation"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "NgoRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ngo_id",
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "0=Pending, 1=Active, 2=Rejected, 3=Suspended"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "metadata_hash",
+            "docs": [
+              "SHA-512 hash of NGO verification documents"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "registered_at",
+            "docs": [
+              "Unix timestamp of registration"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA"
             ],
             "type": "u8"
           }

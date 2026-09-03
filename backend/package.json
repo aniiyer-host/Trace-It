@@ -12,6 +12,7 @@
     "start": "node --experimental-specifier-resolution=node dist/src/index.js",
     "build": "tsc",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand ",
+    "test:integration": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --testPathIgnorePatterns='node_modules'",
     "typecheck": "tsc --noEmit",
     "seed": "prisma db seed",
     "db:seed": "prisma db seed",
