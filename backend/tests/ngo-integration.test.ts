@@ -1,5 +1,5 @@
 import { getBlockchainService } from '../src/services/blockchainInstance';
-import { prisma } from '../db/prisma';
+import { prisma } from '../src/db/prisma.js';
 
 describe('NGO Integration', () => {
   let blockchainService: any;

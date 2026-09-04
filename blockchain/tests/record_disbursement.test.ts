@@ -36,7 +36,7 @@ describe("record_disbursement", () => {
 
     await program.methods
       .registerNgo(ngoId, ngoMetadataHash)
-      .accountsPartial({
+      .accounts({
         ngoRecord: ngoPda,
         authority: provider.wallet.publicKey,
       })
@@ -51,7 +51,7 @@ describe("record_disbursement", () => {
 
     await program.methods
       .registerCohort(cohortId, ngoId, cohortMetadataHash)
-      .accountsPartial({
+      .accounts({
         cohortRecord: cohortPda,
         ngoRecord: ngoPda,
         authority: provider.wallet.publicKey,
@@ -82,7 +82,7 @@ describe("record_disbursement", () => {
         timestamp,
         transactionHash
       )
-      .accountsPartial({
+      .accounts({
         disbursementRecord: disbursementPda,
         ngoRecord: ngoPda,
         authority: provider.wallet.publicKey,
@@ -125,7 +125,7 @@ describe("record_disbursement", () => {
           timestamp,
           transactionHash
         )
-        .accountsPartial({
+        .accounts({
           disbursementRecord: disbursementPda,
           ngoRecord: ngoPda,
           authority: provider.wallet.publicKey,
@@ -163,7 +163,7 @@ describe("record_disbursement", () => {
           timestamp,
           transactionHash
         )
-        .accountsPartial({
+        .accounts({
           disbursementRecord: disbursementPda2,
           ngoRecord: inactiveNgoPda,
           authority: provider.wallet.publicKey,
@@ -200,7 +200,7 @@ describe("record_disbursement", () => {
           timestamp,
           transactionHash
         )
-        .accountsPartial({
+        .accounts({
           disbursementRecord: badDisbursementPda,
           ngoRecord: ngoPda,
           authority: provider.wallet.publicKey,

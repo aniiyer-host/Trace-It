@@ -42,7 +42,7 @@ describe("traceit", () => {
         timestamp,
         recordHash
       )
-      .accountsPartial({
+      .accounts({
         donationRecord: donationPda,
         authority: provider.wallet.publicKey,
       })
@@ -78,7 +78,7 @@ describe("traceit", () => {
           timestamp,
           recordHash
         )
-        .accountsPartial({
+        .accounts({
           donationRecord: donationPda,
           authority: provider.wallet.publicKey,
         })
@@ -98,7 +98,7 @@ describe("traceit", () => {
 
     await program.methods
       .updateDonationStatus(donationId, 2) // ALLOCATED
-      .accountsPartial({
+      .accounts({
         donationRecord: donationPda,
         authority: provider.wallet.publicKey,
       })
@@ -118,7 +118,7 @@ describe("traceit", () => {
     try {
       await program.methods
         .updateDonationStatus(donationId, 4) // Trying to jump ALLOCATED -> DELIVERED
-        .accountsPartial({
+        .accounts({
           donationRecord: donationPda,
           authority: provider.wallet.publicKey,
         })
@@ -149,7 +149,7 @@ describe("traceit", () => {
           timestamp,
           recordHash
         )
-        .accountsPartial({
+        .accounts({
           donationRecord: donationPda,
           authority: provider.wallet.publicKey,
         })

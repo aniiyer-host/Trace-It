@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "description": "TraceIt Solana Anchor smart contracts and test suite",
   "scripts": {
-    "test": "ANCHOR_PROVIDER_URL=${ANCHOR_PROVIDER_URL:-http://127.0.0.1:8899} ANCHOR_WALLET=${ANCHOR_WALLET:-/home/aaditya/.config/solana/devnet-traceit.json} ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'"
+    "pretest": "bash scripts/start-validator.sh",
+    "test": "ANCHOR_PROVIDER_URL=${ANCHOR_PROVIDER_URL:-http://127.0.0.1:8899} ANCHOR_WALLET=${ANCHOR_WALLET:-/home/aaditya/.config/solana/devnet-traceit.json} ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'",
+    "posttest": "bash scripts/stop-validator.sh"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.1",

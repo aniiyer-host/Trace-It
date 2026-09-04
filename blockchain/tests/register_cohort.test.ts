@@ -30,7 +30,7 @@ describe("register_cohort", () => {
 
     await program.methods
       .registerNgo(ngoId, ngoMetadataHash)
-      .accountsPartial({
+      .accounts({
         ngoRecord: ngoPda,
         authority: provider.wallet.publicKey,
       })
@@ -52,7 +52,7 @@ describe("register_cohort", () => {
 
     const tx = await program.methods
       .registerCohort(cohortId, ngoId, metadataHash)
-      .accountsPartial({
+      .accounts({
         cohortRecord: cohortPda,
         ngoRecord: ngoPda,
         authority: provider.wallet.publicKey,
@@ -84,7 +84,7 @@ describe("register_cohort", () => {
     try {
       await program.methods
         .registerCohort(cohortId, ngoId, metadataHash)
-        .accountsPartial({
+        .accounts({
           cohortRecord: cohortPda,
           ngoRecord: ngoPda,
           authority: provider.wallet.publicKey,
@@ -119,7 +119,7 @@ describe("register_cohort", () => {
     try {
       await program.methods
         .registerCohort(cohortId2, inactiveNgoId, cohortMetadataHash2)
-        .accountsPartial({
+        .accounts({
           cohortRecord: cohortPda2,
           ngoRecord: inactiveNgoPda,
           authority: provider.wallet.publicKey,
