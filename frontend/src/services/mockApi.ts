@@ -23,7 +23,7 @@ export const CAMPAIGNS: Campaign[] = [
     },
     {
         id: 'camp-002',
-        title: 'Girls\' Education – Rural Rajasthan',
+        title: 'Girls\\' Education – Rural Rajasthan',
         ngo: 'ShikshaPath Trust',
         description: 'Scholarships and digital literacy for 2,000 girls in 40 villages across Barmer district.',
         targetAmount: 50000,
@@ -47,7 +47,36 @@ export const CAMPAIGNS: Campaign[] = [
             { id: 'ms-003-b', campaignId: 'camp-003', title: 'Installation Complete', description: 'All 20 units installed and operational', targetAmount: 30000, status: 'delivered', txHash: mockTxHash('ms003b'), proofCid: 'QmA3qRt...Def' },
         ],
     },
+    {
+        id: 'camp-004',
+        title: 'Renewable Energy – Sundarbans',
+        ngo: 'GreenEnergy Trust',
+        description: 'Installing solar microgrids in 50 remote villages to replace diesel generators.',
+        targetAmount: 75000,
+        raisedAmount: 42300,
+        category: 'environment',
+        milestones: [
+            { id: 'ms-004-a', campaignId: 'camp-004', title: 'Solar Panel Installation', description: 'Install 500 solar panels across 50 villages', targetAmount: 30000, status: 'delivered', txHash: mockTxHash('ms004a'), proofCid: 'QmY8rSt...Def', disbursedAt: '2025-08-15T09:30:00Z', approvedAt: '2025-08-14T16:45:00Z' },
+            { id: 'ms-004-b', campaignId: 'camp-004', title: 'Battery Storage Setup', description: 'Install 100 battery units for energy storage', targetAmount: 25000, status: 'disbursed', txHash: mockTxHash('ms004b'), disbursedAt: '2025-08-22T14:15:00Z' },
+            { id: 'ms-004-c', campaignId: 'camp-004', title: 'Training & Maintenance', description: 'Train local technicians for system maintenance', targetAmount: 20000, status: 'allocated' },
+        ],
+    },
+    {
+        id: 'camp-005',
+        title: 'Digital Literacy – Urban Slums',
+        ngo: 'TechForAll Foundation',
+        description: 'Setting up computer labs in 100 slum communities for youth skill development.',
+        targetAmount: 40000,
+        raisedAmount: 35600,
+        category: 'education',
+        milestones: [
+            { id: 'ms-005-a', campaignId: 'camp-005', title: 'Computer Lab Setup', description: 'Establish 100 computer labs with 10 PCs each', targetAmount: 20000, status: 'delivered', txHash: mockTxHash('ms005a'), proofCid: 'QmZ1aBc...Xyz', disbursedAt: '2025-09-01T11:20:00Z', approvedAt: '2025-08-31T17:00:00Z' },
+            { id: 'ms-005-b', campaignId: 'camp-005', title: 'Curriculum Development', description: 'Create localized digital literacy curriculum', targetAmount: 15000, status: 'delivered', txHash: mockTxHash('ms005b'), proofCid: 'QmA2dEf...Ghi', disbursedAt: '2025-09-05T14:45:00Z', approvedAt: '2025-09-04T10:30:00Z' },
+            { id: 'ms-005-c', campaignId: 'camp-005', title: 'Instructor Training', description: 'Train 200 local instructors on curriculum delivery', targetAmount: 5000, status: 'pending' },
+        ],
+    },
 ]
+
 
 // ─── Campaign APIs ─────────────────────────────────────────────────────────────
 
