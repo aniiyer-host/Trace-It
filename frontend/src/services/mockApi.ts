@@ -23,7 +23,7 @@ export const CAMPAIGNS: Campaign[] = [
     },
     {
         id: 'camp-002',
-        title: 'Girls\\' Education – Rural Rajasthan',
+        title: "Girls' Education – Rural Rajasthan",
         ngo: 'ShikshaPath Trust',
         description: 'Scholarships and digital literacy for 2,000 girls in 40 villages across Barmer district.',
         targetAmount: 50000,

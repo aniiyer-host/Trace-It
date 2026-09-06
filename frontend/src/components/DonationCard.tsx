@@ -7,18 +7,20 @@ import { Progress } from '@/components/ui/progress'
 import type { Campaign } from '@/types'
 import { formatUSD, cn } from '@/lib/utils'
 
-const CATEGORY_COLOURS: Record<Campaign['category'], string> = {
-    disaster: 'bg-red-500/20 text-red-400 border-red-500/30',
-    education: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    health: 'bg-green-500/20 text-green-400 border-green-500/30',
-    environment: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+interface Props {
+  campaign: Campaign
+  onDonate?: (campaign: Campaign) => void
+  onView?: (campaign: Campaign) => void
+  compact?: boolean
+  isSelected?: boolean
 }
 
-interface Props {
-    campaign: Campaign
-    onDonate?: (campaign: Campaign) => void
-    onView?: (campaign: Campaign) => void
-    compact?: boolean
+// Use CSS variables that match our theme from index.css
+const CATEGORY_COLOURS: Record<Campaign['category'], string> = {
+    disaster: 'bg-primary/10 text-primary border-primary/20', // Blue for disaster
+    education: 'bg-accent/10 text-accent border-accent/20', // Teal for education
+    health: 'bg-primary/10 text-primary border-primary/20', // Blue for health
+    environment: 'bg-accent/10 text-accent border-accent/20', // Teal for environment
 }
 
 export function DonationCard({ campaign, onDonate, onView, compact = false }: Props) {
@@ -50,7 +52,7 @@ export function DonationCard({ campaign, onDonate, onView, compact = false }: Pr
                 <div>
                     <div className="flex justify-between text-xs mb-1">
                         <span className="text-muted-foreground">Raised</span>
-                        <span className="font-semibold">
+                        <span className="font-medium">
                             {formatUSD(campaign.raisedAmount)}{' '}
                             <span className="text-muted-foreground font-normal">/ {formatUSD(campaign.targetAmount)}</span>
                         </span>

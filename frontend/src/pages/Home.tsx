@@ -4,6 +4,7 @@ import { Shield, TrendingUp, Zap, DollarSign, Users, MapPin } from 'lucide-react
 import { useNavigate } from 'react-router-dom'
 import { DonationCard } from '@/components/DonationCard'
 import { DonateDialog } from '@/components/DonateDialog'
+import { Button } from '@/components/ui/button'
 import { useDonationStore } from '@/store/donationStore'
 import type { Campaign } from '@/types'
 

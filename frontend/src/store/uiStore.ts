@@ -36,7 +36,7 @@ interface UIStore {
     sidebarCollapsed: boolean
     setSidebarCollapsed: (collapsed: boolean) => void
     notifications: Array<{ id: string; title: string; description: string; variant?: 'default' | 'destructive' | 'success' }>
-    addNotification: (notification: Omit<typeof UIStore['notifications'][0], 'id'>) => void
+    addNotification: (notification: Omit<{ id: string; title: string; description: string; variant?: 'default' | 'destructive' | 'success' }, 'id'>) => void
     removeNotification: (id: string) => void
     clearNotifications: () => void
 
@@ -52,6 +52,9 @@ export const useUIStore = create<UIStore>((set, get) => ({
         await new Promise(resolve => setTimeout(resolve, 500))
         // In a real app, this would call an auth API
         // For demo, we'll accept any email/password
+        if (!email.trim() || !password.trim()) {
+            throw new Error('Email and password are required')
+        }
         const mockUser: User = {
             id: 'user_' + Date.now(),
             email,

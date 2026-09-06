@@ -1,6 +1,6 @@
 // DonorDashboard – Enhanced donor dashboard with wallet overview, donation history, and impact tracking
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { ExternalLink, RefreshCw, Loader2, DollarSign, Users, TrendingUp, MapPin, CheckCircle, X } from 'lucide-react'
+import { ExternalLink, Loader2, DollarSign, Users, TrendingUp, MapPin, Wallet, Wallet2 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,8 +17,8 @@ import type { Campaign, Donation } from '@/types'
 
 export default function DonorDashboard() {
   const [params] = useSearchParams()
-  const { campaigns, loadCampaigns, setDonations } = useDonationStore()
-  const { wallet, user, setWallet, connectWallet, disconnectWallet, addNotification } = useUIStore()
+  const { campaigns, loadCampaigns, setDonations, campaignsLoading } = useDonationStore()
+  const { wallet, user, connectWallet, disconnectWallet, addNotification } = useUIStore()
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -127,7 +127,7 @@ export default function DonorDashboard() {
               <CardHeader className="flex flex-col space-y-2">
                 <CardTitle className="flex items-center gap-3">
                   <Users className="h-5 w-5 text-primary" />
-                  <span className="text-xl font-semibold">{user.name}</span>
+                  <span className="text-xl font-semibold">{user.email.split('@')[0]}</span>
                 </CardTitle>
                 <CardDescription className="text-muted-foreground">
                   {user.email}
@@ -152,9 +152,9 @@ export default function DonorDashboard() {
                   variant="destructive"
                   size="sm"
                   onClick={async () => {
-                    await user.logout ? user.logout() : null
                     // Clear UI store on logout
                     const uiStore = useUIStore.getState()
+                    uiStore.logout()
                     uiStore.resetUIState()
                   }}
                 >
@@ -216,10 +216,10 @@ export default function DonorDashboard() {
                   <div className="space-y-1">
                     <p className="font-semibold">{wallet.balance?.toFixed(3) ?? '0.000'} SOL</p>
                     <p className="text-xs text-muted-foreground">
-                      {(wallet.balance ?? 0) * 150} ≈ ₹{(wallet.balance ?? 0) * 150}.toLocaleString()}
+                      {(wallet.balance ?? 0) * 150} ≈ ₹{((wallet.balance ?? 0) * 150).toLocaleString()}
                       (approx. at ₹150/SOL)
                     </p>
-                  }
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

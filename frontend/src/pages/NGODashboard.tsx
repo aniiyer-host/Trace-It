@@ -125,7 +125,10 @@ export default function NGODashboard() {
                                             size="sm"
                                             variant="outline"
                                             className="gap-2 border-primary/40 text-primary"
-                                            onClick={() => { setProofMs(activeMilestone); setProofOpen(true) }}
+                                            onClick={() => {
+                                                setProofMs(activeMilestone);
+                                                setProofOpen(true)
+                                            }}
                                         >
                                             <Upload className="h-4 w-4" /> Upload Proof
                                         </Button>
@@ -174,7 +177,7 @@ export default function NGODashboard() {
             </button>
 
             <ProofUploadDialog
-                milestone={proofMs}
+                data={proofMs ? { milestone: proofMs, campaign: selected } : null}
                 open={proofOpen}
                 onClose={() => setProofOpen(false)}
                 onSuccess={handleProofSuccess}

@@ -2,10 +2,8 @@
 // TODO: Replace fetchCampaigns with real RPC calls when integrating @solana/web3.js
 
 import { create } from 'zustand'
-import type { Campaign, Donation, Milestone } from '@/types'
+import type { Campaign, Donation, DonationStatus } from '@/types'
 import { fetchCampaigns, createDonation, fetchDonationsByWallet, approveMilestone, uploadMilestoneProof, cycleMilestoneStatus } from '@/services/mockApi'
-import type { WalletState } from '@/types'
-import { useUIStore } from '@/store/uiStore'
 
 interface DonationStore {
     // ── Campaigns ─────────────────────────────────────
@@ -71,7 +69,7 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
         }
     },
 
-    updateMilestoneStatus: (milestoneId, status) => {
+    updateMilestoneStatus: (milestoneId, status: DonationStatus) => {
         const campaigns = get().campaigns.map((c) => ({
             ...c,
             milestones: c.milestones.map((m) =>
@@ -98,7 +96,7 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
                 ...c,
                 milestones: c.milestones.map((m) =>
                     m.id === milestoneId
-                        ? { ...m, status: 'disbursed', proofCid: cid }
+                        ? {...m, status: 'disbursed' as DonationStatus, proofCid: cid}
                         : m,
                 ),
             }))
