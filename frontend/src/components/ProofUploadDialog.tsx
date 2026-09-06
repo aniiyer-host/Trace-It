@@ -24,15 +24,15 @@ interface Props {
 }
 
 export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
-    if (!data) return null
-
-    const milestone = data.milestone
-    const campaign = data.campaign
-
     const [description, setDescription] = useState('')
     const [loading, setLoading] = useState(false)
     const [uploadProgress, setUploadProgress] = useState(0)
     const { toast } = useToast()
+
+    if (!data) return null
+
+    const milestone = data.milestone
+    const campaign = data.campaign
 
     const handleUpload = async () => {
         if (!milestone) return

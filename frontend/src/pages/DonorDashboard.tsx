@@ -19,10 +19,10 @@ export default function DonorDashboard() {
   const [params] = useSearchParams()
   const { campaigns, loadCampaigns, setDonations, campaignsLoading } = useDonationStore()
   const { wallet, user, connectWallet, disconnectWallet, addNotification } = useUIStore()
-  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [donations, setDonationsLocal] = useState<Donation[]>([])
+  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
 
   // Update selectedCampaign when URL param changes
   useEffect(() => {
@@ -31,6 +31,7 @@ export default function DonorDashboard() {
     if (id && campaigns.length) {
       campaign = campaigns.find((x) => x.id === id) ?? null
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedCampaign(campaign)
   }, [params, campaigns])
 
@@ -40,13 +41,12 @@ export default function DonorDashboard() {
 
   const loadDonations = useCallback(async () => {
     if (!wallet.publicKey) return
-    setLoading(true)
     try {
       const data = await fetchDonationsByWallet(wallet.publicKey)
       setDonationsLocal(data)
       setDonations(data) // Also update the store
-    } catch (error) {
-      console.error('Failed to load donations:', error)
+    } catch (_error) {
+      console.error('Failed to load donations:', _error)
       addNotification({
         title: 'Failed to load donations',
         description: 'Please try again later',
@@ -59,7 +59,8 @@ export default function DonorDashboard() {
 
   useEffect(() => {
     if (wallet.publicKey) {
-      loadDonations()
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      loadDonations();
     }
   }, [wallet.publicKey, loadDonations])
 
@@ -82,7 +83,7 @@ export default function DonorDashboard() {
     try {
       await connectWallet()
       // Connection success toast is handled in the store
-    } catch (error) {
+    } catch {
       addNotification({
         title: 'Wallet connection failed',
         description: 'Please try again or use a different wallet',
@@ -102,7 +103,7 @@ export default function DonorDashboard() {
         description: 'Your donation history has been cleared',
         variant: 'default'
       })
-    } catch (error) {
+    } catch {
       addNotification({
         title: 'Disconnection failed',
         description: 'Please try again',

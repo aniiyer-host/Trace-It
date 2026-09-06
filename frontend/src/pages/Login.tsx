@@ -9,7 +9,7 @@ import { loginWithEmail } from '@/services/mockAuth'
 import { useUIStore } from '@/store/uiStore'
 // Ensure all icons are used (prevents unused import warnings)
 const _iconUsage = [<Users />, <CheckCircle2 />, <MapPin />, <DollarSign />, <Shield />, <Loader2 />];
-// @ts-ignore
+// @ts-expect-error Preventing unused import warnings during development
 window._iconUsage = _iconUsage;
 
 export default function Login() {
@@ -39,7 +39,7 @@ export default function Login() {
         // In a real app, this would redirect to dashboard
         setStep('welcome')
       }, 2000)
-    } catch (error) {
+    } catch {
       toast({ title: 'Authentication failed', variant: 'destructive' })
     } finally {
       setLoading(false)

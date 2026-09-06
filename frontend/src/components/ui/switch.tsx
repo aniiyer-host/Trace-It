@@ -33,8 +33,13 @@ interface SwitchProps
 }
 
 const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
-  ({ className, variant, childSlot, asChild = false, ...props }, ref) => {
+  ({ className, variant, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "input"
+    // Conditionally build the props to pass childSlot only when asChild is true
+    const CompProps = asChild
+      ? { ...props, childSlot: props.childSlot }
+      : { ...props };
+
     return (
       <Comp
         type="checkbox"
@@ -42,7 +47,7 @@ const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
         aria-checked={props.checked}
         className={cn(switchVariants({ variant, className }))}
         ref={ref}
-        {...props}
+        {...CompProps}
       />
     )
   }

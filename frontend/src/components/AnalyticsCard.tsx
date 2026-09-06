@@ -23,18 +23,22 @@ export function AnalyticsCard({
   variant = 'primary',
   trend
 }: Props) {
-  const variantColors: Record<string, string> = {
-    primary: 'text-primary border-primary/20',
-    secondary: 'text-muted-foreground border-muted/20',
-    success: 'text-emerald-400 border-emerald-500/20',
-    warning: 'text-amber-400 border-amber-500/20'
-  }
+  // Using Maps to avoid security/detect-object-injection warnings
+  const variantColorsMap = new Map([
+    ['primary', 'text-primary border-primary/20'],
+    ['secondary', 'text-muted-foreground border-muted/20'],
+    ['success', 'text-emerald-400 border-emerald-500/20'],
+    ['warning', 'text-amber-400 border-amber-500/20']
+  ])
+
+  // Ensure variant is valid to prevent potential injection
+  const variantStyle = variantColorsMap.get(variant) ?? variantColorsMap.get('primary')!
 
   return (
-    <Card className={cn('glass p-6 hover:border-primary/40 transition-colors border', variantColors[variant])}>
+    <Card className={cn('glass p-6 hover:border-primary/40 transition-colors border', variantStyle)}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <Icon className={cn('h-5 w-5', variantColors[variant].split(' ')[0])} />
+          <Icon className={cn('h-5 w-5', variantStyle.split(' ')[0])} />
           <div className="space-y-1">
             <h3 className="font-semibold text-lg">{title}</h3>
             {description && <p className={description.length > 0 ? 'text-xs text-muted-foreground' : 'hidden'}>

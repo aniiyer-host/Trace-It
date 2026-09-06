@@ -10,7 +10,7 @@ import { logoutUser } from '@/services/mockAuth'
 import { useUIStore } from '@/store/uiStore'
 // Ensure all icons are used (prevents unused import warnings)
 const _iconUsage = [<Users />, <DollarSign />, <Settings />, <MapPin />, <Shield />, <CheckCircle2 />, <Mail />, <Phone />, <Loader2 />];
-// @ts-ignore
+// @ts-expect-error Preventing unused import warnings in development
 window._iconUsage = _iconUsage;
 
 export default function Profile() {
@@ -32,7 +32,8 @@ export default function Profile() {
         description: 'Your profile information has been saved'
       })
       setEditing(false)
-    } catch (error) {
+    } catch {
+      // Error handled by showing toast
       toast({
         title: 'Update failed',
         variant: 'destructive'
@@ -47,7 +48,7 @@ export default function Profile() {
     try {
       await logoutUser()
       setUser(null)
-    } catch (error) {
+    } catch {
       toast({
         title: 'Logout failed',
         variant: 'destructive'
@@ -68,7 +69,7 @@ export default function Profile() {
         title: 'Wallet disconnected',
         description: 'Your wallet has been disconnected'
       })
-    } catch (error) {
+    } catch {
       toast({
         title: 'Disconnection failed',
         variant: 'destructive'

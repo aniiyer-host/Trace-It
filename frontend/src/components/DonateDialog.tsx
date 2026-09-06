@@ -74,8 +74,8 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
             )
             setSuccessDonation(donation)
             toast({ title: `${formatUSD(finalAmount)} donation successful! 🎉` })
-        } catch (error: any) {
-            console.error(error)
+        } catch (_error) {
+            console.error(_error)
             toast({ title: 'Donation failed', variant: 'destructive' })
         } finally {
             setLoading(false)

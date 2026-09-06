@@ -1,6 +1,7 @@
 // Core domain types for TraceIt blockchain charity tracker
 
 export type DonationStatus = 'pending' | 'allocated' | 'disbursed' | 'delivered'
+export type ExtendedStatus = DonationStatus | 'processing' | 'failed' | 'verified' | 'cancelled'
 
 export interface ActivityItem {
   id: string
