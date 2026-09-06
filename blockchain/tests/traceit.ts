@@ -9,7 +9,7 @@ describe("traceit", () => {
   anchor.setProvider(provider);
   const program = anchor.workspace.Traceit as Program<Traceit>;
 
-  const donationId = "d1234567-89ab-cdef-0123-456789abcdef";
+  const donationId = `d-${Date.now().toString().slice(-8)}`;
   const donorIdHash = crypto
     .createHash("sha512")
     .update("user123" + "test_secret")
@@ -43,6 +43,7 @@ describe("traceit", () => {
         recordHash
       )
       .accounts({
+        donationRecord: donationPda,
         authority: provider.wallet.publicKey,
       })
       .rpc({ commitment: "confirmed" });
@@ -78,6 +79,7 @@ describe("traceit", () => {
           recordHash
         )
         .accounts({
+          donationRecord: donationPda,
           authority: provider.wallet.publicKey,
         })
         .rpc();
@@ -97,6 +99,7 @@ describe("traceit", () => {
     await program.methods
       .updateDonationStatus(donationId, 2) // ALLOCATED
       .accounts({
+        donationRecord: donationPda,
         authority: provider.wallet.publicKey,
       })
       .rpc({ commitment: "confirmed" });
@@ -116,6 +119,7 @@ describe("traceit", () => {
       await program.methods
         .updateDonationStatus(donationId, 4) // Trying to jump ALLOCATED -> DELIVERED
         .accounts({
+          donationRecord: donationPda,
           authority: provider.wallet.publicKey,
         })
         .rpc();
@@ -126,9 +130,10 @@ describe("traceit", () => {
   });
 
   it("Rejects zero amount", async () => {
-    const badDonationId = "bad-donation-id-for-zero-test-12345";
+    const badDonationId = "bad-donation-id-for-zero-test-12";
+    const cleanBadId = badDonationId.replace(/-/g, '');
     const [donationPda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("donation"), Buffer.from(badDonationId)],
+      [Buffer.from("donation"), Buffer.from(cleanBadId)],
       program.programId
     );
 
@@ -145,6 +150,7 @@ describe("traceit", () => {
           recordHash
         )
         .accounts({
+          donationRecord: donationPda,
           authority: provider.wallet.publicKey,
         })
         .rpc();

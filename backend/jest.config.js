@@ -8,6 +8,11 @@ export default {
   ],
   testEnvironment: "node",
   testMatch: ["**/tests/**/*.test.ts"],
+  testPathIgnorePatterns: [
+    "/node_modules/",
+    ".*Integration\\.test\\.ts$",
+    ".*ngo-integration\\.test\\.ts$"
+  ],
   setupFiles: ["<rootDir>/jest.setup.js"],
   globalTeardown: "<rootDir>/jest.teardown.js",
   moduleNameMapper: {

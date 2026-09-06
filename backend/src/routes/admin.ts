@@ -10,6 +10,7 @@ import {
   CampaignStatus,
   KycStatus,
   GovernmentRequestStatus,
+  DocumentType,
 } from "../../generated/prisma/enums.js";
 import { writeAuditLog } from "../services/auditLogService.js";
 import { allocateDonation } from "../services/statusService.js";
@@ -53,110 +54,190 @@ export const approveDisbursement = async (
       },
     });
 
+    // BLOCKCHAIN INTEGRATION: Record disbursement on-chain after approval (non-blocking)
+    // We don't await this to avoid slowing down the approval process
+    // Only run in non-test environments to avoid initialization errors during testing
+    if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
+      const recordDisbursementOnChain = async () => {
+        try {
+          const blockchainService = await getBlockchainService();
+
+          // We need the transaction hash of the actual funds transfer.
+          // For now, we assume that the disbursement record already has the solanaTxHash
+          // populated by a previous step (e.g., when funds are sent).
+          // If not, we skip and log a warning.
+          if (!disbursement.solanaTxHash) {
+            console.warn(`Disbursement ${disbursementId} has no solanaTxHash. Skipping on-chain recording.`);
+            return;
+          }
+
+          // Convert amountInr to paisa (u64)
+          const amountPaisa = Math.round(Number(disbursement.amountInr) * 100);
+
+          const result = await blockchainService.recordDisbursement({
+            disbursementId: disbursement.id,
+            ngoId: disbursement.ngoId,
+            cohortId: disbursement.cohortId ?? '',
+            amountInr: Number(disbursement.amountInr),
+            currency: 'INR',
+            timestamp: disbursement.createdAt, // Or use updatedAt? We'll use createdAt for now.
+            transactionHash: disbursement.solanaTxHash,
+          });
+
+          if (result.success) {
+            await writeAuditLog({
+              actorType: AuditActorType.USER,
+              actorId: adminId,
+              entityType: "disbursement",
+              entityId: disbursement.id,
+              action: "BLOCKCHAIN_DISBURSEMENT_RECORDED",
+              metadata: {
+                disbursementId: disbursement.id,
+                transactionHash: result.txHash,
+                ngoId: disbursement.ngoId,
+                cohortId: disbursement.cohortId,
+                amountInr: Number(disbursement.amountInr),
+              },
+            });
+            console.info(`Blockchain disbursement recorded for disbursement ${disbursement.id}: ${result.txHash}`);
+          } else {
+            console.error(`Failed to record disbursement ${disbursement.id} on-chain: ${result.error}`);
+
+            // Add to retry queue for disbursement recording
+            await addToBlockchainRetryQueue({
+              donationId: disbursement.id, // Using disbursementId as the key for the retry queue
+              error: result.error ?? 'Unknown blockchain error',
+              retryCount: 0,
+              type: 'DISBURSEMENT_RECORDING',
+            });
+
+            await writeAuditLog({
+              actorType: AuditActorType.USER,
+              actorId: adminId,
+              entityType: "disbursement",
+              entityId: disbursement.id,
+              action: "BLOCKCHAIN_DISBURSEMENT_RECORDING_FAILED",
+              metadata: {
+                disbursementId: disbursement.id,
+                error: result.error,
+              },
+            });
+          }
+        } catch (error) {
+          console.error('Error in blockchain disbursement recording integration:', error);
+          // Don't fail the disbursement approval if blockchain integration fails
+        }
+      };
+      // Fire and forget
+      recordDisbursementOnChain();
+    }
+
     // BLOCKCHAIN INTEGRATION: Update donation status to ALLOCATED on-chain (non-blocking)
-// We don't await this to avoid slowing down the disbursement approval process
-// Only run in non-test environments to avoid initialization errors during testing
-	if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
-	  const updateDonationStatusOnChain = async () => {
-	    try {
-	      const blockchainService = await getBlockchainService();
+    // We don't await this to avoid slowing down the disbursement approval process
+    // Only run in non-test environments to avoid initialization errors during testing
+    if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
+      const updateDonationStatusOnChain = async () => {
+        try {
+          const blockchainService = await getBlockchainService();
 
-	      // Find associated donations for this disbursement
-	      const donations = await prisma.donation.findMany({
-	        where: {
-	          campaignId: disbursement.campaignId,
-	          status: "SUCCESS",
-	        },
-	        include: {
-	          ngo: true
-	        }
-	      });
+          // Find associated donations for this disbursement
+          const donations = await prisma.donation.findMany({
+            where: {
+              campaignId: disbursement.campaignId,
+              status: "SUCCESS",
+            },
+            include: {
+              ngo: true
+            }
+          });
 
-	      // Update each donation in the campaign to ALLOCATED status
-	      for (const donation of donations) {
-	        if (donation.solanaTxHash) { // Only update if already recorded on-chain
-	          const result = await blockchainService.updateDonationStatus(
-	            donation.id,
-	            2 // ALLOCATED status
-	          );
+          // Update each donation in the campaign to ALLOCATED status
+          for (const donation of donations) {
+            if (donation.solanaTxHash) { // Only update if already recorded on-chain
+              const result = await blockchainService.updateDonationStatus(
+                donation.id,
+                2 // ALLOCATED status
+              );
 
-	          if (result.success) {
-	            await writeAuditLog({
-	              actorType: AuditActorType.USER,
-	              actorId: adminId,
-	              entityType: "donation",
-	              entityId: donation.id,
-	              action: "BLOCKCHAIN_STATUS_UPDATE",
-	              metadata: {
-	                donationId: donation.id,
-	                transactionHash: result.txHash,
-	                newStatus: "ALLOCATED"
-	              },
-	            });
-	          } else {
-	            console.error(`Failed to update donation ${donation.id} status on-chain: ${result.error}`);
+              if (result.success) {
+                await writeAuditLog({
+                  actorType: AuditActorType.USER,
+                  actorId: adminId,
+                  entityType: "donation",
+                  entityId: donation.id,
+                  action: "BLOCKCHAIN_STATUS_UPDATE",
+                  metadata: {
+                    donationId: donation.id,
+                    transactionHash: result.txHash,
+                    newStatus: "ALLOCATED"
+                  },
+                });
+              } else {
+                console.error(`Failed to update donation ${donation.id} status on-chain: ${result.error}`);
 
-	            // Add to retry queue for status updates
-	            await addToBlockchainRetryQueue({
-	              donationId: donation.id,
-	              error: result.error ?? 'Unknown blockchain error',
-	              retryCount: 0,
-	              type: 'STATUS_UPDATE',
-	              targetStatus: 2
-	            });
-	          }
-	        } else {
-	          console.warn(`Donation ${donation.id} not yet recorded on-chain, skipping status update`);
-	        }
-	      }
-	    } catch (error) {
-	      console.error('Error in blockchain status update integration:', error);
-	      // Don't fail the disbursement approval if blockchain integration fails
-	    }
-	  };
-	}
+                // Add to retry queue for status updates
+                await addToBlockchainRetryQueue({
+                  donationId: donation.id,
+                  error: result.error ?? 'Unknown blockchain error',
+                  retryCount: 0,
+                  type: 'STATUS_UPDATE',
+                  targetStatus: 2
+                });
+              }
+            } else {
+              console.warn(`Donation ${donation.id} not yet recorded on-chain, skipping status update`);
+            }
+          }
+        } catch (error) {
+          console.error('Error in blockchain status update integration:', error);
+          // Don't fail the disbursement approval if blockchain integration fails
+        }
+      };
+      // Fire and forget
+      updateDonationStatusOnChain();
+    }
 
 
-// Allocate donations up to the disbursed amount
-// First, find all SUCCESS donations for this campaign
-const donationAllocations = await prisma.donation.findMany({
-  where: {
-    campaignId: disbursement.campaignId,
-    status: "SUCCESS",
-  },
-  orderBy: { createdAt: "asc" },
-});
+    // Allocate donations up to the disbursed amount
+    // First, find all SUCCESS donations for this campaign
+    const donationAllocations = await prisma.donation.findMany({
+      where: {
+        campaignId: disbursement.campaignId,
+        status: "SUCCESS",
+      },
+      orderBy: { createdAt: "asc" },
+    });
 
-let remainingToAllocate = Number(disbursement.amountInr);
+    let remainingToAllocate = Number(disbursement.amountInr);
 
-for (const donation of donationAllocations) {
-  if (remainingToAllocate <= 0) break;
+    for (const donation of donationAllocations) {
+      if (remainingToAllocate <= 0) break;
 
-  const donationAmount = Number(donation.amount);
+      const donationAmount = Number(donation.amount);
 
-  // Call allocateDonation for each applicable donation
-  if (disbursement.cohortId) {
-    await allocateDonation(donation.id, disbursement.cohortId);
-  }
+      // Call allocateDonation for each applicable donation
+      if (disbursement.cohortId) {
+        await allocateDonation(donation.id, disbursement.cohortId);
+      }
 
-  // Deduct the donation amount from what's remaining to allocate
-  remainingToAllocate -= donationAmount;
-}
+      // Deduct the donation amount from what's remaining to allocate
+      remainingToAllocate -= donationAmount;
+    }
 
-// Write audit log
-await writeAuditLog({
-  actorType: AuditActorType.USER, // Admin is a user in the system
-  actorId: adminId,
-  entityType: "disbursement",
-  entityId: disbursement.id,
-  action: "DISBURSEMENT_APPROVED",
-  metadata: {
-    campaignId: disbursement.campaignId,
-    amountInr: Number(disbursement.amountInr),
-  },
-});
+    // Write audit log
+    await writeAuditLog({
+      actorType: AuditActorType.USER, // Admin is a user in the system
+      actorId: adminId,
+      entityType: "disbursement",
+      entityId: disbursement.id,
+      action: "DISBURSEMENT_APPROVED",
+      metadata: {
+        campaignId: disbursement.campaignId,
+        amountInr: Number(disbursement.amountInr),
+      },
+    });
 
-res.json(updated);
+    res.json(updated);
   } catch (err) {
     next(err);
   }
@@ -294,6 +375,84 @@ export const approveNgo = async (
       action: "NGO_APPROVED",
       metadata: {},
     });
+
+    // BLOCKCHAIN INTEGRATION: Register NGO on-chain after approval (non-blocking)
+    // We don't await this to avoid slowing down the approval process
+    // Only run in non-test environments to avoid initialization errors during testing
+    if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
+      const registerNgoOnChain = async () => {
+        try {
+          const blockchainService = await getBlockchainService();
+
+          // Find the latest NGO verification document (NGO_CERT) owned by this NGO
+          const verificationDoc = await prisma.document.findFirst({
+            where: {
+              ownerId: ngoId,
+              documentType: DocumentType.NGO_CERT,
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+          });
+
+          if (!verificationDoc) {
+            console.warn(`No verification document found for NGO ${ngoId}. Skipping on-chain registration.`);
+            return;
+          }
+
+          const metadataHash = verificationDoc.sha512Hash;
+
+          const result = await blockchainService.registerNgo({
+            ngoId,
+            metadataHash,
+          });
+
+          if (result.success) {
+            await writeAuditLog({
+              actorType: AuditActorType.USER,
+              actorId: adminId,
+              entityType: "ngo",
+              entityId: ngoId,
+              action: "BLOCKCHAIN_NGO_REGISTERED",
+              metadata: {
+                ngoId: ngoId,
+                transactionHash: result.txHash,
+                metadataHash,
+              },
+            });
+            console.info(`Blockchain NGO registration successful for NGO ${ngoId}: ${result.txHash}`);
+          } else {
+            console.error(`Failed to register NGO ${ngoId} on-chain: ${result.error}`);
+
+            // Add to retry queue for NGO registration
+            await addToBlockchainRetryQueue({
+              donationId: ngoId, // Using ngoId as the key for the retry queue (though it's not a donation, we can adapt the queue)
+              error: result.error ?? 'Unknown blockchain error',
+              retryCount: 0,
+              type: 'NGO_REGISTRATION',
+            });
+
+            await writeAuditLog({
+              actorType: AuditActorType.USER,
+              actorId: adminId,
+              entityType: "ngo",
+              entityId: ngoId,
+              action: "BLOCKCHAIN_NGO_REGISTRATION_FAILED",
+              metadata: {
+                ngoId: ngoId,
+                error: result.error,
+              },
+            });
+          }
+        } catch (error) {
+          console.error('Error in blockchain NGO registration integration:', error);
+          // Don't fail the NGO approval if blockchain integration fails
+        }
+      };
+      // Fire and forget
+      registerNgoOnChain();
+    }
+
     res.json(updated);
   } catch (err) {
     next(err);
@@ -819,6 +978,12 @@ adminRouter.post(
   requireAuth,
   requireRole(UserRole.ADMIN),
   approveNgo,
+);
+adminRouter.post(
+  "/disburse/:id/approve",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  approveDisbursement,
 );
 adminRouter.post(
   "/ngos/:id/reject",

@@ -10,7 +10,6 @@ import { useToast } from '@/hooks/use-toast'
 import { useUIStore } from '@/store/uiStore'
 import { useDonationStore } from '@/store/donationStore'
 import { initiateUpiPayment, initiateSolPayment } from '@/services/mockPayments'
-import { createDonation } from '@/services/mockApi'
 import { formatUSD, shortenHash } from '@/lib/utils'
 import type { Campaign, PaymentMethod, Donation } from '@/types'
 
@@ -30,7 +29,7 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
     const [successDonation, setSuccessDonation] = useState<Donation | null>(null)
 
     const { wallet, user } = useUIStore()
-    const { addDonation } = useDonationStore()
+    const donationStore = useDonationStore()
     const { toast } = useToast()
 
     const finalAmount = custom ? parseInt(custom, 10) || 0 : amount
@@ -69,14 +68,14 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                 txHash = result.txHash
             }
 
-            const walletAddr = wallet.publicKey || `mock-addr-${user!.id}`
-            const donation = await createDonation(
+            const walletAddr = wallet.publicKey || `mock-addr-${user.id}`
+            const donation = await donationStore.createDonation(
                 campaign, finalAmount, method, orderId, txHash, walletAddr,
             )
-            addDonation(donation)
             setSuccessDonation(donation)
             toast({ title: `${formatUSD(finalAmount)} donation successful! 🎉` })
-        } catch {
+        } catch (_error) {
+            console.error(_error)
             toast({ title: 'Donation failed', variant: 'destructive' })
         } finally {
             setLoading(false)
@@ -120,8 +119,8 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                                 <div className="flex justify-between"><span className="text-muted-foreground">Campaign:</span> <span className="truncate ml-4">{successDonation.campaignTitle}</span></div>
                                 <div className="flex justify-between"><span className="text-muted-foreground">Amount:</span> <span className="font-semibold">{formatUSD(successDonation.amount)}</span></div>
                                 <div className="flex justify-between"><span className="text-muted-foreground">Payment:</span> <span className="uppercase">{successDonation.paymentMethod}</span></div>
-                                <Button 
-                                    variant="outline" 
+                                <Button
+                                    variant="outline"
                                     className="w-full mt-4"
                                     onClick={() => {
                                         const text = `TRACE-IT DONATION RECEIPT\n--------------------------\nDate: ${new Date(successDonation.createdAt).toLocaleString()}\nOrder ID: ${successDonation.orderId}\nCampaign: ${successDonation.campaignTitle}\nAmount: ${formatUSD(successDonation.amount)}\nPayment Method: ${successDonation.paymentMethod.toUpperCase()}\nSolana TX: ${successDonation.txHash}\n\nThank you for your contribution!`;
@@ -138,7 +137,7 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                                 </Button>
                             </div>
                         )}
-                        
+
                         <Button className="w-full" onClick={handleClose}>Done</Button>
                     </div>
                 ) : (

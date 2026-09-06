@@ -258,7 +258,8 @@ export class BlockchainRetryProcessor {
 }
 
 // Start the processor when the module is imported in a long-running process
-if (require.main === module) {
+// Note: Using import.meta.url instead of require.main === module for ES modules
+if (import.meta.url === `file://${process.argv[1]}`) {
     const processor = new BlockchainRetryProcessor();
     processor.start().catch(console.error);
 

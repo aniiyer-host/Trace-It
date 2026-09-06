@@ -1,72 +1,72 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 @layer base {
   /* ── Light mode ─────────────────────────────────────────────── */
   :root {
-    --background:        30 20% 97%;      /* warm off-white    */
-    --foreground:        220 20% 18%;     /* soft charcoal     */
+    --background:        0 0% 100%;        /* pure white        */
+    --foreground:        220 15% 15%;      /* dark slate        */
 
     --card:              0 0% 100%;
-    --card-foreground:   220 20% 18%;
+    --card-foreground:   220 15% 15%;
 
     --popover:           0 0% 100%;
-    --popover-foreground: 220 20% 18%;
+    --popover-foreground: 220 15% 15%;
 
-    --primary:           155 38% 40%;    /* sage green        */
+    --primary:           210 60% 45%;      /* professional blue */
     --primary-foreground: 0 0% 100%;
 
-    --secondary:         210 18% 92%;    /* cool stone        */
-    --secondary-foreground: 220 20% 30%;
+    --secondary:         210 15% 95%;      /* very light gray   */
+    --secondary-foreground: 220 15% 25%;
 
-    --muted:             210 18% 93%;
-    --muted-foreground:  220 12% 50%;
+    --muted:             210 15% 92%;      /* light gray        */
+    --muted-foreground:  220 10% 45%;
 
-    --accent:            37 75% 52%;     /* warm amber        */
+    --accent:            150 50% 50%;      /* teal green        */
     --accent-foreground: 0 0% 100%;
 
-    --destructive:       0 72% 55%;
+    --destructive:       0 72% 55%;        /* red               */
     --destructive-foreground: 0 0% 100%;
 
-    --border:            220 15% 87%;
-    --input:             220 15% 87%;
-    --ring:              155 38% 40%;
+    --border:            210 15% 85%;      /* light border      */
+    --input:             210 15% 85%;      /* light input       */
+    --ring:              210 60% 45%;      /* professional blue */
 
-    --radius:            0.75rem;
+    --radius:            0.5rem;
   }
 
   /* ── Dark mode ──────────────────────────────────────────────── */
   .dark {
-    --background:        220 18% 10%;    /* deep blue-slate   */
-    --foreground:        210 20% 92%;    /* soft white        */
+    --background:        220 15% 8%;       /* very dark blue    */
+    --foreground:        210 15% 90%;      /* light gray        */
 
-    --card:              220 18% 14%;
-    --card-foreground:   210 20% 92%;
+    --card:              220 15% 12%;       /* dark card         */
+    --card-foreground:   210 15% 90%;      /* light gray        */
 
-    --popover:           220 18% 14%;
-    --popover-foreground: 210 20% 92%;
+    --popover:           220 15% 12%;       /* dark popover      */
+    --popover-foreground: 210 15% 90%;     /* light gray        */
 
-    --primary:           155 38% 50%;    /* sage green        */
-    --primary-foreground: 220 18% 10%;
+    --primary:           210 60% 55%;      /* brighter blue     */
+    --primary-foreground: 220 15% 10%;     /* very dark blue    */
 
-    --secondary:         220 14% 22%;
-    --secondary-foreground: 210 20% 80%;
+    --secondary:         220 15% 12%;       /* dark secondary    */
+    --secondary-foreground: 210 15% 85%;   /* light gray        */
 
-    --muted:             220 14% 18%;
-    --muted-foreground:  210 14% 55%;
+    --muted:             220 15% 15%;       /* slightly lighter  */
+    --muted-foreground:  210 10% 60%;      /* medium gray       */
 
-    --accent:            37 70% 55%;     /* warm amber        */
-    --accent-foreground: 220 18% 10%;
+    --accent:            150 50% 55%;      /* teal green        */
+    --accent-foreground: 220 15% 10%;      /* very dark blue    */
 
-    --destructive:       0 65% 56%;
+    --destructive:       0 70% 50%;        /* red               */
     --destructive-foreground: 0 0% 100%;
 
-    --border:            220 14% 22%;
-    --input:             220 14% 22%;
-    --ring:              155 38% 50%;
+    --border:            220 15% 20%;      /* dark border       */
+    --input:             220 15% 20%;      /* dark input        */
+    --ring:              210 60% 50%;      /* brighter blue     */
   }
 }
 
