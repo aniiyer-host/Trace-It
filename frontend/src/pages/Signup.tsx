@@ -1,72 +1,67 @@
-// Login.tsx – Professional login/onboarding experience
+// Signup.tsx – Complete signup/onboarding experience with KYC collection
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Users, CheckCircle2, MapPin, DollarSign, Shield, Loader2 } from 'lucide-react'
+import { Users, CheckCircle2, MapPin, DollarSign, Shield, Loader2, Mail } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { loginWithEmail } from '@/services/authService'
+import { signupWithEmail } from '@/services/authService'
 import { useAuthStore } from '@/store/authStore'
-// Ensure all icons are used (prevents unused import warnings)
-const _iconUsage = [<Users />, <CheckCircle2 />, <MapPin />, <DollarSign />, <Shield />, <Loader2 />];
-// @ts-expect-error Preventing unused import warnings during development
-window._iconUsage = _iconUsage;
 
-export default function Login() {
+export default function Signup() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [pan, setPan] = useState('')
   const [loading, setLoading] = useState(false)
-  const [step, setStep] = useState<'welcome' | 'login' | 'verify' | 'success'>('welcome')
+  const [step, setStep] = useState<'welcome' | 'details' | 'kyc' | 'verify' | 'success'>('welcome')
   const { setUser } = useAuthStore()
   const { toast } = useToast()
 
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      toast({ title: 'Email and password are required', variant: 'destructive' })
+  const handleSignup = async () => {
+    if (!email.trim() || !password.trim() || !fullName.trim()) {
+      toast({ title: 'Email, password, and full name are required', variant: 'destructive' })
       return
     }
+
+    // Check if KYC is needed (amount > 10,000 INR would trigger this in real scenario)
+    // For demo, we'll always collect PAN but make it optional for now
+    const needsKYC = pan.trim() !== ''
 
     setLoading(true)
     try {
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1000))
 
-      const { user } = await loginWithEmail({ email, password })
-      // In a real app, we would store the token and set the user
-      // For now, we'll just set the user in authStore
-      // setUser would typically be from authStore
-      // Since we're migrating stores gradually, we'll use both for now
+      const user = await signupWithEmail({
+        email,
+        password,
+        fullName
+      })
+
       setUser(user)
 
-      // In a complete implementation, we would also:
-      // 1. Store the access token (in cookies or localStorage)
-      // 2. Set authentication state
-      // 3. Redirect to appropriate dashboard based on role
+      if (needsKYC) {
+        setStep('verify') // In real app, this would be KYC verification
+      } else {
+        setStep('success')
+      }
 
-      setStep('success')
       setTimeout(() => {
-        // In a real app, this would redirect to dashboard
         setStep('welcome')
       }, 2000)
     } catch {
-      toast({ title: 'Authentication failed', variant: 'destructive' })
+      toast({ title: 'Signup failed', variant: 'destructive' })
     } finally {
       setLoading(false)
     }
   }
 
-  const handleGuestLogin = () => {
-    // Simulate guest login
-    setStep('success')
-    setTimeout(() => {
-      // Create a temporary guest user
-      const guestUser = {
-        id: `guest-${Date.now()}`,
-        email: 'guest@traceit.demo'
-      }
-      setUser(guestUser)
-      setStep('welcome')
-    }, 1500)
+  const handlePanChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPan(e.target.value)
+    // Auto-format PAN input to uppercase
+    e.target.value = e.target.value.toUpperCase()
+    setPan(e.target.value)
   }
 
   return (
@@ -76,7 +71,7 @@ export default function Login() {
         <div className="container max-w-4xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold gradient-text">
-              TraceIt Login
+              TraceIt Signup
             </h1>
             <div className="text-sm text-muted-foreground">
               Demo Mode • {new Date().getFullYear()}
@@ -91,26 +86,26 @@ export default function Login() {
           <div className="text-center space-y-8">
             <div className="space-y-4">
               <Users className="h-12 w-12 text-primary mx-auto" />
-              <h2 className="text-3xl font-bold">Welcome to TraceIt</h2>
+              <h2 className="text-3xl font-bold">Join TraceIt</h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Track every rupee's journey from donation to impact on the blockchain.
-                Sign in to explore campaigns, make donations, and verify transparency.
+                Sign up to track donations from source to impact with blockchain verification.
+                Your identity stays private while every rupee is traced on-chain.
               </p>
             </div>
 
             <div className="space-y-4">
               <Button
                 className="w-full md:w-auto px-8 py-3"
-                onClick={() => setStep('login')}
+                onClick={() => setStep('details')}
               >
-                Sign In
+                Get Started
               </Button>
+
               <Button
                 variant="outline"
                 className="w-full md:w-auto px-8 py-3 border-border/50 text-muted-foreground hover:border-primary/50"
-                onClick={handleGuestLogin}
               >
-                Continue as Guest
+                Already have an account? Sign In
               </Button>
             </div>
 
@@ -120,45 +115,57 @@ export default function Login() {
           </div>
         )}
 
-        {step === 'login' && (
+        {step === 'details' && (
           <div className="space-y-8">
             <div className="space-y-4">
-              <h2 className="text-2xl font-bold">Sign In to Your Account</h2>
+              <h2 className="text-2xl font-bold">Create Your Account</h2>
               <p className="text-muted-foreground">
-                Enter your email and password to access the donation tracking platform.
+                Enter your details to begin tracking donations with blockchain transparency.
               </p>
             </div>
 
             <form onClick={(e) => e.preventDefault()} className="space-y-6">
               <div className="space-y-3">
-                <Label htmlFor="login-email">Email Address</Label>
+                <Label htmlFor="signup-fullname">Full Name</Label>
                 <Input
-                  id="login-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
+                  id="signup-fullname"
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Enter your full name"
                   required
                   autoFocus
                 />
               </div>
 
               <div className="space-y-3">
-                <Label htmlFor="login-password">Password</Label>
+                <Label htmlFor="signup-email">Email Address</Label>
                 <Input
-                  id="login-password"
+                  id="signup-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  required
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label htmlFor="signup-password">Password</Label>
+                <Input
+                  id="signup-password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  placeholder="Create a secure password"
                   required
                 />
               </div>
 
               <div className="flex items-center justify-between text-xs">
-                <Label htmlFor="login-remember" className="flex items-center gap-2">
+                <Label htmlFor="signup-remember" className="flex items-center gap-2">
                   <input
-                    id="login-remember"
+                    id="signup-remember"
                     type="checkbox"
                     checked={false}
                     onChange={() => {}}
@@ -173,17 +180,17 @@ export default function Login() {
 
               <Button
                 type="submit"
-                onClick={handleLogin}
+                onClick={handleSignup}
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                 disabled={loading}
               >
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Signing in...
+                    Creating Account...
                   </>
                 ) : (
-                  'Sign In'
+                  'Create Account'
                 )}
               </Button>
             </form>
@@ -191,7 +198,7 @@ export default function Login() {
             <div className="border-t border-border/30 pt-6 mt-6">
               <div className="text-center space-y-4">
                 <p className="text-muted-foreground">
-                  Don't have an account? In the demo version, any email and password will work.
+                  By signing up, you agree to our Terms of Service and Privacy Policy.
                 </p>
                 <div className="flex justify-center gap-4">
                   <a href="#" className="text-sm text-primary hover:underline">
@@ -207,10 +214,81 @@ export default function Login() {
           </div>
         )}
 
+        {step === 'kyc' && (
+          <div className="space-y-8">
+            <div className="space-y-4">
+              <Shield className="h-12 w-12 text-primary mx-auto" />
+              <h2 className="text-2xl font-bold">Complete KYC Verification</h2>
+              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                For donations over ₹10,000, we need to verify your identity for compliance.
+                Your PAN will be hashed and never stored on-chain.
+              </p>
+            </div>
+
+            <form onClick={(e) => e.preventDefault()} className="space-y-6">
+              <div className="space-y-3">
+                <Label htmlFor="signup-pan">PAN Number</Label>
+                <Input
+                  id="signup-pan"
+                  type="text"
+                  value={pan}
+                  onChange={handlePanChange}
+                  placeholder="Enter your PAN (e.g., ABCDE1234F)"
+                  maxLength={10}
+                  pattern="[A-Z]{5}[0-9]{4}[A-Z]"
+                  title="PAN must be in format AAAAA9999A"
+                  required
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Format: AAAAA9999A (5 letters, 4 digits, 1 letter)
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <Label htmlFor="signup-kyc-remember" className="flex items-center gap-2">
+                  <input
+                    id="signup-kyc-remember"
+                    type="checkbox"
+                    checked={false}
+                    onChange={() => {}}
+                    className="h-4 w-4 text-primary rounded border-gray-300"
+                  />
+                  Remember my PAN for future donations
+                </Label>
+              </div>
+
+              <Button
+                type="submit"
+                onClick={handleSignup}
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  'Verify & Continue'
+                )}
+              </Button>
+            </form>
+
+            <div className="border-t border-border/30 pt-6 mt-6">
+              <div className="text-center space-y-4">
+                <p className="text-muted-foreground">
+                  Your PAN is used only to generate a cryptographic hash for compliance.
+                  The raw PAN is never stored on-chain or shared with third parties.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {step === 'verify' && (
           <div className="text-center space-y-8">
             <div className="space-y-4">
-              <CheckCircle2 className="h-12 w-12 text-emerald-400 mx-auto" />
+              <Mail className="h-12 w-12 text-emerald-400 mx-auto" />
               <h2 className="text-2xl font-bold">Verify Your Email</h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
                 We've sent a verification link to {email}. Please check your inbox to complete the signup process.
@@ -227,9 +305,9 @@ export default function Login() {
               </Button>
               <Button
                 className="w-full md:w-auto px-8 py-3"
-                onClick={() => setStep('login')}
+                onClick={() => setStep('details')}
               >
-                Resend Email
+                Edit Details
               </Button>
             </div>
           </div>
@@ -239,9 +317,9 @@ export default function Login() {
           <div className="text-center space-y-8 py-12">
             <div className="space-y-4">
               <CheckCircle2 className="h-14 w-14 text-emerald-500 mx-auto" />
-              <h2 className="text-3xl font-bold text-emerald-500">Welcome Back!</h2>
+              <h2 className="text-3xl font-bold text-emerald-500">Welcome to TraceIt!</h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                You've successfully signed in to TraceIt. Redirecting to your dashboard...
+                You've successfully signed in. Let's start tracking your impact.
               </p>
             </div>
 

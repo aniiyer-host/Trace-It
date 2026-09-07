@@ -3,7 +3,7 @@
 
 import { create } from 'zustand'
 import type { Campaign, Donation, DonationStatus } from '@/types'
-import { fetchCampaigns, createDonation, fetchDonationsByWallet, approveMilestone, uploadMilestoneProof, cycleMilestoneStatus } from '@/services/mockApi'
+import { fetchCampaigns, createDonation, approveMilestone, uploadMilestoneProof, cycleMilestoneStatus, fetchDonationsByUser, getAttestationByDonationId, requestAttestation } from '@/services/mockApi'
 
 interface DonationStore {
     // ── Campaigns ─────────────────────────────────────
@@ -14,10 +14,15 @@ interface DonationStore {
     // ── Donations made by the connected donor ─────────
     donations: Donation[]
     donationsLoading: boolean
-    fetchDonations: (walletAddress: string) => Promise<void>
+    fetchDonations: (userId: string) => Promise<void>
     addDonation: (d: Donation) => void
     setDonations: (d: Donation[]) => void
     createDonation: (campaign: Campaign, amount: number, paymentMethod: 'upi' | 'sol', orderId: string, txHash: string, walletAddress: string) => Promise<Donation>
+
+    // ── Attestation Management ───────────────────────
+    attestationStatus: Record<string, 'pending' | 'receipt_confirmed' | 'delivery_confirmed' | 'loading'>
+    requestAttestation: (donationId: string, type: 'receipt' | 'delivery') => Promise<void>
+    getAttestationStatus: (donationId: string) => Promise<'pending' | 'receipt_confirmed' | 'delivery_confirmed' | null>
 
     // ── Optimistic milestone status updates ───────────
     updateMilestoneStatus: (milestoneId: string, status: NonNullable<Campaign['milestones'][0]['status']>) => void
@@ -46,10 +51,12 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
 
     donations: [],
     donationsLoading: false,
-    fetchDonations: async (walletAddress: string) => {
+    attestationStatus: {},
+
+    fetchDonations: async (userId: string) => {
         set({ donationsLoading: true })
         try {
-            const donations = await fetchDonationsByWallet(walletAddress)
+            const donations = await fetchDonationsByUser(userId)
             set({ donations, donationsLoading: false })
         } catch (error) {
             console.error('Failed to fetch donations:', error)
@@ -66,6 +73,73 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
         } catch (error) {
             console.error('Failed to create donation:', error)
             throw error
+        }
+    },
+
+    // Attestation management
+    requestAttestation: async (donationId: string, type: 'receipt' | 'delivery') => {
+        // Update state to show loading
+        set(state => ({
+            attestationStatus: {
+                ...state.attestationStatus,
+                [donationId]: 'loading'
+            }
+        }))
+
+        try {
+            // Request attestation from API
+            const result = await requestAttestation(donationId, type)
+
+            // Update state with result
+            set(state => ({
+                attestationStatus: {
+                    ...state.attestationStatus,
+                    [donationId]: result.status === 'confirmed'
+                        ? (type === 'receipt' ? 'receipt_confirmed' : 'delivery_confirmed')
+                        : 'pending'
+                }
+            }))
+        } catch (error) {
+            console.error('Failed to request attestation:', error)
+            // Reset to pending on error
+            set(state => ({
+                attestationStatus: {
+                    ...state.attestationStatus,
+                    [donationId]: 'pending'
+                }
+            }))
+        }
+    },
+
+    getAttestationStatus: async (donationId: string) => {
+        // Check if we have cached status
+        const cachedStatus = get().attestationStatus[donationId]
+        if (cachedStatus) {
+            return cachedStatus === 'loading' ? null : cachedStatus
+        }
+
+        // Try to fetch from API
+        try {
+            const attestation = await getAttestationByDonationId(donationId)
+            if (!attestation) {
+                return null
+            }
+
+            // Map API status to our status
+            const status = attestation.type === 'receipt' ? 'receipt_confirmed' : 'delivery_confirmed'
+
+            // Update cache
+            set(state => ({
+                attestationStatus: {
+                    ...state.attestationStatus,
+                    [donationId]: status
+                }
+            }))
+
+            return status
+        } catch (error) {
+            console.error('Failed to get attestation status:', error)
+            return null
         }
     },
 
@@ -122,9 +196,8 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
             campaignsLoading: false,
             donations: [],
             donationsLoading: false,
+            attestationStatus: {}
         })
-        // Also reset UI store wallet state? Maybe not, as wallet connection might persist.
-        // We'll reset the active campaign and user in UI store via separate action if needed.
     },
     simulateDonationFlow: async (campaignId, amount, paymentMethod) => {
         const { campaigns } = get()

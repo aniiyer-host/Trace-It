@@ -6,8 +6,12 @@ import { NavBar } from '@/components/NavBar'
 import Home from '@/pages/Home'
 import DonorDashboard from '@/pages/DonorDashboard'
 import NGODashboard from '@/pages/NGODashboard'
+import AdminPanel from '@/pages/AdminPanel'
 import Login from '@/pages/Login'
 import Profile from '@/pages/Profile'
+// Placeholder for attestation verification page (to be implemented)
+import AttestationVerify from '@/pages/AttestationVerify'
+import PageTransition from '@/components/PageTransition'
 
 export default function App() {
   return (
@@ -15,15 +19,19 @@ export default function App() {
     <BrowserRouter>
       <div className="min-h-screen flex flex-col">
         <NavBar />
-        <main className="flex-1 container max-w-6xl mx-auto px-4 py-8">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/donor" element={<DonorDashboard />} />
-            <Route path="/ngo" element={<NGODashboard />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/profile" element={<Profile />} />
-          </Routes>
-        </main>
+        <PageTransition>
+          <main className="flex-1 container max-w-6xl mx-auto px-4 py-8">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/donor" element={<DonorDashboard />} />
+              <Route path="/ngo" element={<NGODashboard />} />
+              <Route path="/admin" element={<AdminPanel />} />
+              <Route path="/attestation/verify/:attestationId" element={<AttestationVerify />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/profile" element={<Profile />} />
+            </Routes>
+          </main>
+        </PageTransition>
         <footer className="border-t border-border/30 py-4 text-center text-xs text-muted-foreground">
           TraceIt © 2025 — All data is simulated for demo purposes •{' '}
           <a

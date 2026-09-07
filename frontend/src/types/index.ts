@@ -12,6 +12,12 @@ export interface ActivityItem {
   statusColor?: string
 }
 
+export interface User {
+  id: string
+  email: string
+  name?: string
+}
+
 export type PaymentMethod = 'upi' | 'sol'
 
 export interface Campaign {

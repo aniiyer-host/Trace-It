@@ -77,8 +77,85 @@ export const CAMPAIGNS: Campaign[] = [
     },
 ]
 
+// Mock attestations data
+const _attestations: Record<string, {
+  id: string;
+  donationId: string;
+  type: 'receipt' | 'delivery';
+  status: 'pending' | 'confirmed';
+  attestedBy: string;  // NGO name
+  attestedAt: string;  // ISO timestamp
+  statement: string;
+} > = {}
 
-// ─── Campaign APIs ─────────────────────────────────────────────────────────────
+// ─── Seed Data for Donations ─────────────────────────────────────────────────
+
+const _donations: Donation[] = [
+  {
+    id: 'don-001',
+    campaignId: 'camp-001',
+    campaignTitle: 'Flood Relief – Assam 2025',
+    amount: 5000,
+    paymentMethod: 'upi',
+    orderId: 'order_001',
+    txHash: mockTxHash('don001'),
+    status: 'delivered',
+    milestoneId: 'ms-001-a',
+    createdAt: '2025-07-08T10:30:00Z',
+    walletAddress: 'demo_wallet_001',
+    explorerUrl: explorerUrl(mockTxHash('don001')),
+  },
+  {
+    id: 'don-002',
+    campaignId: 'camp-002',
+    campaignTitle: "Girls' Education – Rural Rajasthan",
+    amount: 10000,
+    paymentMethod: 'upi',
+    orderId: 'order_002',
+    txHash: mockTxHash('don002'),
+    status: 'disbursed',
+    milestoneId: 'ms-002-a',
+    createdAt: '2025-08-15T14:20:00Z',
+    walletAddress: 'demo_wallet_001',
+    explorerUrl: explorerUrl(mockTxHash('don002')),
+  },
+  {
+    id: 'don-003',
+    campaignId: 'camp-003',
+    campaignTitle: 'Clean Water – Jharkhand',
+    amount: 2500,
+    paymentMethod: 'sol',
+    orderId: 'order_003',
+    txHash: mockTxHash('don003'),
+    status: 'pending',
+    createdAt: '2025-09-01T09:15:00Z',
+    walletAddress: 'demo_wallet_002',
+    explorerUrl: explorerUrl(mockTxHash('don003')),
+  }
+]
+
+// Add attestations for some donations
+_attestations['att-001'] = {
+  id: 'att-001',
+  donationId: 'don-001',
+  type: 'receipt',
+  status: 'confirmed',
+  attestedBy: 'AidIndia Foundation',
+  attestedAt: '2025-07-09T14:00:00Z',
+  statement: 'AidIndia Foundation confirms receipt of ₹5,000 donated for Flood Relief – Assam 2025 on 2025-07-08'
+}
+
+_attestations['att-002'] = {
+  id: 'att-002',
+  donationId: 'don-001',
+  type: 'delivery',
+  status: 'confirmed',
+  attestedBy: 'AidIndia Foundation',
+  attestedAt: '2025-07-10T08:20:00Z',
+  statement: 'AidIndia Foundation confirms delivery of aid worth ₹5,000 to beneficiaries in Assam flood zones'
+}
+
+// ─── Campaign APIs ────────────────────────────────────────────────────────────
 
 export async function fetchCampaigns(): Promise<Campaign[]> {
     await delay(600)
@@ -90,9 +167,7 @@ export async function fetchCampaignById(id: string): Promise<Campaign | undefine
     return structuredClone(CAMPAIGNS.find((c) => c.id === id))
 }
 
-// ─── Donation APIs ─────────────────────────────────────────────────────────────
-
-const _donations: Donation[] = []
+// ─── Donation APIs ────────────────────────────────────────────────────────────
 
 export async function createDonation(
     campaign: Campaign,
@@ -126,9 +201,139 @@ export async function fetchDonationsByWallet(walletAddress: string): Promise<Don
     // TODO: GET /api/donations?wallet=<address>
 }
 
+export async function fetchDonationsByUser(userId: string): Promise<Donation[]> {
+    await delay(500)
+    // In a real app, we'd map userId to wallet address(es)
+    // For demo, we'll return donations for demo wallets if userId matches
+    if (userId === 'user-001') {
+      return structuredClone(_donations.filter((d) => d.walletAddress === 'demo_wallet_001'))
+    }
+    if (userId === 'user-002') {
+      return structuredClone(_donations.filter((d) => d.walletAddress === 'demo_wallet_002'))
+    }
+    // Return empty array for unknown users
+    return structuredClone([])
+    // TODO: GET /api/donations?user=<id>
+}
+
+// ─── Attestation APIs ────────────────────────────────────────────────────────
+
+export async function createAttestation(
+  donationId: string,
+  type: 'receipt' | 'delivery',
+  ngoName: string
+): Promise<{ id: string; attestedAt: string }> {
+  await delay(800)
+
+  const attestationId = `att-${Date.now()}`
+  const attestedAt = new Date().toISOString()
+
+  // Find donation to create statement
+  const donation = _donations.find(d => d.id === donationId)
+  if (!donation) {
+    throw new Error('Donation not found')
+  }
+
+  let statement = ''
+  if (type === 'receipt') {
+    statement = `${ngoName} confirms receipt of ₹${donation.amount} donated for ${donation.campaignTitle} on ${new Date(donation.createdAt).toLocaleDateString()}`
+  } else {
+    statement = `${ngoName} confirms delivery of aid worth ₹${donation.amount} to beneficiaries for ${donation.campaignTitle}`
+  }
+
+  _attestations[attestationId] = {
+    id: attestationId,
+    donationId,
+    type,
+    status: 'confirmed',
+    attestedBy: ngoName,
+    attestedAt,
+    statement
+  }
+
+  // Update donation status if this is a receipt attestation
+  if (type === 'receipt') {
+    const donationIndex = _donations.findIndex(d => d.id === donationId)
+    if (donationIndex !== -1) {
+      _donations[donationIndex] = {
+        ..._donations[donationIndex],
+        status: 'disbursed' // Move to disbursed after receipt confirmation
+      }
+    }
+  }
+
+  return structuredClone({ id: attestationId, attestedAt })
+}
+
+export async function getAttestationByDonationId(
+  donationId: string,
+  type?: 'receipt' | 'delivery'
+): Promise<{
+  id: string;
+  donationId: string;
+  type: 'receipt' | 'delivery';
+  status: 'pending' | 'confirmed';
+  attestedBy: string;
+  attestedAt: string;
+  statement: string;
+} | null> {
+  await delay(300)
+
+  // Find attestation for this donation and type
+  const attestation = Object.values(_attestations).find(
+    att => att.donationId === donationId &&
+           (!type || att.type === type) &&
+           att.status === 'confirmed'
+  )
+
+  if (!attestation) {
+    return null
+  }
+
+  return structuredClone(attestation)
+}
+
+export async function requestAttestation(
+  donationId: string,
+  type: 'receipt' | 'delivery'
+): Promise<{ id: string; status: 'pending' | 'confirmed' }> {
+  await delay(500)
+
+  // Check if donation exists
+  const donation = _donations.find(d => d.id === donationId)
+  if (!donation) {
+    throw new Error('Donation not found')
+  }
+
+  // Check if attestation already exists
+  const existingAttestation = Object.values(_attestations).find(
+    att => att.donationId === donationId && att.type === type
+  )
+
+  if (existingAttestation) {
+    return structuredClone({
+      id: existingAttestation.id,
+      status: existingAttestation.status
+    })
+  }
+
+  // Create pending attestation
+  const attestationId = `att-${Date.now()}-pending`
+  _attestations[attestationId] = {
+    id: attestationId,
+    donationId,
+    type,
+    status: 'pending',
+    attestedBy: '', // Will be filled when NGO confirms
+    attestedAt: '',
+    statement: ''
+  }
+
+  return structuredClone({ id: attestationId, status: 'pending' })
+}
+
 // ─── Milestone & Proof APIs ────────────────────────────────────────────────────
 
-/** NGO: Upload proof of milestone completion (IPFS CID mock) */
 export async function uploadMilestoneProof(proof: ProofUpload): Promise<Milestone> {
     await delay(900)
     const campaign = CAMPAIGNS.find((c) =>
@@ -142,7 +347,6 @@ export async function uploadMilestoneProof(proof: ProofUpload): Promise<Mileston
     return structuredClone(milestone) // TODO: POST /api/milestones/:id/proof
 }
 
-/** Admin: Approve a milestone → sets status to 'delivered' + writes tx hash */
 export async function approveMilestone(milestoneId: string): Promise<Milestone> {
     await delay(800)
     const campaign = CAMPAIGNS.find((c) =>
@@ -156,7 +360,6 @@ export async function approveMilestone(milestoneId: string): Promise<Milestone> 
     return structuredClone(milestone) // TODO: POST /api/milestones/:id/approve
 }
 
-/** Demo helper: Cycle a milestone through all statuses for live demo */
 export async function cycleMilestoneStatus(milestoneId: string): Promise<DonationStatus> {
     await delay(300)
     const flow: DonationStatus[] = ['pending', 'allocated', 'disbursed', 'delivered']
