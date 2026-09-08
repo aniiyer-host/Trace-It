@@ -1,12 +1,12 @@
-// NavBar.tsx – Professional navigation header
+// NavBar.tsx – Professional navigation header with attestation focus
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
-import { GitBranch, UserCircle, LogOut } from 'lucide-react'
+import { NavLink, useLocation } from 'react-router-dom'
+import { GitBranch, UserCircle, LogOut, Bell } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AuthDialog } from '@/components/AuthDialog'
-import { WalletButton } from '@/components/WalletButton'
 import { ModeToggle } from '@/components/ModeToggle'
 import { useUIStore } from '@/store/uiStore'
+import { useNGOStore } from '@/store/ngoStore'
 import { logoutUser } from '@/services/mockAuth'
 
 const NAV_LINKS = [
@@ -19,7 +19,11 @@ const NAV_LINKS = [
 
 export function NavBar() {
   const { user, setUser } = useUIStore()
+  const { pendingAttestations } = useNGOStore()
   const [authOpen, setAuthOpen] = useState(false)
+  const location = useLocation()
+  const isNGOPage = location.pathname.startsWith('/ngo')
+  const pendingCount = Object.keys(pendingAttestations).length
 
   const handleLogout = async () => {
     await logoutUser()
@@ -70,7 +74,15 @@ export function NavBar() {
                 Sign In
               </Button>
             )}
-            <WalletButton />
+            {/* Attestation badge for NGO - shows pending count */}
+            {isNGOPage && pendingCount > 0 && (
+              <div className="flex items-center gap-2">
+                <Bell className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium text-primary bg-primary/20 rounded-full px-2 py-0.5">
+                  {pendingCount}
+                </span>
+              </div>
+            )}
             <ModeToggle />
           </div>
         </div>
