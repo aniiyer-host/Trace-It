@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Campaign, Milestone } from '@/types'
-import { fetchCampaigns, approveMilestone, getAttestationByDonationId } from '@/services/mockApi'
+import { fetchCampaigns, approveMilestone } from '@/services/mockApi'
 
 interface AdminStore {
     // ── Campaigns ─────────────────────────────────────
@@ -112,6 +112,9 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
                 const { [attestationId]: removed, ...rest } = state.pendingAttestations
                 return { pendingAttestations: rest }
             })
+
+            // Log the reason for debugging
+            console.log(`Attestation ${attestationId} rejected: ${reason}`)
         } catch (error) {
             console.error('Failed to reject attestation:', error)
             throw error
@@ -138,7 +141,7 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
                         m.id === milestoneId ? { ...m, status: 'delivered' } : m,
                     ),
                 }))
-                return { campaigns }
+                return { ...state, campaigns }
             })
         } catch (error) {
             console.error('Failed to approve milestone:', error)
