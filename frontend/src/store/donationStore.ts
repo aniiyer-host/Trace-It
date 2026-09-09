@@ -3,7 +3,8 @@
 
 import { create } from 'zustand'
 import type { Campaign, Donation, DonationStatus } from '@/types'
-import { fetchCampaigns, createDonation, approveMilestone, uploadMilestoneProof, cycleMilestoneStatus, fetchDonationsByUser, getAttestationByDonationId, requestAttestation } from '@/services/mockApi'
+// import { cycleMilestoneStatus } from '@/services/mockApi'
+import { apiService } from '@/utils/apiClient'
 
 interface DonationStore {
     // ── Campaigns ─────────────────────────────────────
@@ -41,7 +42,7 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
     loadCampaigns: async () => {
         set({ campaignsLoading: true })
         try {
-            const campaigns = await fetchCampaigns()
+            const campaigns = await apiService.campaigns.getAll()
             set({ campaigns, campaignsLoading: false })
         } catch (error) {
             console.error('Failed to load campaigns:', error)
@@ -56,7 +57,7 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
     fetchDonations: async (userId: string) => {
         set({ donationsLoading: true })
         try {
-            const donations = await fetchDonationsByUser(userId)
+            const donations = await apiService.donations.getByUser(userId)
             set({ donations, donationsLoading: false })
         } catch (error) {
             console.error('Failed to fetch donations:', error)
@@ -67,7 +68,7 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
     setDonations: (d) => set({ donations: d }),
     createDonation: async (campaign, amount, paymentMethod, orderId, txHash, walletAddress) => {
         try {
-            const donation = await createDonation(campaign, amount, paymentMethod, orderId, txHash, walletAddress)
+            const donation = await apiService.donations.create({ campaignId: campaign.id, amount, paymentMethod, orderId, txHash, walletAddress })
             get().addDonation(donation)
             return donation
         } catch (error) {
@@ -87,8 +88,8 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
         }))
 
         try {
-            // Request attestation from API
-            const result = await requestAttestation(donationId, type)
+            // Request attestation from real API
+            const result = await apiService.donations.requestAttestation(donationId, type)
 
             // Update state with result
             set(state => ({
@@ -120,7 +121,7 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
 
         // Try to fetch from API
         try {
-            const attestation = await getAttestationByDonationId(donationId)
+            const attestation = await apiService.donations.getAttestation(donationId)
             if (!attestation) {
                 return null
             }
@@ -154,7 +155,7 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
     },
     approveMilestone: async (milestoneId) => {
         try {
-            await approveMilestone(milestoneId)
+            await apiService.milestones.approve(milestoneId)
             // Optimistically update the milestone status to 'delivered'
             get().updateMilestoneStatus(milestoneId, 'delivered')
         } catch (error) {
@@ -164,7 +165,7 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
     },
     uploadMilestoneProof: async (milestoneId, description, cid) => {
         try {
-            await uploadMilestoneProof({ milestoneId, description, cid })
+            await apiService.milestones.uploadProof(milestoneId, { description, proofHash: cid })
             // Optimistically update the milestone status to 'disbursed' and set proofCid
             const campaigns = get().campaigns.map((c) => ({
                 ...c,

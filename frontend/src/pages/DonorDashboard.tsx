@@ -9,7 +9,7 @@ import { DonateDialog } from '@/components/DonateDialog'
 import LoadingSkeleton from '@/components/LoadingSkeleton'
 import { useDonationStore } from '@/store/donationStore'
 import { useAuthStore } from '@/store/authStore'
-import { fetchDonationsByUser } from '@/services/mockApi'
+import { apiService } from '@/utils/apiClient'
 import type { Campaign, Donation } from '@/types'
 import { DonationCard } from '@/components/DonationCard'
 
@@ -43,7 +43,7 @@ export default function DonorDashboard() {
   const loadDonations = useCallback(async () => {
     if (!user?.id) return
     try {
-      const data = await fetchDonationsByUser(user.id)
+      const data = await apiService.donations.getByUser(user.id)
       setDonationsLocal(data)
       setDonations(data) // Also update the store
     } catch (error) {

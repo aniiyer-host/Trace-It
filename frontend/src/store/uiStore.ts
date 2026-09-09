@@ -2,9 +2,7 @@
 // TODO: Replace wallet slice with useWallet() from @solana/wallet-adapter-react
 
 import { create } from 'zustand'
-import type { WalletState } from '@/types'
-import type { User } from '@/services/mockAuth'
-import { connectWallet, disconnectWallet } from '@/services/mockWallet'
+import type { User } from '@/types'
 import { shortenHash } from '@/lib/utils'
 
 interface UIStore {
@@ -13,16 +11,6 @@ interface UIStore {
     setUser: (u: User | null) => void
     login: (email: string, password: string) => Promise<void>
     logout: () => Promise<void>
-
-    // ── Wallet ──────────────────────────────────────
-    wallet: WalletState
-    walletLoading: boolean
-    setWallet: (w: WalletState) => void
-    setWalletLoading: (v: boolean) => void
-    connectWallet: () => Promise<void>
-    disconnectWallet: () => Promise<void>
-    simulateBalanceChange: (amount: number) => void
-    simulateTransaction: (txHash: string, amount: number, type: 'deposit' | 'withdrawal') => void
 
     // ── Active page / tab ───────────────────────────
     activeCampaignId: string | null
@@ -70,53 +58,6 @@ export const useUIStore = create<UIStore>((set, get) => ({
         // get().disconnectWallet()
     },
 
-    wallet: { connected: false, publicKey: null, balance: 0 },
-    walletLoading: false,
-    setWallet: (w) => set({ wallet: w }),
-    setWalletLoading: (v) => set({ walletLoading: v }),
-    connectWallet: async () => {
-        set({ walletLoading: true })
-        try {
-            const state = await connectWallet()
-            set({ wallet: state })
-            // Simulate a balance fetch
-            setTimeout(() => {
-                get().simulateBalanceChange(parseFloat((Math.random() * 5).toFixed(2))) // Random balance between 0-5 SOL
-            }, 1000)
-        } catch (error) {
-            console.error('Wallet connection failed:', error)
-            // Toast will be handled by the calling component
-            throw error
-        } finally {
-            set({ walletLoading: false })
-        }
-    },
-    disconnectWallet: async () => {
-        set({ walletLoading: true })
-        const state = await disconnectWallet()
-        set({ wallet: state })
-        set({ walletLoading: false })
-    },
-    simulateBalanceChange: (amount: number) => {
-        set(state => ({
-            wallet: {
-                ...state.wallet,
-                balance: Math.max(0, state.wallet.balance + amount),
-            }
-        }))
-    },
-    simulateTransaction: (txHash: string, amount: number, type: 'deposit' | 'withdrawal') => {
-        // In a real app, this would add to transaction history
-        // For demo, we'll just adjust balance and maybe add a notification
-        const balanceChange = type === 'deposit' ? amount : -amount
-        get().simulateBalanceChange(balanceChange)
-        get().addNotification({
-            title: `Transaction ${type === 'deposit' ? 'received' : 'sent'}`,
-            description: `${type === 'deposit' ? '+' : '-'}${amount} SOL • ${shortenHash(txHash)}`,
-            variant: type === 'deposit' ? 'success' : 'default',
-        })
-    },
-
     activeCampaignId: null,
     setActiveCampaignId: (id) => set({ activeCampaignId: id }),
 
@@ -145,8 +86,6 @@ export const useUIStore = create<UIStore>((set, get) => ({
     resetUIState: () => {
         set({
             user: null,
-            wallet: { connected: false, publicKey: null, balance: 0 },
-            walletLoading: false,
             activeCampaignId: null,
             globalLoading: false,
             sidebarCollapsed: false,

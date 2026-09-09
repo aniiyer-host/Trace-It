@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Campaign, Milestone } from '@/types'
-import { fetchCampaigns, approveMilestone, uploadMilestoneProof, cycleMilestoneStatus, getAttestationByDonationId, requestAttestation, createAttestation } from '@/services/mockApi'
+// import { cycleMilestoneStatus } from '@/services/mockApi'
+import { apiService } from '@/utils/apiClient'
 
 interface NGOStore {
     // ── Campaigns ─────────────────────────────────────
@@ -41,7 +42,7 @@ export const useNGOStore = create<NGOStore>((set, get) => ({
     loadCampaigns: async () => {
         set({ campaignsLoading: true })
         try {
-            const campaigns = await fetchCampaigns()
+            const campaigns = await apiService.campaigns.getAll()
             set({ campaigns, campaignsLoading: false })
         } catch (error) {
             console.error('Failed to load campaigns:', error)
@@ -51,28 +52,23 @@ export const useNGOStore = create<NGOStore>((set, get) => ({
 
     // Attestation Management
     fetchPendingAttestations: async () => {
-        // In a real app, this would fetch from backend
-        // For demo, we'll simulate some pending attestations
-        setTimeout(async () => {
-            // Simulate fetching pending attestations
-            const mockPending = {
-                'don-001': {
-                    id: 'don-001',
-                    donationId: 'don-001',
-                    amount: 5000,
-                    donorName: 'John Doe',
-                    campaignTitle: 'Flood Relief – Assam 2025',
-                    requestedAt: new Date(Date.now() - 3600000).toISOString() // 1 hour ago
-                }
-            }
-            set({ pendingAttestations: mockPending })
-        }, 500)
+        try {
+            const pendingList = await apiService.ngos.getPendingAttestations();
+            // Convert array to Record<string, ...>
+            const pendingMap = pendingList.reduce((acc, curr) => {
+                acc[curr.id] = curr;
+                return acc;
+            }, {} as Record<string, any>);
+            set({ pendingAttestations: pendingMap });
+        } catch (error) {
+            console.error('Failed to fetch pending attestations:', error);
+        }
     },
 
     signAttestation: async (donationId: string, type: 'receipt' | 'delivery', ngoName: string) => {
         try {
-            // Create attestation (simulating NGO signing with private key)
-            const result = await createAttestation(donationId, type, ngoName)
+            // Call real backend API for NGO attestation
+            const result = await apiService.ngos.signAttestation(donationId, type)
 
             // Update attestation status
             set(state => ({
@@ -104,7 +100,7 @@ export const useNGOStore = create<NGOStore>((set, get) => ({
     },
     approveMilestone: async (milestoneId) => {
         try {
-            await approveMilestone(milestoneId)
+            await apiService.milestones.approve(milestoneId)
             // Optimistically update the milestone status to 'delivered'
             get().updateMilestoneStatus(milestoneId, 'delivered')
         } catch (error) {
@@ -114,7 +110,8 @@ export const useNGOStore = create<NGOStore>((set, get) => ({
     },
     uploadMilestoneProof: async (milestoneId, description, cid) => {
         try {
-            await uploadMilestoneProof({ milestoneId, description, cid })
+            // The real API takes (milestoneId, proofData) where proofData contains description and proofHash (cid)
+            await apiService.milestones.uploadProof(milestoneId, { description, proofHash: cid })
             // Optimistically update the milestone status to 'disbursed' and set proofCid
             const campaigns = get().campaigns.map((c) => ({
                 ...c,

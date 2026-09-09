@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { useUIStore } from '@/store/uiStore'
-import { loginWithEmail } from '@/services/mockAuth'
+import { apiService } from '@/utils/apiClient'
 
 interface Props {
     open: boolean
@@ -22,8 +22,8 @@ export function AuthDialog({ open, onClose }: Props) {
         e.preventDefault()
         setLoading(true)
         try {
-            const user = await loginWithEmail(email, password)
-            setUser(user)
+            const { user, token } = await apiService.auth.login(email, password)
+            setUser({ ...user, token })
             toast({ title: 'Welcome to TraceIt!', description: `Logged in as ${user.email}` })
             onClose()
         } catch {

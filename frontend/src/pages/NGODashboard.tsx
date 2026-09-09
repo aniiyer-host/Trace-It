@@ -11,7 +11,7 @@ import { ProofUploadDialog } from '@/components/ProofUploadDialog'
 import AttestationSignDialog from '@/components/AttestationSignDialog'
 import { useDonationStore } from '@/store/donationStore'
 import { useNGOStore } from '@/store/ngoStore'
-import { approveMilestone, cycleMilestoneStatus } from '@/services/mockApi'
+import { apiService } from '@/utils/apiClient'
 import { useToast } from '@/hooks/use-toast'
 import { formatUSD } from '@/lib/utils'
 import type { Campaign, Milestone } from '@/types'
@@ -26,7 +26,6 @@ export default function NGODashboard() {
     const [proofMs, setProofMs] = useState<Milestone | null>(null)
     const [proofOpen, setProofOpen] = useState(false)
     const [approvingId, setApprovingId] = useState<string | null>(null)
-    const [cyclingId, setCyclingId] = useState<string | null>(null)
     const [attestationDialogOpen, setAttestationDialogOpen] = useState(false)
     const [selectedAttestation, setSelectedAttestation] = useState<{
         donationId: string;
@@ -40,22 +39,22 @@ export default function NGODashboard() {
     const ngoCampaigns = campaigns.filter((c) => NGO_CAMPAIGN_IDS.includes(c.id))
 
     useEffect(() => {
-        loadCampaigns().then(() => {
-            // Auto-select first campaign on load if none selected
-            if (!selected && ngoCampaigns.length) {
-                setSelected(ngoCampaigns[0]);
-            }
-            // Fetch pending attestations when NGO logs in or campaigns load
-            fetchPendingAttestations();
-        });
-    }, [loadCampaigns, selected, ngoCampaigns, fetchPendingAttestations]);
+        loadCampaigns();
+        fetchPendingAttestations();
+    }, [loadCampaigns, fetchPendingAttestations]);
+
+    useEffect(() => {
+        if (!selected && ngoCampaigns.length > 0) {
+            setSelected(ngoCampaigns[0]);
+        }
+    }, [selected, ngoCampaigns]);
 
     // No need for separate effect; the above handles initialization.
 
     const handleApprove = async (ms: Milestone) => {
         setApprovingId(ms.id)
         try {
-            await approveMilestone(ms.id)
+            await apiService.milestones.approve(ms.id)
             updateMilestoneStatus(ms.id, 'delivered')
             toast({ title: `Milestone "${ms.title}" approved & funds released!` })
         } catch {
@@ -82,17 +81,7 @@ export default function NGODashboard() {
         setAttestationDialogOpen(true);
     }
 
-    /** Hidden demo helper – cycles all milestones of selected campaign one step */
-    const handleDemoCycle = async () => {
-        if (!selected) return
-        for (const ms of selected.milestones) {
-            setCyclingId(ms.id)
-            const next = await cycleMilestoneStatus(ms.id)
-            updateMilestoneStatus(ms.id, next)
-        }
-        setCyclingId(null)
-        toast({ title: '🔄 Demo: milestone statuses cycled' })
-    }
+
 
     const activeMilestone = selected
         ? selected.milestones.find((m) => m.status !== 'delivered')
@@ -265,19 +254,7 @@ export default function NGODashboard() {
                 ))}
             </Tabs>
 
-            {/* ── HIDDEN DEMO BUTTON ── Only visible during live presentations */}
-            {/* This cycles all milestone statuses for the selected campaign */}
-            <button
-                id="demo-cycle-btn"
-                aria-label="Demo: cycle milestone statuses"
-                onClick={handleDemoCycle}
-                disabled={!!cyclingId}
-                className="fixed bottom-6 right-6 opacity-0 hover:opacity-100 focus:opacity-100 transition-opacity
-          bg-muted/80 border border-border text-muted-foreground text-xs px-3 py-2 rounded-lg flex items-center gap-1"
-            >
-                {cyclingId ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronDown className="h-3 w-3" />}
-                Cycle Status
-            </button>
+
 
             <ProofUploadDialog
                 data={proofMs ? { milestone: proofMs, campaign: selected } : null}

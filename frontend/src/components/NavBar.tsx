@@ -7,7 +7,7 @@ import { AuthDialog } from '@/components/AuthDialog'
 import { ModeToggle } from '@/components/ModeToggle'
 import { useUIStore } from '@/store/uiStore'
 import { useNGOStore } from '@/store/ngoStore'
-import { logoutUser } from '@/services/mockAuth'
+import { apiService } from '@/utils/apiClient'
 
 const NAV_LINKS = [
   { to: '/', label: 'Campaigns', end: true },
@@ -26,7 +26,7 @@ export function NavBar() {
   const pendingCount = Object.keys(pendingAttestations).length
 
   const handleLogout = async () => {
-    await logoutUser()
+    await apiService.auth.logout()
     setUser(null)
   }
 

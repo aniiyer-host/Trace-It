@@ -5,7 +5,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { approveMilestone } from '@/services/mockApi'
+import { apiService } from '@/utils/apiClient'
 import type { Milestone } from '@/types'
 
 interface MilestoneApprovalDialogProps {

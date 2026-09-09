@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Users, DollarSign, Settings, MapPin, Shield, CheckCircle2, Mail, Phone, Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { logoutUser } from '@/services/mockAuth'
+import { apiService } from '@/utils/apiClient'
 import { useUIStore } from '@/store/uiStore'
 // Ensure all icons are used (prevents unused import warnings)
 const _iconUsage = [<Users />, <DollarSign />, <Settings />, <MapPin />, <Shield />, <CheckCircle2 />, <Mail />, <Phone />, <Loader2 />];
@@ -16,7 +16,7 @@ window._iconUsage = _iconUsage;
 export default function Profile() {
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(false)
-  const { user, setUser, wallet } = useUIStore()
+  const { user, setUser } = useUIStore()
   const { toast } = useToast()
 
   const handleUpdateProfile = async () => {
@@ -46,32 +46,11 @@ export default function Profile() {
   const handleLogout = async () => {
     setLoading(true)
     try {
-      await logoutUser()
+      await apiService.auth.logout()
       setUser(null)
     } catch {
       toast({
         title: 'Logout failed',
-        variant: 'destructive'
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleDisconnectWallet = async () => {
-    // In a real app, this would use wallet-adapter
-    // For demo, we'll just reset the wallet state
-    setLoading(true)
-    try {
-      // Simulate wallet disconnection
-      await new Promise(resolve => setTimeout(resolve, 800))
-      toast({
-        title: 'Wallet disconnected',
-        description: 'Your wallet has been disconnected'
-      })
-    } catch {
-      toast({
-        title: 'Disconnection failed',
         variant: 'destructive'
       })
     } finally {
@@ -170,14 +149,6 @@ export default function Profile() {
                 >
                   {editing ? 'Saving...' : 'Edit Profile'}
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleDisconnectWallet}
-                  className="ml-2"
-                >
-                  Wallet
-                </Button>
               </div>
               {editing && (
                 <form onClick={(e) => e.preventDefault()} className="mt-6 w-full max-w-xl space-y-4">
@@ -229,35 +200,13 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Wallet & Activity Card */}
+          {/* Activity Card */}
           <div className="glass rounded-xl p-6">
-            <h3 className="font-semibold text-lg mb-4">Wallet & Activity</h3>
-            <div className="grid gap-4 md:grid-cols-2">
-              {/* Wallet Info */}
-              <div className="space-y-4">
-                <div className="flex items-center mb-3">
-                  <DollarSign className="h-5 w-5 text-primary mr-3" />
-                  <div>
-                    <p className="font-medium">SOL Balance</p>
-                    <p className="text-2xl font-bold">
-                      {(wallet.balance ?? 0).toFixed(3)} SOL
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      ≈ ₹{Math.round((wallet.balance ?? 0) * 150)} INR
-                    </p>
-                  </div>
-                </div>
-                <div className="border-t border-border/30 pt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Connected wallet: {wallet.publicKey ?
-                      wallet.publicKey.slice(0, 4) + '...' + wallet.publicKey.slice(-4) :
-                      'Not connected'}
-                  </p>
-                </div>
-              </div>
+            <h3 className="font-semibold text-lg mb-4">Activity</h3>
+            <div className="grid gap-4 md:grid-cols-1">
 
               {/* Activity Stats */}
-              <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <div className="flex items-center mb-3">
                   <Users className="h-5 w-5 text-primary mr-3" />
                   <div>

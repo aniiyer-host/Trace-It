@@ -7,7 +7,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/StatusBadge'
 import { useToast } from '@/hooks/use-toast'
-import { uploadMilestoneProof } from '@/services/mockApi'
+import { apiService } from '@/utils/apiClient'
 import { mockTxHash, formatUSD } from '@/lib/utils'
 import type { Milestone, Campaign } from '@/types'
 

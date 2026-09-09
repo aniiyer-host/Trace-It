@@ -5,7 +5,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { requestAttestation } from '@/services/mockApi'
+import { apiService } from '@/utils/apiClient'
 import type { Donation } from '@/types'
 
 interface AttestationRequestDialogProps {

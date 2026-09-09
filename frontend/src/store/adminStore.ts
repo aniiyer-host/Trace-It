@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Campaign, Milestone } from '@/types'
-import { fetchCampaigns, approveMilestone } from '@/services/mockApi'
+import { apiService } from '@/utils/apiClient'
 
 interface AdminStore {
     // ── Campaigns ─────────────────────────────────────
@@ -46,7 +46,7 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
     loadCampaigns: async () => {
         set({ campaignsLoading: true })
         try {
-            const campaigns = await fetchCampaigns()
+            const campaigns = await apiService.campaigns.getAll()
             set({ campaigns, campaignsLoading: false })
         } catch (error) {
             console.error('Failed to load campaigns:', error)
@@ -56,30 +56,22 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
 
     // Attestation Management
     fetchPendingAttestations: async () => {
-        // In a real app, this would fetch from backend
-        // For demo, we'll simulate some pending attestations
-        setTimeout(async () => {
-            const mockPending = {
-                'att-001': {
-                    id: 'att-001',
-                    donationId: 'don-001',
-                    amount: 5000,
-                    donorName: 'Jane Smith',
-                    campaignTitle: 'Flood Relief – Assam 2025',
-                    ngoName: 'AidIndia Foundation',
-                    attestedAt: new Date(Date.now() - 1800000).toISOString(), // 30 min ago
-                    statement: 'AidIndia Foundation confirms receipt of ₹5,000 donated for Flood Relief – Assam 2025 on 2025-07-08',
-                    type: 'receipt' as const
-                }
-            }
-            set({ pendingAttestations: mockPending })
-        }, 500)
+        try {
+            const attestations = await apiService.admin.getPendingAttestations();
+            const pendingMap = attestations.reduce((acc, curr) => {
+                acc[curr.id] = curr;
+                return acc;
+            }, {} as Record<string, any>);
+            set({ pendingAttestations: pendingMap });
+        } catch (error) {
+            console.error('Failed to fetch pending attestations:', error);
+        }
     },
 
     approveAttestation: async (attestationId: string) => {
         try {
-            // In a real app, this would update the attestation status on-chain
-            // For demo, we'll just update local state
+            await apiService.admin.approveAttestation(attestationId)
+            
             set((state: AdminStore) => ({
                 attestationStatus: {
                     ...state.attestationStatus,
@@ -100,6 +92,8 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
 
     rejectAttestation: async (attestationId: string, reason: string) => {
         try {
+            await apiService.admin.rejectAttestation(attestationId, reason)
+
             set((state: AdminStore) => ({
                 attestationStatus: {
                     ...state.attestationStatus,
@@ -123,16 +117,21 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
 
     // Milestone Management
     fetchPendingMilestoneApprovals: async () => {
-        // In a real app, this would fetch pending milestones needing admin approval
-        setTimeout(() => {
-            // Mock data - in reality would come from backend
-            set({ pendingMilestoneApprovals: {} }) // Empty for now
-        }, 500)
+        try {
+            const milestones = await apiService.admin.getPendingMilestones();
+            const pendingMap = milestones.reduce((acc, curr) => {
+                acc[curr.id] = curr;
+                return acc;
+            }, {} as Record<string, Milestone>);
+            set({ pendingMilestoneApprovals: pendingMap });
+        } catch (error) {
+            console.error('Failed to fetch pending milestones:', error);
+        }
     },
 
     approveMilestone: async (milestoneId: string) => {
         try {
-            await approveMilestone(milestoneId)
+            await apiService.admin.approveMilestone(milestoneId)
             // Update local state
             set((state: AdminStore) => {
                 const campaigns = state.campaigns.map((c) => ({
@@ -151,8 +150,7 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
 
     rejectMilestone: async (milestoneId: string, reason: string) => {
         try {
-            // In a real app, this would send back to NGO for revision
-            // For demo, we'll just log it
+            await apiService.admin.rejectMilestone(milestoneId, reason)
             console.log(`Milestone ${milestoneId} rejected: ${reason}`)
         } catch (error) {
             console.error('Failed to reject milestone:', error)

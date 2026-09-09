@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Users, CheckCircle2, MapPin, DollarSign, Shield, Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { loginWithEmail } from '@/services/authService'
+import { apiService } from '@/utils/apiClient'
 import { useAuthStore } from '@/store/authStore'
 // Ensure all icons are used (prevents unused import warnings)
 const _iconUsage = [<Users />, <CheckCircle2 />, <MapPin />, <DollarSign />, <Shield />, <Loader2 />];
@@ -28,15 +28,8 @@ export default function Login() {
 
     setLoading(true)
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      const { user } = await loginWithEmail({ email, password })
-      // In a real app, we would store the token and set the user
-      // For now, we'll just set the user in authStore
-      // setUser would typically be from authStore
-      // Since we're migrating stores gradually, we'll use both for now
-      setUser(user)
+      const { user, token } = await apiService.auth.login(email, password)
+      setUser({ ...user, token })
 
       // In a complete implementation, we would also:
       // 1. Store the access token (in cookies or localStorage)

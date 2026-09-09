@@ -1,15 +1,14 @@
 // DonateDialog – Modal for making a UPI or SOL donation to a campaign
 import { useState } from 'react'
-import { Loader2, Wallet2, CreditCard, ExternalLink } from 'lucide-react'
+import { Loader2, CreditCard, ExternalLink } from 'lucide-react'
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
 import { useUIStore } from '@/store/uiStore'
 import { useDonationStore } from '@/store/donationStore'
-import { initiateUpiPayment, initiateSolPayment } from '@/services/mockPayments'
+import { initiateUpiPayment } from '@/services/mockPayments'
 import { formatUSD, shortenHash } from '@/lib/utils'
 import type { Campaign, PaymentMethod, Donation } from '@/types'
 
@@ -24,11 +23,11 @@ interface Props {
 export function DonateDialog({ campaign, open, onClose }: Props) {
     const [amount, setAmount] = useState(50)
     const [custom, setCustom] = useState('')
-    const [method, setMethod] = useState<PaymentMethod>('upi')
+    const method: PaymentMethod = 'upi'
     const [loading, setLoading] = useState(false)
     const [successDonation, setSuccessDonation] = useState<Donation | null>(null)
 
-    const { wallet, user } = useUIStore()
+    const { user } = useUIStore()
     const donationStore = useDonationStore()
     const { toast } = useToast()
 
@@ -43,10 +42,6 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
             toast({ title: 'Sign in to donate', variant: 'destructive' })
             return
         }
-        if (method === 'sol' && (!wallet.connected || !wallet.publicKey)) {
-            toast({ title: 'Connect wallet to use SOL', variant: 'destructive' })
-            return
-        }
         if (finalAmount < 1) {
             toast({ title: 'Enter a valid amount', variant: 'destructive' })
             return
@@ -56,19 +51,12 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
             let orderId: string
             let txHash: string
 
-            if (method === 'upi') {
-                // TODO: Replace with real Razorpay checkout
-                const result = await initiateUpiPayment(finalAmount)
-                orderId = result.orderId
-                txHash = result.razorpayPaymentId
-            } else {
-                // TODO: Replace with @solana/web3.js send transaction
-                const result = await initiateSolPayment(finalAmount)
-                orderId = result.txHash
-                txHash = result.txHash
-            }
+            // TODO: Replace with real Razorpay checkout
+            const result = await initiateUpiPayment(finalAmount)
+            orderId = result.orderId
+            txHash = result.razorpayPaymentId
 
-            const walletAddr = wallet.publicKey || `mock-addr-${user.id}`
+            const walletAddr = ''
             const donation = await donationStore.createDonation(
                 campaign, finalAmount, method, orderId, txHash, walletAddr,
             )
@@ -167,27 +155,21 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                         </div>
 
                         {/* Payment method */}
-                        <Tabs value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}>
-                            <TabsList className="w-full">
-                                <TabsTrigger value="upi" className="flex-1 gap-2"><CreditCard className="h-4 w-4" />UPI</TabsTrigger>
-                                <TabsTrigger value="sol" className="flex-1 gap-2"><Wallet2 className="h-4 w-4" />SOL</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="upi">
-                                <p className="text-xs text-muted-foreground">Powered by Razorpay (simulated). Your UPI app will open in production.</p>
-                            </TabsContent>
-                            <TabsContent value="sol">
-                                <p className="text-xs text-muted-foreground">Sends SOL via Phantom wallet (simulated). Real tx on Solana devnet in production.</p>
-                            </TabsContent>
-                        </Tabs>
+                        <div className="flex flex-col gap-2 p-3 border border-border/50 rounded-lg bg-muted/20">
+                            <div className="flex items-center gap-2">
+                                <CreditCard className="h-4 w-4 text-primary" />
+                                <span className="text-sm font-medium">UPI Payment</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Powered by Razorpay. Your fiat payment will be recorded on-chain via ZK attestations.
+                            </p>
+                        </div>
 
                         <Button className="w-full" onClick={handleDonate} disabled={loading || !user}>
                             {loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Processing…</> : `Donate ${formatUSD(finalAmount)}`}
                         </Button>
                         {!user && (
                             <p className="text-xs text-center text-destructive">Sign in first to donate</p>
-                        )}
-                        {user && method === 'sol' && !wallet.connected && (
-                            <p className="text-xs text-center text-destructive">Connect Wallet to donate via SOL</p>
                         )}
                     </div>
                 )}

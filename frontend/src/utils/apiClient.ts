@@ -109,9 +109,12 @@ export const apiService = {
 
   // Campaigns
   campaigns: {
-    getAll: () => get<any[]>('/campaigns'),
-    getById: (campaignId: string) => get(`/campaigns/${campaignId}`),
-    create: (campaignData: any) => post('/campaigns', campaignData),
+    getAll: async () => {
+      const res = await get<{ data: any[] }>('/public/campaigns');
+      return res.data;
+    },
+    getById: (campaignId: string) => get(`/public/campaigns/${campaignId}`),
+    create: (campaignData: any) => post('/charity/campaigns', campaignData),
   },
 
   // Milestones
@@ -141,8 +144,8 @@ export const apiService = {
 
   // Admin
   admin: {
-    getPendingAttestations: () =>[]>('/admin/attestations/pending'),
-    getPendingMilestones: () =>[]>('/admin/milestones/pending'),
+    getPendingAttestations: () => get<any[]>('/admin/attestations/pending'),
+    getPendingMilestones: () => get<any[]>('/admin/milestones/pending'),
     approveAttestation: (attestationId: string) =>
       post(`/admin/attestations/${attestationId}/approve`),
     rejectAttestation: (attestationId: string, reason: string) =>

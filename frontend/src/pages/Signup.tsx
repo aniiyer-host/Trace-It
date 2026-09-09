@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Users, CheckCircle2, MapPin, DollarSign, Shield, Loader2, Mail } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { signupWithEmail } from '@/services/authService'
+import { apiService } from '@/utils/apiClient'
 import { useAuthStore } from '@/store/authStore'
 
 export default function Signup() {
@@ -30,16 +30,13 @@ export default function Signup() {
 
     setLoading(true)
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      const user = await signupWithEmail({
+      const { user, token } = await apiService.auth.register({
         email,
         password,
-        fullName
+        name: fullName
       })
 
-      setUser(user)
+      setUser({ ...user, token })
 
       if (needsKYC) {
         setStep('verify') // In real app, this would be KYC verification

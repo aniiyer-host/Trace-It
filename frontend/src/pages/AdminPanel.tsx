@@ -10,7 +10,6 @@ import { ProofUploadDialog } from '@/components/ProofUploadDialog'
 import AttestationVerificationDialog from '@/components/AttestationVerificationDialog'
 import { useDonationStore } from '@/store/donationStore'
 import { useAdminStore } from '@/store/adminStore'
-import { cycleMilestoneStatus } from '@/services/mockApi'
 import { useToast } from '@/hooks/use-toast'
 import { formatUSD } from '@/lib/utils'
 import type { Campaign, Milestone } from '@/types'
@@ -22,7 +21,6 @@ export default function AdminPanel() {
     const [proofMs, setProofMs] = useState<Milestone | null>(null)
     const [proofOpen, setProofOpen] = useState(false)
     const [approvingId, setApprovingId] = useState<string | null>(null)
-    const [cyclingId, setCyclingId] = useState<string | null>(null)
     const [attestationDialogOpen, setAttestationDialogOpen] = useState(false)
     const [selectedAttestation, setSelectedAttestation] = useState<{
         id: string;
@@ -43,16 +41,16 @@ export default function AdminPanel() {
     const adminCampaigns = campaigns
 
     useEffect(() => {
-        loadCampaigns().then(() => {
-            // Auto-select first campaign on load if none selected
-            if (!selected && adminCampaigns.length) {
-                setSelected(adminCampaigns[0]);
-            }
-            // Fetch pending attestations and milestone approvals when admin logs in
-            fetchPendingAttestations();
-            fetchPendingMilestoneApprovals();
-        });
-    }, [loadCampaigns, selected, adminCampaigns, fetchPendingAttestations, fetchPendingMilestoneApprovals]);
+        loadCampaigns();
+        fetchPendingAttestations();
+        fetchPendingMilestoneApprovals();
+    }, [loadCampaigns, fetchPendingAttestations, fetchPendingMilestoneApprovals]);
+
+    useEffect(() => {
+        if (!selected && adminCampaigns.length > 0) {
+            setSelected(adminCampaigns[0]);
+        }
+    }, [selected, adminCampaigns]);
 
     const handleApprove = async (ms: Milestone) => {
         setApprovingId(ms.id)
@@ -138,18 +136,6 @@ export default function AdminPanel() {
     const handleMilestoneSelect = (milestone: Milestone) => {
         setSelectedMilestone(milestone)
         setMilestoneDialogOpen(true)
-    }
-
-    /** Hidden demo helper – cycles all milestones of selected campaign one step */
-    const handleDemoCycle = async () => {
-        if (!selected) return
-        for (const ms of selected.milestones) {
-            setCyclingId(ms.id)
-            const next = await cycleMilestoneStatus(ms.id)
-            updateMilestoneStatus(ms.id, next)
-        }
-        setCyclingId(null)
-        toast({ title: '🔄 Demo: milestone statuses cycled' })
     }
 
     const activeMilestone = selected
@@ -384,19 +370,7 @@ export default function AdminPanel() {
                 ))}
             </Tabs>
 
-            {/* ── HIDDEN DEMO BUTTON ── Only visible during live presentations */}
-            {/* This cycles all milestone statuses for the selected campaign */}
-            <button
-                id="demo-cycle-btn"
-                aria-label="Demo: cycle milestone statuses"
-                onClick={handleDemoCycle}
-                disabled={!!cyclingId}
-                className="fixed bottom-6 right-6 opacity-0 hover:opacity-100 focus:opacity-100 transition-opacity
-          bg-muted/80 border border-border text-muted-foreground text-xs px-3 py-2 rounded-lg flex items-center gap-1"
-            >
-                {cyclingId ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronDown className="h-3 w-3" />}
-                Cycle Status
-            </button>
+
 
             <ProofUploadDialog
                 data={proofMs ? { milestone: proofMs, campaign: selected } : null}
