@@ -1,26 +1,34 @@
-// Login.tsx – Professional login/onboarding experience
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Users, CheckCircle2, MapPin, DollarSign, Shield, Loader2 } from 'lucide-react'
+import { useNavigate, Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import type { Variants } from 'framer-motion'
+import { Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { apiService } from '@/utils/apiClient'
 import { useAuthStore } from '@/store/authStore'
-// Ensure all icons are used (prevents unused import warnings)
-const _iconUsage = [<Users />, <CheckCircle2 />, <MapPin />, <DollarSign />, <Shield />, <Loader2 />];
-// @ts-expect-error Preventing unused import warnings during development
-window._iconUsage = _iconUsage;
+
+const containerVariants: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.1 } }
+}
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } }
+}
 
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [step, setStep] = useState<'welcome' | 'login' | 'verify' | 'success'>('welcome')
+  const [success, setSuccess] = useState(false)
+  
   const { setUser } = useAuthStore()
   const { toast } = useToast()
+  const navigate = useNavigate()
 
-  const handleLogin = async () => {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
     if (!email.trim() || !password.trim()) {
       toast({ title: 'Email and password are required', variant: 'destructive' })
       return
@@ -30,248 +38,119 @@ export default function Login() {
     try {
       const { user, token } = await apiService.auth.login(email, password)
       setUser({ ...user, token })
-
-      // In a complete implementation, we would also:
-      // 1. Store the access token (in cookies or localStorage)
-      // 2. Set authentication state
-      // 3. Redirect to appropriate dashboard based on role
-
-      setStep('success')
+      
+      setSuccess(true)
+      
       setTimeout(() => {
-        // In a real app, this would redirect to dashboard
-        setStep('welcome')
-      }, 2000)
+        // TODO: RBAC redirect pending backend branch merge.
+        // Once `user.role` is returned from backend, route accordingly:
+        // if (user.role === 'admin') navigate('/admin')
+        // else if (user.role === 'ngo') navigate('/ngo')
+        // else navigate('/donor')
+        navigate('/donor')
+      }, 1200)
     } catch {
       toast({ title: 'Authentication failed', variant: 'destructive' })
-    } finally {
       setLoading(false)
     }
   }
 
-  const handleGuestLogin = () => {
-    // Simulate guest login
-    setStep('success')
-    setTimeout(() => {
-      // Create a temporary guest user
-      const guestUser = {
-        id: `guest-${Date.now()}`,
-        email: 'guest@traceit.demo'
-      }
-      setUser(guestUser)
-      setStep('welcome')
-    }, 1500)
-  }
-
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      {/* Header */}
-      <header className="bg-primary/5 text-primary/50 border-b border-border/20">
-        <div className="container max-w-4xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold gradient-text">
-              TraceIt Login
-            </h1>
-            <div className="text-sm text-muted-foreground">
-              Demo Mode • {new Date().getFullYear()}
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="w-screen min-h-[calc(100dvh-3.5rem)] relative left-1/2 -ml-[50vw] -mt-8 flex flex-col md:flex-row bg-background">
+      {/* Left Panel: Trust Anchor (Hidden on mobile) */}
+      <div className="hidden md:flex md:w-1/2 bg-foreground text-background flex-col justify-end p-12 lg:p-24">
+        <h1 className="text-6xl lg:text-8xl font-extrabold tracking-tighter leading-none mb-6 text-balance">
+          Trace Every Rupee.
+        </h1>
+        <p className="text-xl lg:text-2xl font-medium text-background/80 max-w-md text-balance">
+          Transparent, immutable, and accountable. Impact you can verify on-chain.
+        </p>
+      </div>
 
-      {/* Main Content */}
-      <main className="flex-1 container max-w-4xl mx-auto px-4 py-12">
-        {step === 'welcome' && (
-          <div className="text-center space-y-8">
-            <div className="space-y-4">
-              <Users className="h-12 w-12 text-primary mx-auto" />
-              <h2 className="text-3xl font-bold">Welcome to TraceIt</h2>
-              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Track every rupee's journey from donation to impact on the blockchain.
-                Sign in to explore campaigns, make donations, and verify transparency.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <Button
-                className="w-full md:w-auto px-8 py-3"
-                onClick={() => setStep('login')}
-              >
-                Sign In
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full md:w-auto px-8 py-3 border-border/50 text-muted-foreground hover:border-primary/50"
-                onClick={handleGuestLogin}
-              >
-                Continue as Guest
-              </Button>
-            </div>
-
-            <div className="text-xs text-muted-foreground">
-              <p>By continuing, you agree to our Terms of Service and Privacy Policy.</p>
-            </div>
-          </div>
-        )}
-
-        {step === 'login' && (
-          <div className="space-y-8">
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold">Sign In to Your Account</h2>
-              <p className="text-muted-foreground">
-                Enter your email and password to access the donation tracking platform.
-              </p>
-            </div>
-
-            <form onClick={(e) => e.preventDefault()} className="space-y-6">
-              <div className="space-y-3">
-                <Label htmlFor="login-email">Email Address</Label>
-                <Input
-                  id="login-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  required
-                  autoFocus
+      {/* Right Panel: The Brutalist Form */}
+      <div className="flex-1 flex flex-col justify-center px-6 py-12 md:px-16 lg:px-24">
+        <motion.div 
+          variants={containerVariants}
+          initial="hidden"
+          animate="show"
+          className="w-full max-w-md mx-auto md:mx-0"
+        >
+          {success ? (
+            <motion.div variants={itemVariants} className="space-y-4">
+              <h2 className="text-4xl font-bold tracking-tight text-foreground">Welcome Back</h2>
+              <p className="text-lg text-muted-foreground font-medium">Authenticating your session...</p>
+              <div className="h-1 w-full bg-muted mt-8 overflow-hidden">
+                <motion.div 
+                  initial={{ scaleX: 0 }} 
+                  animate={{ scaleX: 1 }} 
+                  transition={{ duration: 1.2, ease: "easeInOut" }}
+                  className="h-full bg-emerald-500 origin-left"
                 />
               </div>
+            </motion.div>
+          ) : (
+            <>
+              <motion.div variants={itemVariants} className="mb-12">
+                <h2 className="text-4xl lg:text-5xl font-bold tracking-tight text-foreground mb-3">Sign In</h2>
+                <p className="text-lg text-muted-foreground font-medium">Access your institutional dashboard.</p>
+              </motion.div>
 
-              <div className="space-y-3">
-                <Label htmlFor="login-password">Password</Label>
-                <Input
-                  id="login-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  required
-                />
-              </div>
-
-              <div className="flex items-center justify-between text-xs">
-                <Label htmlFor="login-remember" className="flex items-center gap-2">
+              <form onSubmit={handleLogin} className="space-y-8">
+                <motion.div variants={itemVariants} className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Email</label>
                   <input
-                    id="login-remember"
-                    type="checkbox"
-                    checked={false}
-                    onChange={() => {}}
-                    className="h-4 w-4 text-primary rounded border-gray-300"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoFocus
+                    className="w-full bg-transparent border-0 border-b-2 border-muted-foreground/30 focus:border-foreground text-2xl font-medium py-2 px-0 outline-none transition-colors rounded-none placeholder:text-muted-foreground/30"
+                    placeholder="name@institution.org"
                   />
-                  Remember me
-                </Label>
-                <a href="#" className="text-primary hover:underline">
-                  Forgot Password?
-                </a>
-              </div>
+                </motion.div>
 
-              <Button
-                type="submit"
-                onClick={handleLogin}
-                className="w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  'Sign In'
-                )}
-              </Button>
-            </form>
+                <motion.div variants={itemVariants} className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Password</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="w-full bg-transparent border-0 border-b-2 border-muted-foreground/30 focus:border-foreground text-2xl font-medium py-2 px-0 outline-none transition-colors rounded-none placeholder:text-muted-foreground/30"
+                    placeholder="••••••••"
+                  />
+                </motion.div>
 
-            <div className="border-t border-border/30 pt-6 mt-6">
-              <div className="text-center space-y-4">
-                <p className="text-muted-foreground">
-                  Don't have an account? In the demo version, any email and password will work.
+                <motion.div variants={itemVariants} className="pt-6">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-foreground text-background py-4 px-8 text-lg font-bold hover:bg-foreground/90 disabled:opacity-50 transition-all active:scale-[0.98]"
+                  >
+                    {loading ? (
+                      <span className="flex items-center justify-center">
+                        <Loader2 className="w-6 h-6 mr-3 animate-spin" />
+                        Authenticating...
+                      </span>
+                    ) : (
+                      'Sign In'
+                    )}
+                  </button>
+                </motion.div>
+              </form>
+              
+              <motion.div variants={itemVariants} className="mt-8">
+                <p className="text-muted-foreground font-medium">
+                  Don't have an account?{' '}
+                  <Link to="/signup" className="text-foreground border-b border-foreground hover:text-muted-foreground hover:border-muted-foreground transition-colors pb-0.5">
+                    Apply for access
+                  </Link>
                 </p>
-                <div className="flex justify-center gap-4">
-                  <a href="#" className="text-sm text-primary hover:underline">
-                    Terms of Service
-                  </a>
-                  <span className="text-xs text-muted-foreground">|</span>
-                  <a href="#" className="text-sm text-primary hover:underline">
-                    Privacy Policy
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {step === 'verify' && (
-          <div className="text-center space-y-8">
-            <div className="space-y-4">
-              <CheckCircle2 className="h-12 w-12 text-emerald-400 mx-auto" />
-              <h2 className="text-2xl font-bold">Verify Your Email</h2>
-              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                We've sent a verification link to {email}. Please check your inbox to complete the signup process.
-              </p>
-            </div>
-
-            <div className="space-y-6">
-              <Button
-                variant="outline"
-                className="w-full md:w-auto px-8 py-3"
-                onClick={() => setStep('welcome')}
-              >
-                Go to Inbox
-              </Button>
-              <Button
-                className="w-full md:w-auto px-8 py-3"
-                onClick={() => setStep('login')}
-              >
-                Resend Email
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {step === 'success' && (
-          <div className="text-center space-y-8 py-12">
-            <div className="space-y-4">
-              <CheckCircle2 className="h-14 w-14 text-emerald-500 mx-auto" />
-              <h2 className="text-3xl font-bold text-emerald-500">Welcome Back!</h2>
-              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                You've successfully signed in to TraceIt. Redirecting to your dashboard...
-              </p>
-            </div>
-
-            <div className="animate-pulse infinite">
-              <div className="flex justify-center space-x-4">
-                <DollarSign className="h-6 w-6 text-emerald-500" />
-                <Users className="h-6 w-6 text-emerald-500" />
-                <MapPin className="h-6 w-6 text-emerald-500" />
-                <Shield className="h-6 w-6 text-emerald-500" />
-              </div>
-            </div>
-          </div>
-        )}
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-muted/5 text-center text-xs text-muted-foreground py-6 border-t border-border/20">
-        <div className="container max-w-4xl mx-auto px-4">
-          <p>
-            TraceIt © {new Date().getFullYear()} — Built for transparent charitable giving
-          </p>
-          <div className="mt-4 flex flex-col sm:flex-row gap-2 sm:gap-4 justify-center">
-            <a href="#" className="hover:text-primary transition-colors">
-              About
-            </a>
-            <a href="#" className="hover:text-primary transition-colors">
-              How It Works
-            </a>
-            <a href="#" className="hover:text-primary transition-colors">
-              Blog
-            </a>
-            <a href="#" className="hover:text-primary transition-colors">
-              Contact
-            </a>
-          </div>
-        </div>
-      </footer>
+              </motion.div>
+            </>
+          )}
+        </motion.div>
+      </div>
     </div>
   )
 }

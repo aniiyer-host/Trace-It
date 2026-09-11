@@ -10,7 +10,8 @@ import { useNGOStore } from '@/store/ngoStore'
 import { apiService } from '@/utils/apiClient'
 
 const NAV_LINKS = [
-  { to: '/', label: 'Campaigns', end: true },
+  { to: '/', label: 'Home', end: true },
+  { to: '/campaigns', label: 'Explore', end: false },
   { to: '/donor', label: 'Donor', end: false },
   { to: '/ngo', label: 'NGO', end: false },
   { to: '/login', label: 'Login', end: true },

@@ -1,86 +1,96 @@
-// Campaign card shown on the Home page and Donor Dashboard
-import { ExternalLink, Users } from 'lucide-react'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import type { Campaign } from '@/types'
-import { formatUSD, cn } from '@/lib/utils'
+import { MapPin, Target, ExternalLink } from 'lucide-react'
 
-interface Props {
-  campaign: Campaign
-  onDonate?: (campaign: Campaign) => void
-  onView?: (campaign: Campaign) => void
-  compact?: boolean
-  isSelected?: boolean
+interface DonationCardProps {
+    campaign: Campaign
+    onDonate?: (campaign: Campaign) => void
+    onView?: (campaign: Campaign) => void
+    compact?: boolean
+    glass?: boolean // Legacy prop for older dashboards, but adapted for new bento style
 }
 
-// Use CSS variables that match our theme from index.css
-const CATEGORY_COLOURS: Record<Campaign['category'], string> = {
-    disaster: 'bg-primary/10 text-primary border-primary/20', // Blue for disaster
-    education: 'bg-accent/10 text-accent border-accent/20', // Teal for education
-    health: 'bg-primary/10 text-primary border-primary/20', // Blue for health
-    environment: 'bg-accent/10 text-accent border-accent/20', // Teal for environment
-}
-
-export function DonationCard({ campaign, onDonate, onView, compact = false }: Props) {
-    const pct = Math.min(100, Math.round((campaign.raisedAmount / campaign.targetAmount) * 100))
-    const isFunded = pct >= 100
+export function DonationCard({ campaign, onDonate, onView, compact = false, glass = false }: DonationCardProps) {
+    const isFunded = campaign.raisedAmount >= campaign.targetAmount
+    const progress = Math.min(100, Math.round((campaign.raisedAmount / campaign.targetAmount) * 100))
 
     return (
-        <Card className={cn('glass hover:border-primary/40 transition-all duration-300 animate-fade-in', compact && 'text-sm')}>
-            <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                    <CardTitle className={cn('leading-tight', compact ? 'text-base' : 'text-lg')}>
-                        {campaign.title}
-                    </CardTitle>
-                    <Badge
-                        className={cn('shrink-0 border text-xs', CATEGORY_COLOURS[campaign.category])}
-                        variant="outline"
-                    >
+        <Card className={cn(
+            'group overflow-hidden transition-all duration-500',
+            glass ? 'glass hover:border-primary/40' : 'bg-card text-card-foreground border-border shadow-[0_10px_30px_-15px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] rounded-[2.5rem]',
+            compact && 'text-sm'
+        )}>
+            {/* Image Container with scale effect */}
+            <div className={cn("relative overflow-hidden bg-muted", compact ? 'h-32' : 'h-56')}>
+                {campaign.imageUrl ? (
+                    <img 
+                        src={campaign.imageUrl} 
+                        alt={`Campaign image for ${campaign.title}`} 
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center text-muted-foreground/50 bg-muted">
+                        <Target className="w-12 h-12 stroke-[1]" />
+                    </div>
+                )}
+                <div className="absolute top-4 right-4">
+                    <Badge variant="secondary" className="bg-background/90 backdrop-blur-md text-foreground border-none font-semibold px-3 py-1 shadow-sm">
                         {campaign.category}
                     </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground">{campaign.ngo}</p>
+            </div>
+
+            <CardHeader className={cn("space-y-3", glass ? '' : 'px-8 pt-8 pb-4')}>
+                <h3 className="font-bold text-2xl tracking-tight text-foreground leading-snug text-balance line-clamp-2">
+                    {campaign.title}
+                </h3>
+                <div className="flex items-center text-muted-foreground text-sm font-medium">
+                    <MapPin className="h-4 w-4 mr-1.5 opacity-70" />
+                    {campaign.ngoName}
+                </div>
             </CardHeader>
 
-            <CardContent className="space-y-3">
-                {!compact && (
-                    <p className="text-sm text-muted-foreground line-clamp-2">{campaign.description}</p>
-                )}
+            <CardContent className={cn("space-y-6", glass ? '' : 'px-8 pb-8')}>
+                <p className="text-muted-foreground leading-relaxed text-pretty line-clamp-3">
+                    {campaign.description}
+                </p>
 
-                <div>
-                    <div className="flex justify-between text-xs mb-1">
-                        <span className="text-muted-foreground">Raised</span>
-                        <span className="font-medium">
-                            {formatUSD(campaign.raisedAmount)}{' '}
-                            <span className="text-muted-foreground font-normal">/ {formatUSD(campaign.targetAmount)}</span>
-                        </span>
+                <div className="space-y-3 pt-2">
+                    <div className="flex justify-between text-sm items-end">
+                        <span className="font-bold text-foreground text-lg tabular-nums tracking-tight">₹{campaign.raisedAmount.toLocaleString()}</span>
+                        <span className="text-muted-foreground font-medium tracking-tight">of ₹{campaign.targetAmount.toLocaleString()}</span>
                     </div>
-                    <Progress value={pct} className="h-2" />
-                    <p className="text-xs text-right mt-1 text-muted-foreground">{pct}% funded</p>
-                </div>
-
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Users className="h-3 w-3" />
-                    {campaign.milestones.length} milestones
+                    <Progress value={progress} className="h-2 bg-muted" indicatorClassName={cn("transition-all duration-1000", isFunded ? 'bg-emerald-500' : 'bg-foreground')} />
                 </div>
             </CardContent>
 
-            <CardFooter className="gap-2 pt-0">
+            <CardFooter className={cn("gap-3 pt-0", glass ? '' : 'px-8 pb-8')}>
                 {onDonate && !isFunded && (
-                    <Button size="sm" className="flex-1 bg-primary text-primary-foreground hover:bg-primary/80" onClick={() => onDonate(campaign)}>
+                    <Button 
+                        size="lg" 
+                        className="flex-1 bg-foreground text-background hover:bg-foreground/90 rounded-full font-bold shadow-none active:scale-[0.98] transition-all" 
+                        onClick={() => onDonate(campaign)}
+                    >
                         Donate
                     </Button>
                 )}
                 {isFunded && (
-                    <Badge className="flex-1 justify-center py-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border">
+                    <div className="flex-1 flex justify-center py-3 bg-emerald-500/10 rounded-full text-emerald-600 font-bold border border-emerald-500/20">
                         ✓ Fully Funded
-                    </Badge>
+                    </div>
                 )}
                 {onView && (
-                    <Button size="sm" variant="ghost" className="gap-1" onClick={() => onView(campaign)}>
-                        <ExternalLink className="h-3 w-3" /> Track
+                    <Button 
+                        size="lg" 
+                        variant="outline" 
+                        className="gap-2 rounded-full border-border text-foreground hover:bg-muted hover:text-foreground font-bold active:scale-[0.98] transition-all" 
+                        onClick={() => onView(campaign)}
+                    >
+                        <ExternalLink className="h-4 w-4" /> Track
                     </Button>
                 )}
             </CardFooter>

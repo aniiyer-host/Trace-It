@@ -17,7 +17,7 @@ export function StatusBadge({ status, className, size = 'default' }: Props) {
                 className={cn(
                     'inline-flex items-center gap-1.5 rounded-full border',
                     size === 'sm' ? 'text-xs font-medium px-2 py-0.5' : size === 'lg' ? 'text-sm font-medium px-3 py-1' : 'text-xs font-medium px-2.5 py-0.5',
-                    'bg-indigo-500/15 text-indigo-400 border-indigo-500/30 animate-pulse',
+                    'bg-primary/10 text-primary border-primary/20 animate-pulse',
                     className,
                 )}
             >
@@ -33,7 +33,7 @@ export function StatusBadge({ status, className, size = 'default' }: Props) {
                 className={cn(
                     'inline-flex items-center gap-1.5 rounded-full border',
                     size === 'sm' ? 'text-xs font-medium px-2 py-0.5' : size === 'lg' ? 'text-sm font-medium px-3 py-1' : 'text-xs font-medium px-2.5 py-0.5',
-                    'bg-red-500/15 text-red-400 border-red-500/30',
+                    'bg-foreground/5 text-foreground/70 border-foreground/10',
                     className,
                 )}
             >
@@ -49,7 +49,7 @@ export function StatusBadge({ status, className, size = 'default' }: Props) {
                 className={cn(
                     'inline-flex items-center gap-1.5 rounded-full border',
                     size === 'sm' ? 'text-xs font-medium px-2 py-0.5' : size === 'lg' ? 'text-sm font-medium px-3 py-1' : 'text-xs font-medium px-2.5 py-0.5',
-                    'bg-teal-500/15 text-teal-400 border-teal-500/30',
+                    'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
                     className,
                 )}
             >
@@ -65,7 +65,7 @@ export function StatusBadge({ status, className, size = 'default' }: Props) {
                 className={cn(
                     'inline-flex items-center gap-1.5 rounded-full border',
                     size === 'sm' ? 'text-xs font-medium px-2 py-0.5' : size === 'lg' ? 'text-sm font-medium px-3 py-1' : 'text-xs font-medium px-2.5 py-0.5',
-                    'bg-gray-500/15 text-gray-400 border-gray-500/30',
+                    'bg-foreground/5 text-foreground/70 border-foreground/10',
                     className,
                 )}
             >
@@ -97,10 +97,10 @@ export function StatusBadge({ status, className, size = 'default' }: Props) {
     ])
 
     const STATUS_COLORS_MAP = new Map<DonationStatus, string>([
-        ['pending', 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30'],
-        ['allocated', 'bg-blue-500/15 text-blue-400 border-blue-500/30'],
-        ['disbursed', 'bg-purple-500/15 text-purple-400 border-purple-500/30'],
-        ['delivered', 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'],
+        ['pending', 'bg-foreground/5 text-foreground/70 border-foreground/10'],
+        ['allocated', 'bg-primary/10 text-primary border-primary/20'],
+        ['disbursed', 'bg-foreground/5 text-foreground/70 border-foreground/10'],
+        ['delivered', 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'],
     ])
 
     const icon = ICONS_MAP.get(status) ?? <Clock className="h-3 w-3" />

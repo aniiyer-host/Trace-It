@@ -1,44 +1,116 @@
-// AdminPanel – Admin views all campaigns, manages attestations, and approves disbursements
-import { useState, useEffect } from 'react'
-import { CheckCircle2, Upload, Loader2, ChevronDown, Shield } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { StatusBadge } from '@/components/StatusBadge'
-import { MilestoneTimeline } from '@/components/MilestoneTimeline'
-import { ProofUploadDialog } from '@/components/ProofUploadDialog'
-import AttestationVerificationDialog from '@/components/AttestationVerificationDialog'
+import { Input } from '@/components/ui/input'
 import { useDonationStore } from '@/store/donationStore'
 import { useAdminStore } from '@/store/adminStore'
+import { useAuthStore } from '@/store/authStore'
 import { useToast } from '@/hooks/use-toast'
 import { formatUSD } from '@/lib/utils'
-import type { Campaign, Milestone } from '@/types'
+import type { Campaign } from '@/types'
+
+/*
+ * TODO: RBAC-pending 
+ * When user.role exists in the backend, add a check here on mount.
+ * If user.role !== 'admin', navigate away (e.g. to /donor).
+ */
+
+function ActionRow({ 
+    item, 
+    loadingId, 
+    onApprove, 
+    onReject 
+}: { 
+    item: any, 
+    loadingId: string | null, 
+    onApprove: (id: string, type: 'milestone' | 'attestation') => Promise<void>,
+    onReject: (id: string, type: 'milestone' | 'attestation', reason: string) => Promise<void>
+}) {
+    const [isRejecting, setIsRejecting] = useState(false)
+    const [rejectReason, setRejectReason] = useState('')
+    const isLoading = loadingId === item.id
+    const anyLoading = loadingId !== null
+
+    const handleRejectConfirm = () => {
+        if (!rejectReason.trim()) return
+        onReject(item.id, item.type, rejectReason)
+    }
+
+    return (
+        <tr className="border-b border-border/10 hover:bg-muted/10 transition-colors group">
+            <td className="py-4 px-4 font-medium">{item.campaign}</td>
+            <td className="py-4 px-4 text-muted-foreground">{item.ngo}</td>
+            <td className="py-4 px-4">
+                <span className="flex items-center gap-2 text-sm">
+                    <span className={`h-1.5 w-1.5 rounded-full ${item.type === 'milestone' ? 'bg-primary' : 'bg-emerald-500'}`} />
+                    {item.type === 'milestone' ? 'Milestone Proof' : 'Attestation Request'}
+                </span>
+            </td>
+            <td className="py-4 px-4 text-right tabular-nums font-semibold">{formatUSD(item.amount)}</td>
+            <td className="py-4 px-4 text-right">
+                {isRejecting ? (
+                    <div className="flex items-center justify-end gap-2">
+                        <Input 
+                            autoFocus
+                            className="h-8 w-48 text-xs bg-transparent"
+                            placeholder="Reason for rejection..." 
+                            value={rejectReason}
+                            onChange={e => setRejectReason(e.target.value)}
+                            disabled={anyLoading}
+                            onKeyDown={e => e.key === 'Enter' && handleRejectConfirm()}
+                        />
+                        <Button size="sm" variant="ghost" onClick={() => setIsRejecting(false)} disabled={anyLoading}>Cancel</Button>
+                        <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={handleRejectConfirm} disabled={!rejectReason.trim() || anyLoading}>
+                            {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Confirm'}
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+                        <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-foreground" onClick={() => setIsRejecting(true)} disabled={anyLoading}>
+                            Reject
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10" onClick={() => onApprove(item.id, item.type)} disabled={anyLoading}>
+                            {isLoading ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
+                            Approve
+                        </Button>
+                    </div>
+                )}
+            </td>
+        </tr>
+    )
+}
+
+function CampaignRow({ campaign }: { campaign: Campaign }) {
+    return (
+        <tr className="border-b border-border/10 hover:bg-muted/10 transition-colors">
+            <td className="py-4 px-4 font-medium">{campaign.title}</td>
+            <td className="py-4 px-4 text-muted-foreground">{campaign.ngo}</td>
+            <td className="py-4 px-4">
+                <span className="flex items-center gap-2 text-sm">
+                    <span className={`h-1.5 w-1.5 rounded-full ${campaign.raisedAmount >= campaign.targetAmount ? 'bg-emerald-500' : 'bg-primary'}`} />
+                    {campaign.raisedAmount >= campaign.targetAmount ? 'Funded' : 'Active'}
+                </span>
+            </td>
+            <td className="py-4 px-4 text-right tabular-nums">{campaign.milestones.length}</td>
+            <td className="py-4 px-4 text-right tabular-nums">{formatUSD(campaign.raisedAmount)}</td>
+            <td className="py-4 px-4 text-right tabular-nums font-semibold">{formatUSD(campaign.targetAmount)}</td>
+        </tr>
+    )
+}
 
 export default function AdminPanel() {
-    const { campaigns, loadCampaigns, updateMilestoneStatus } = useDonationStore()
-    const { pendingAttestations, fetchPendingAttestations, approveAttestation, rejectAttestation, attestationStatus, pendingMilestoneApprovals, fetchPendingMilestoneApprovals, approveMilestone: approveMilestoneAction, rejectMilestone } = useAdminStore()
-    const [selected, setSelected] = useState<Campaign | null>(null)
-    const [proofMs, setProofMs] = useState<Milestone | null>(null)
-    const [proofOpen, setProofOpen] = useState(false)
-    const [approvingId, setApprovingId] = useState<string | null>(null)
-    const [attestationDialogOpen, setAttestationDialogOpen] = useState(false)
-    const [selectedAttestation, setSelectedAttestation] = useState<{
-        id: string;
-        donationId: string;
-        amount: number;
-        donorName: string;
-        campaignTitle: string;
-        ngoName: string;
-        attestedAt: string;
-        statement: string;
-        type: 'receipt' | 'delivery';
-    } | null>(null)
-    const [milestoneDialogOpen, setMilestoneDialogOpen] = useState<boolean>(false)
-    const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null)
+    const { user } = useAuthStore()
+    const navigate = useNavigate()
     const { toast } = useToast()
 
-    // Filter to show all campaigns (admin sees everything)
-    const adminCampaigns = campaigns
+    const { campaigns, loadCampaigns } = useDonationStore()
+    const { 
+        pendingAttestations, fetchPendingAttestations, approveAttestation, rejectAttestation, 
+        pendingMilestoneApprovals, fetchPendingMilestoneApprovals, approveMilestone, rejectMilestone 
+    } = useAdminStore()
+
+    const [loadingId, setLoadingId] = useState<string | null>(null)
 
     useEffect(() => {
         loadCampaigns();
@@ -46,412 +118,181 @@ export default function AdminPanel() {
         fetchPendingMilestoneApprovals();
     }, [loadCampaigns, fetchPendingAttestations, fetchPendingMilestoneApprovals]);
 
-    useEffect(() => {
-        if (!selected && adminCampaigns.length > 0) {
-            setSelected(adminCampaigns[0]);
-        }
-    }, [selected, adminCampaigns]);
+    const actionItems = useMemo(() => {
+        const items: any[] = [];
+        Object.entries(pendingMilestoneApprovals).forEach(([key, ms]: [string, any]) => {
+            const camp = campaigns.find(c => c.milestones.some(m => m.id === ms.id))
+            items.push({
+                type: 'milestone',
+                id: key,
+                entityId: ms.id,
+                title: ms.title,
+                amount: ms.targetAmount,
+                ngo: camp?.ngo || 'Unknown NGO',
+                campaign: camp?.title || 'Unknown Campaign'
+            })
+        });
+        Object.entries(pendingAttestations).forEach(([key, att]: [string, any]) => {
+            items.push({
+                type: 'attestation',
+                id: key,
+                entityId: att.donationId,
+                title: att.statement,
+                amount: att.amount,
+                ngo: att.ngoName,
+                campaign: att.campaignTitle
+            })
+        });
+        return items;
+    }, [pendingMilestoneApprovals, pendingAttestations, campaigns]);
 
-    const handleApprove = async (ms: Milestone) => {
-        setApprovingId(ms.id)
+    const totalTarget = campaigns.reduce((sum, c) => sum + c.targetAmount, 0);
+    const totalRaised = campaigns.reduce((sum, c) => sum + c.raisedAmount, 0);
+    const pendingCount = actionItems.length;
+
+    const handleApprove = async (id: string, type: 'milestone' | 'attestation') => {
+        setLoadingId(id)
         try {
-            await approveMilestoneAction(ms.id)
-            updateMilestoneStatus(ms.id, 'delivered')
-            toast({ title: `Milestone "${ms.title}" approved & funds released!` })
-        } catch {
+            if (type === 'milestone') {
+                await approveMilestone(id)
+                await fetchPendingMilestoneApprovals()
+                toast({ title: 'Milestone approved & funds released!' })
+            } else {
+                await approveAttestation(id)
+                await fetchPendingAttestations()
+                toast({ title: 'Attestation approved successfully!' })
+            }
+        } catch (error) {
             toast({ title: 'Approval failed', variant: 'destructive' })
         } finally {
-            setApprovingId(null)
+            setLoadingId(null)
         }
     }
 
-    const handleProofSuccess = (ms: Milestone) => {
-        updateMilestoneStatus(ms.id, ms.status)
-        toast({ title: 'Proof submitted — awaiting admin approval' })
-    }
-
-    const handleAttestationApprove = async (attestationId: string) => {
+    const handleReject = async (id: string, type: 'milestone' | 'attestation', reason: string) => {
+        setLoadingId(id)
         try {
-            await approveAttestation(attestationId)
-            toast({ title: 'Attestation approved successfully!' })
-            // Refresh pending attestations
-            await fetchPendingAttestations();
+            if (type === 'milestone') {
+                await rejectMilestone(id, reason)
+                await fetchPendingMilestoneApprovals()
+                toast({ title: 'Milestone rejected' })
+            } else {
+                await rejectAttestation(id, reason)
+                await fetchPendingAttestations()
+                toast({ title: 'Attestation rejected' })
+            }
         } catch (error) {
-            console.error('Failed to approve attestation:', error)
-            toast({ title: 'Approval failed', variant: 'destructive' })
-        }
-    }
-
-    const handleAttestationReject = async (attestationId: string, reason: string) => {
-        try {
-            await rejectAttestation(attestationId, reason)
-            toast({ title: 'Attestation rejected' })
-            // Refresh pending attestations
-            await fetchPendingAttestations();
-        } catch (error) {
-            console.error('Failed to reject attestation:', error)
             toast({ title: 'Rejection failed', variant: 'destructive' })
+        } finally {
+            setLoadingId(null)
         }
     }
 
-    const handleMilestoneApprove = async (milestoneId: string) => {
-        try {
-            await approveMilestoneAction(milestoneId)
-            toast({ title: 'Milestone approved successfully!' })
-            // Refresh pending milestone approvals
-            await fetchPendingMilestoneApprovals();
-        } catch (error) {
-            console.error('Failed to approve milestone:', error)
-            toast({ title: 'Approval failed', variant: 'destructive' })
-        }
+    if (!user) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-6">
+                <h2 className="text-4xl font-bold tracking-tighter">Access Denied</h2>
+                <p className="text-muted-foreground text-lg max-w-md text-balance">Please sign in to access the administrator console.</p>
+                <Button onClick={() => navigate('/login')}>Sign In</Button>
+            </div>
+        )
     }
-
-    const handleMilestoneReject = async (milestoneId: string, reason: string) => {
-        try {
-            await rejectMilestone(milestoneId, reason)
-            toast({ title: 'Milestone rejected' })
-            // Refresh pending milestone approvals
-            await fetchPendingMilestoneApprovals();
-        } catch (error) {
-            console.error('Failed to reject milestone:', error)
-            toast({ title: 'Rejection failed', variant: 'destructive' })
-        }
-    }
-
-    const handleAttestationSelect = (attestation: {
-        id: string;
-        donationId: string;
-        amount: number;
-        donorName: string;
-        campaignTitle: string;
-        ngoName: string;
-        attestedAt: string;
-        statement: string;
-        type: 'receipt' | 'delivery';
-    }) => {
-        setSelectedAttestation(attestation);
-        setAttestationDialogOpen(true);
-    }
-
-    const handleMilestoneSelect = (milestone: Milestone) => {
-        setSelectedMilestone(milestone)
-        setMilestoneDialogOpen(true)
-    }
-
-    const activeMilestone = selected
-        ? selected.milestones.find((m) => m.status !== 'delivered')
-        : null
 
     return (
-        <div className="space-y-8 pb-20 animate-fade-in">
-            <h1 className="text-3xl font-bold">Admin Panel</h1>
-
-            {/* Campaign tabs */}
-            <Tabs
-                value={selected?.id ?? ''}
-                onValueChange={(id) => setSelected(adminCampaigns.find((c) => c.id === id) ?? null)}
-            >
-                <TabsList>
-                    {adminCampaigns.map((c) => (
-                        <TabsTrigger key={c.id} value={c.id}>{c.title.split('–')[0].trim()}</TabsTrigger>
-                    ))}
-                </TabsList>
-
-                {adminCampaigns.map((c) => (
-                    <TabsContent key={c.id} value={c.id} className="space-y-6 mt-6">
-                        {/* Stats row */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {[
-                                { label: 'Target', value: formatUSD(c.targetAmount) },
-                                { label: 'Raised', value: formatUSD(c.raisedAmount) },
-                                { label: 'Milestones', value: `${c.milestones.length}` },
-                                { label: 'Completed', value: `${c.milestones.filter((m) => m.status === 'delivered').length}` },
-                            ].map(({ label, value }) => (
-                                <Card key={label} className="glass">
-                                    <CardContent className="pt-4">
-                                        <p className="text-xs text-muted-foreground">{label}</p>
-                                        <p className="text-xl font-bold">{value}</p>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-
-                        {/* Active milestone action card */}
-                        {activeMilestone && (
-                            <Card className="glass border-primary/30">
-                                <CardHeader>
-                                    <CardTitle className="text-base flex items-center gap-2">
-                                        <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                                        Active: {activeMilestone.title}
-                                    </CardTitle>
-                                    <p className="text-sm text-muted-foreground">{activeMilestone.description}</p>
-                                </CardHeader>
-                                <CardContent className="flex flex-wrap gap-3">
-                                    <StatusBadge status={activeMilestone.status} />
-
-                                    {activeMilestone.status === 'allocated' && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="gap-2 border-primary/40 text-primary"
-                                            onClick={() => {
-                                                setProofMs(activeMilestone);
-                                                setProofOpen(true)
-                                            }}
-                                        >
-                                            <Upload className="h-4 w-4" /> Upload Proof
-                                        </Button>
-                                    )}
-
-                                    {activeMilestone.status === 'disbursed' && (
-                                        <Button
-                                            size="sm"
-                                            className="gap-2 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30"
-                                            disabled={approvingId === activeMilestone.id}
-                                            onClick={() => handleApprove(activeMilestone)}
-                                        >
-                                            {approvingId === activeMilestone.id
-                                                ? <Loader2 className="h-4 w-4 animate-spin" />
-                                                : <CheckCircle2 className="h-4 w-4" />}
-                                            Admin Approve & Release
-                                        </Button>
-                                    )}
-
-                                    {/* Attestation button for completed milestones */}
-                                    {activeMilestone.status === 'delivered' && (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="gap-2 border-primary/40 text-primary"
-                                            onClick={() => {
-                                                // Find attestations for this milestone
-                                                // In a real app, we'd fetch attestations for donations related to this milestone
-                                                handleAttestationSelect({
-                                                    id: `att-${activeMilestone.id}`,
-                                                    donationId: `don-${activeMilestone.id}`,
-                                                    amount: activeMilestone.targetAmount,
-                                                    donorName: 'Anonymous Donor',
-                                                    campaignTitle: selected?.title ?? '',
-                                                    ngoName: selected?.ngo ?? '',
-                                                    attestedAt: new Date().toISOString(),
-                                                    statement: `${selected?.ngo ?? 'NGO'} confirms receipt of ₹${activeMilestone.targetAmount} for ${selected?.title ?? 'Campaign'}`,
-                                                    type: 'receipt'
-                                                })
-                                            }}
-                                        >
-                                            {attestationStatus[`att-${activeMilestone.id}`] === 'approved' ? (
-                                                <>
-                                                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                                                    Attestation Approved
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Shield className="mr-2 h-4 w-4" />
-                                                    Review Attestation
-                                                </>
-                                            )}
-                                        </Button>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {/* Pending Attestations Section */}
-                        {Object.keys(pendingAttestations).length > 0 && (
-                            <div className="mt-6">
-                                <h3 className="font-semibold mb-4">Pending Attestation Reviews</h3>
-                                <div className="space-y-4">
-                                    {Object.entries(pendingAttestations).map(([key, attestation]) => (
-                                        <Card key={key} className="glass border-primary/30 p-4">
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div>
-                                                    <h4 className="font-medium">{attestation.donorName}</h4>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        ₹{attestation.amount.toLocaleString()} • {attestation.campaignTitle} • {attestation.ngoName}
-                                                    </p>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => handleAttestationSelect(attestation)}
-                                                    >
-                                                        View Details
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <p className="text-xs text-muted-foreground">
-                                                    Statement: {attestation.statement}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground">
-                                                    Requested: {new Date(attestation.attestedAt).toLocaleString()}
-                                                </p>
-                                            </div>
-                                            <div className="flex justify-end space-x-2">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => handleAttestationReject(key, 'Insufficient information')}
-                                                    className="text-sm"
-                                                >
-                                                    Reject
-                                                </Button>
-                                                <Button
-                                                    onClick={() => handleAttestationApprove(key)}
-                                                    className="ml-2"
-                                                >
-                                                    Approve
-                                                </Button>
-                                            </div>
-                                        </Card>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Pending Milestone Approvals Section */}
-                        {Object.keys(pendingMilestoneApprovals).length > 0 && (
-                            <div className="mt-6">
-                                <h3 className="font-semibold mb-4">Pending Milestone Approvals</h3>
-                                <div className="space-y-4">
-                                    {Object.entries(pendingMilestoneApprovals).map(([key, milestone]) => (
-                                        <Card key={key} className="glass border-primary/30 p-4">
-                                            <div className="flex justify-between items-start mb-3">
-                                                <div>
-                                                    <h4 className="font-medium">{milestone.title}</h4>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        ₹{milestone.targetAmount.toLocaleString()} • {milestone.status}
-                                                    </p>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => handleMilestoneSelect(milestone)}
-                                                    >
-                                                        View Details
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                            <p className="text-xs text-muted-foreground">
-                                                Description: {milestone.description}
-                                            </p>
-                                            <div className="flex justify-end space-x-2">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => handleMilestoneReject(key, 'Requires revision')}
-                                                    className="text-sm"
-                                                >
-                                                    Reject
-                                                </Button>
-                                                <Button
-                                                    onClick={() => handleMilestoneApprove(key)}
-                                                    className="ml-2"
-                                                >
-                                                    Approve
-                                                </Button>
-                                            </div>
-                                        </Card>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Full timeline */}
-                        <Card className="glass">
-                            <CardHeader><CardTitle className="text-base">Milestone Timeline</CardTitle></CardHeader>
-                            <CardContent>
-                                <MilestoneTimeline milestones={c.milestones} />
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-                ))}
-            </Tabs>
-
-
-
-            <ProofUploadDialog
-                data={proofMs ? { milestone: proofMs, campaign: selected } : null}
-                open={proofOpen}
-                onClose={() => setProofOpen(false)}
-                onSuccess={handleProofSuccess}
-            />
-
-            {/* Attestation Verification Dialog */}
-            {selectedAttestation && (
-                <AttestationVerificationDialog
-                    donation={{
-                        id: selectedAttestation.donationId,
-                        amount: selectedAttestation.amount,
-                        campaignTitle: selectedAttestation.campaignTitle,
-                        paymentMethod: 'upi',
-                        orderId: `order_${selectedAttestation.donationId}`,
-                        txHash: `tx_${selectedAttestation.donationId}`,
-                        walletAddress: 'demo_wallet',
-                        status: 'disbursed',
-                        createdAt: selectedAttestation.attestedAt,
-                        explorerUrl: `https://explorer.solana.com/tx/tx_${selectedAttestation.donationId}?cluster=devnet`
-                    } as any }
-                    open={attestationDialogOpen}
-                    onOpenChange={(open) => setAttestationDialogOpen(open)}
-                />
-            )}
-
-            {/* Milestone Details Dialog */}
-            {milestoneDialogOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                    <Card className="w-96 max-w-xs mx-4">
-                        <CardHeader className="flex items-start justify-between p-6">
-                            <CardTitle className="text-xl font-semibold">Milestone Details</CardTitle>
-                            <button
-                                onClick={() => setMilestoneDialogOpen(false)}
-                                className="text-gray-400 hover:text-gray-500"
-                            >
-                                ✕
-                            </button>
-                        </CardHeader>
-                        <CardContent className="p-6 space-y-4">
-                            <div className="space-y-2">
-                                <p className="text-sm text-muted-foreground">
-                                    <strong>Milestone ID:</strong> {selectedMilestone?.id.substring(0, 8)}...
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                    <strong>Title:</strong> {selectedMilestone?.title}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                    <strong>Description:</strong> {selectedMilestone?.description}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                    <strong>Target Amount:</strong> ₹{selectedMilestone?.targetAmount.toLocaleString()}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                    <strong>Status:</strong> {selectedMilestone?.status.split(/(?=[A-Z])/).join(' ').toLowerCase()}
-                                </p>
-                                {selectedMilestone?.proofCid && (
-                                    <>
-                                        <p className="text-sm text-muted-foreground">
-                                            <strong>Proof CID:</strong> {selectedMilestone?.proofCid.substring(0, 8)}...
-                                        </p>
-                                        <p className="text-sm text-muted-foreground">
-                                            <strong>Disbursed At:</strong> {new Date(selectedMilestone?.disbursedAt ?? Date.now()).toLocaleString()}
-                                        </p>
-                                    </>
-                                )}
-                            </div>
-                        </CardContent>
-                        <div className="flex justify-end p-6">
-                            <button
-                                onClick={() => setMilestoneDialogOpen(false)}
-                                className="px-4 py-2 bg-muted text-muted-foreground hover:bg-muted/50 rounded"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </Card>
+        <div className="max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-16 space-y-16 animate-fade-in">
+            {/* ZONE 3: Stats Bar */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
+                <div className="space-y-2">
+                    <div className="text-4xl md:text-5xl font-bold tabular-nums tracking-tighter text-foreground">
+                        {pendingCount}
+                    </div>
+                    <div className="text-sm text-foreground/40 uppercase tracking-widest font-semibold">
+                        Pending Actions
+                    </div>
                 </div>
-            )}
+                <div className="space-y-2">
+                    <div className="text-4xl md:text-5xl font-bold tabular-nums tracking-tighter text-foreground">
+                        {formatUSD(totalRaised)}
+                    </div>
+                    <div className="text-sm text-foreground/40 uppercase tracking-widest font-semibold">
+                        Total Raised
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    <div className="text-4xl md:text-5xl font-bold tabular-nums tracking-tighter text-foreground">
+                        {formatUSD(totalTarget)}
+                    </div>
+                    <div className="text-sm text-foreground/40 uppercase tracking-widest font-semibold">
+                        Global Target
+                    </div>
+                </div>
+            </div>
+
+            {/* ZONE 1: Action Queue */}
+            <div className="space-y-6">
+                <div className="flex items-baseline justify-between">
+                    <h2 className="text-2xl font-bold tracking-tight">Action Queue</h2>
+                    {pendingCount === 0 && <span className="text-sm text-muted-foreground">All caught up</span>}
+                </div>
+                
+                <div className="w-full overflow-x-auto">
+                    <table className="w-full text-sm text-left whitespace-nowrap">
+                        <thead>
+                            <tr className="border-b border-border/20 text-muted-foreground">
+                                <th className="py-3 px-4 font-medium w-1/4">Campaign</th>
+                                <th className="py-3 px-4 font-medium w-1/4">NGO</th>
+                                <th className="py-3 px-4 font-medium w-1/6">Type</th>
+                                <th className="py-3 px-4 font-medium text-right w-1/6">Amount</th>
+                                <th className="py-3 px-4 font-medium text-right w-1/6">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {actionItems.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                                        No pending actions requiring review.
+                                    </td>
+                                </tr>
+                            ) : (
+                                actionItems.map(item => (
+                                    <ActionRow 
+                                        key={`${item.type}-${item.id}`} 
+                                        item={item} 
+                                        loadingId={loadingId}
+                                        onApprove={handleApprove}
+                                        onReject={handleReject}
+                                    />
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* ZONE 2: Campaign Overview */}
+            <div className="space-y-6">
+                <h2 className="text-2xl font-bold tracking-tight">Platform Campaigns</h2>
+                <div className="w-full overflow-x-auto">
+                    <table className="w-full text-sm text-left whitespace-nowrap">
+                        <thead>
+                            <tr className="border-b border-border/20 text-muted-foreground">
+                                <th className="py-3 px-4 font-medium w-1/3">Campaign</th>
+                                <th className="py-3 px-4 font-medium w-1/4">NGO</th>
+                                <th className="py-3 px-4 font-medium w-1/6">Status</th>
+                                <th className="py-3 px-4 font-medium text-right">Milestones</th>
+                                <th className="py-3 px-4 font-medium text-right">Raised</th>
+                                <th className="py-3 px-4 font-medium text-right">Target</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {campaigns.map(c => (
+                                <CampaignRow key={c.id} campaign={c} />
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
     )
 }

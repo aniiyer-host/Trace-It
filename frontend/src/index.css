@@ -5,6 +5,15 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  overflow-y: scroll;
+  scrollbar-width: none; /* Firefox */
+  overscroll-behavior-y: none; /* Kills bouncy overscroll at the edges */
+}
+html::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
 @layer base {
   /* ── Light mode ─────────────────────────────────────────────── */
   :root {
@@ -37,11 +46,20 @@
     --ring:              210 60% 45%;      /* professional blue */
 
     --radius:            0.5rem;
+
+    /* Living Trust Theme Tokens */
+    --trust-bg: 40 20% 98%;      /* Warm off-white */
+    --trust-navy: 222 47% 11%;   /* Deep navy */
+    --trust-green: 142 71% 25%;  /* Restrained verification green */
+    --trust-text: 220 15% 15%;   /* Near black */
+    --trust-accent: 25 85% 55%;  /* Warm accent (orange/rust) */
+    --trust-surface: 0 0% 100%;  /* Pure white surface for cards */
+    --trust-border: 220 15% 90%; /* Light border */
   }
 
   /* ── Dark mode ──────────────────────────────────────────────── */
   .dark {
-    --background:        220 15% 8%;       /* very dark blue    */
+    --background:        220 10% 6%;       /* near-black charcoal */
     --foreground:        210 15% 90%;      /* light gray        */
 
     --card:              220 15% 12%;       /* dark card         */
@@ -68,6 +86,15 @@
     --border:            220 15% 20%;      /* dark border       */
     --input:             220 15% 20%;      /* dark input        */
     --ring:              210 60% 50%;      /* brighter blue     */
+
+    /* Living Trust Theme Tokens (Dark Mode) */
+    --trust-bg: 220 10% 4%;     /* Near-black charcoal background */
+    --trust-navy: 40 20% 98%;    /* Off-white text over navy */
+    --trust-green: 142 71% 45%;  /* Lighter verification green for dark mode */
+    --trust-text: 210 15% 90%;   /* Off-white text */
+    --trust-accent: 25 85% 65%;  /* Lighter warm accent */
+    --trust-surface: 222 47% 11%; /* Slightly lighter navy for cards */
+    --trust-border: 222 47% 20%; /* Dark border */
   }
 }
 
@@ -92,9 +119,7 @@ body {
 
 /* Subtle page background — dark mode */
 .dark body {
-  background-image:
-    radial-gradient(ellipse 70% 40% at 50% -10%, hsl(155 38% 50% / 0.08) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 30% at 80% 90%, hsl(37 70% 55% / 0.06) 0%, transparent 60%);
+  background-image: none;
 }
 
 /* Scrollbar */

@@ -1,166 +1,244 @@
-// Home page – landing with campaigns grid + hero section
-import { useState, useEffect } from 'react'
-import { Shield, TrendingUp, Zap, DollarSign, Users, MapPin } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { ArrowRight, CheckCircle2, Shield, HeartHandshake, Zap, FileText } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { DonationCard } from '@/components/DonationCard'
 import { DonateDialog } from '@/components/DonateDialog'
 import { Button } from '@/components/ui/button'
 import { useDonationStore } from '@/store/donationStore'
+import { useCountUp } from '@/hooks/useCountUp'
 import type { Campaign } from '@/types'
+import { useGSAP } from '@gsap/react'
+import gsap from 'gsap'
+import ScrollTrigger from 'gsap/ScrollTrigger'
 
-const FEATURES = [
-  { icon: Shield, title: 'Zero PII Exposure', desc: 'Only wallet addresses and on-chain hashes. No personal data ever stored.' },
-  { icon: TrendingUp, title: 'Milestone-gated Funds', desc: 'Funds release only when NGOs submit verifiable proof of milestone completion.' },
-  { icon: Zap, title: 'Solana Speed', desc: 'Sub-second settlement with SOL or UPI – every transaction anchored on-chain.' },
+gsap.registerPlugin(ScrollTrigger)
+
+// New StatBlock that uses the explicitly passed GSAP trigger instead of an observer
+function StatBlock({ value, label, prefix = '', suffix = '', isFallback = false, trigger = false }: { value: number | string, label: string, prefix?: string, suffix?: string, isFallback?: boolean, trigger?: boolean }) {
+  const numericValue = typeof value === 'number' ? value : 0
+  const count = useCountUp(numericValue, 2000, trigger)
+  
+  const displayValue = isFallback ? value : count.toLocaleString()
+  
+  return (
+    <div className="space-y-4">
+      <div className="text-7xl lg:text-9xl font-bold tabular-nums tracking-tighter text-foreground">
+        {isFallback ? displayValue : <>{prefix}{displayValue}{suffix}</>}
+      </div>
+      <div className="text-2xl text-foreground/40 uppercase tracking-[0.2em] font-semibold">
+        {label}
+      </div>
+    </div>
+  )
+}
+
+const CHAIN_STEPS = [
+  { icon: HeartHandshake, title: "1. Donation Escrow", desc: "Funds are securely locked on-chain, pending milestone validation." },
+  { icon: Shield, title: "2. Milestone Triggers", desc: "NGOs unlock capital only by providing cryptographic proof of work." },
+  { icon: FileText, title: "3. Immutable Receipts", desc: "Cohort data and delivery anchoring are permanently recorded." },
+  { icon: CheckCircle2, title: "4. Final Attestation", desc: "Irrevocable sign-off that aid reached the intended beneficiary." },
+  { icon: Zap, title: "5. Zero-Fee Settlement", desc: "Instant value transfer bypassing traditional banking bleed." },
 ]
 
 export default function Home() {
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [triggerStats, setTriggerStats] = useState(false)
+
   const { campaigns, campaignsLoading, loadCampaigns } = useDonationStore()
   const navigate = useNavigate()
 
+  const pinRef = useRef<HTMLDivElement>(null)
+  const trackRef = useRef<HTMLDivElement>(null)
+  const panel1Ref = useRef<HTMLDivElement>(null)
+  const panel2Ref = useRef<HTMLDivElement>(null)
+  const panel3Ref = useRef<HTMLDivElement>(null)
+  const panel4Ref = useRef<HTMLDivElement>(null)
+  const panel5Ref = useRef<HTMLDivElement>(null)
+  const journeyItemsRef = useRef<(HTMLDivElement | null)[]>([])
+
   useEffect(() => { void loadCampaigns() }, [loadCampaigns])
 
-  // Simulated impact metrics (in a real app, these would come from an API)
+  useGSAP(() => {
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: pinRef.current,
+        pin: true,
+        scrub: 2.5, // High dampening for heavy inertia
+        start: "top top",
+        end: "+=15000", // Extended physical scroll distance
+      }
+    })
+
+    const transDur = 2;
+    const holdDur = 1;
+
+    // --- TRANSITION 1: Hero to Journey ---
+    tl.to(panel1Ref.current, { scale: 0.8, opacity: 0, rotateY: 10, duration: transDur, ease: "power2.inOut" }, 0)
+    tl.to(trackRef.current, { x: "-100vw", duration: transDur, ease: "power2.inOut" }, 0)
+    tl.from(panel2Ref.current, { scale: 1.2, opacity: 0, rotateY: -10, duration: transDur, ease: "power2.inOut" }, 0)
+
+    // --- PANEL 2 SCRUBBING (CHAIN OF TRUST) ---
+    CHAIN_STEPS.forEach((_, i) => {
+      const item = journeyItemsRef.current[i]
+      if (!item) return
+
+      tl.fromTo(item, 
+        { opacity: 0, scale: 0.7, z: -200, y: 50 },
+        { opacity: 1, scale: 1, z: 0, y: 0, duration: 1.5, ease: "power2.out" },
+        i === 0 ? "-=0.5" : "-=1" 
+      )
+      
+      tl.to({}, { duration: 0.5 })
+      
+      tl.to(item, {
+        opacity: 0, scale: 1.3, z: 200, y: -50, duration: 1.5, ease: "power2.in"
+      }, "-=0.2")
+    })
+
+    // --- TRANSITION 2: Journey to Stats ---
+    // Fire the React state trigger precisely as Panel 3 starts sliding in
+    tl.call(() => setTriggerStats(true), [], "<")
+
+    tl.to(panel2Ref.current, { scale: 0.8, opacity: 0, rotateY: 10, duration: transDur, ease: "power2.inOut" })
+    tl.to(trackRef.current, { x: "-200vw", duration: transDur, ease: "power2.inOut" }, "<")
+    tl.from(panel3Ref.current, { scale: 1.2, opacity: 0, rotateY: -10, duration: transDur, ease: "power2.inOut" }, "<")
+
+    // --- TRANSITION 3: Stats to Campaigns ---
+    tl.to({}, { duration: holdDur })
+    tl.to(panel3Ref.current, { scale: 0.8, opacity: 0, rotateY: 10, duration: transDur, ease: "power2.inOut" })
+    tl.to(trackRef.current, { x: "-300vw", duration: transDur, ease: "power2.inOut" }, "<")
+    tl.from(panel4Ref.current, { scale: 1.2, opacity: 0, rotateY: -10, duration: transDur, ease: "power2.inOut" }, "<")
+
+    // --- TRANSITION 4: Campaigns to CTA ---
+    tl.to({}, { duration: holdDur })
+    tl.to(panel4Ref.current, { scale: 0.8, opacity: 0, rotateY: 10, duration: transDur, ease: "power2.inOut" })
+    tl.to(trackRef.current, { x: "-400vw", duration: transDur, ease: "power2.inOut" }, "<")
+    tl.from(panel5Ref.current, { scale: 1.2, opacity: 0, rotateY: -10, duration: transDur, ease: "power2.inOut" }, "<")
+
+  }, { scope: pinRef })
+
   const impactMetrics = {
-    totalRaised: 284750, // INR
-    totalDonors: 1240,
+    totalRaised: campaigns.reduce((sum, c) => sum + c.raisedAmount, 0),
+    totalDonors: "—", 
     activeCampaigns: campaigns.length,
-    milestonesCompleted: 8,
+    milestonesCompleted: campaigns.reduce((sum, c) => sum + c.milestones.filter(m => m.status === 'delivered').length, 0),
   }
 
   const handleDonate = (c: Campaign) => { setSelectedCampaign(c); setDialogOpen(true) }
   const handleView = (c: Campaign) => navigate(`/donor?campaign=${c.id}`)
 
   return (
-    <div className="space-y-16 pb-16">
-      {/* Impact Metrics */}
-      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 text-center animate-fade-in">
-        <div className="glass rounded-xl p-6 space-y-3">
-          <DollarSign className="h-6 w-6 text-primary mx-auto" />
-          <h3 className="font-semibold text-2xl">₹{impactMetrics.totalRaised.toLocaleString()}</h3>
-          <p className="text-sm text-muted-foreground">Total Raised</p>
-        </div>
-        <div className="glass rounded-xl p-6 space-y-3">
-          <Users className="h-6 w-6 text-primary mx-auto" />
-          <h3 className="font-semibold text-2xl">{impactMetrics.totalDonors.toLocaleString()}</h3>
-          <p className="text-sm text-muted-foreground">Donors</p>
-        </div>
-        <div className="glass rounded-xl p-6 space-y-3">
-          <MapPin className="h-6 w-6 text-primary mx-auto" />
-          <h3 className="font-semibold text-2xl">{impactMetrics.activeCampaigns}</h3>
-          <p className="text-sm text-muted-foreground">Active Campaigns</p>
-        </div>
-        <div className="glass rounded-xl p-6 space-y-3">
-          <TrendingUp className="h-6 w-6 text-primary mx-auto" />
-          <h3 className="font-semibold text-2xl">{impactMetrics.milestonesCompleted}</h3>
-          <p className="text-sm text-muted-foreground">Milestones Completed</p>
-        </div>
-      </section>
-
-      {/* Hero */}
-      <section className="text-center py-16 space-y-5 animate-fade-in">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-medium mb-4">
-          🔗 Powered by Solana Devnet
-        </div>
-        <h1 className="text-5xl md:text-6xl font-extrabold leading-tight tracking-tight">
-          <span className="gradient-text">Trace</span> Every Rupee.<br />
-          <span className="text-foreground/80">Trust Every NGO.</span>
-        </h1>
-        <p className="text-lg text-muted-foreground max-w-xl mx-auto">
-          TraceIt anchors every donation milestone on Solana — you can always verify
-          where your money went, down to the block.
-        </p>
-        <div className="mt-6 flex justify-center gap-4 flex-wrap">
-          <button
-            onClick={() => {
-              // Scroll to campaigns section
-              document.getElementById('campaigns-section')?.scrollIntoView({ behavior: 'smooth' })
-            }}
-            className="btn-primary px-6 py-3 rounded-md text-font-medium transition-all hover:bg-primary/90"
-          >
-            Explore Campaigns
-          </button>
-          <button
-            onClick={() => {
-              // For demo, show the first campaign's donate dialog
-              if (campaigns.length > 0) {
-                setSelectedCampaign(campaigns[0])
-                setDialogOpen(true)
-              }
-            }}
-            className="btn-outline px-6 py-3 rounded-md border-border/50 text-muted-foreground hover:border-primary/50 hover:text-primary transition-all"
-          >
-            How It Works
-          </button>
-        </div>
-      </section>
-
-      {/* Feature pills */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {FEATURES.map(({ icon: Icon, title, desc }) => (
-          <div key={title} className="glass rounded-xl p-5 space-y-2 hover:border-primary/40 transition-colors">
-            <Icon className="h-6 w-6 text-primary" />
-            <h3 className="font-semibold">{title}</h3>
-            <p className="text-sm text-muted-foreground">{desc}</p>
-          </div>
-        ))}
-      </section>
-
-      {/* Campaign grid */}
-      <section id="campaigns-section">
-        <div className="space-y-6">
-          <div className="flex justify-between items-center wrap">
-            <h2 className="text-2xl font-bold">Active Campaigns</h2>
-            <div className="flex gap-2 flex-wrap">
-              {/* In a real app, we would have filters here */}
-              <select
-                className="select-sm rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                aria-label="Filter campaigns"
-              >
-                <option value="all">All Categories</option>
-                <option value="education">Education</option>
-                <option value="health">Health</option>
-                <option value="disaster">Disaster Relief</option>
-                <option value="environment">Environment</option>
-              </select>
+    <div className="font-sans selection:bg-foreground selection:text-background">
+      
+      {/* FULL PAGE PINNED SCROLLYTELLING SECTION */}
+      <div 
+        ref={pinRef} 
+        className="w-screen relative left-1/2 -ml-[50vw] -mt-8 h-[100dvh] overflow-hidden bg-background text-foreground"
+        style={{ perspective: '1200px' }}
+      >
+        {/* The 500vw Track */}
+        <div ref={trackRef} className="flex h-full w-[500vw] will-change-transform" style={{ transformStyle: 'preserve-3d' }}>
+          
+          {/* PANEL 1: HERO */}
+          <div ref={panel1Ref} className="w-[100vw] h-full flex-shrink-0 flex flex-col items-center justify-center relative p-6">
+            <h1 className="text-7xl md:text-[10rem] font-bold leading-[0.85] tracking-tighter text-foreground text-center text-balance max-w-6xl">
+              Trace Every Rupee.<br/>
+              <span className="text-foreground/30">Trust Every NGO.</span>
+            </h1>
+            <p className="text-2xl md:text-4xl text-foreground/60 max-w-[40ch] leading-relaxed text-pretty text-center font-medium mt-12">
+              We anchor every donation milestone on-chain. Verify exactly where your money went, down to the last rupee.
+            </p>
+            <div className="mt-20 text-foreground/30 flex flex-col items-center">
+              <span className="text-sm font-bold tracking-[0.3em] uppercase mb-6 animate-pulse">Scroll to experience</span>
+              <div className="w-[2px] h-32 bg-gradient-to-b from-foreground/40 to-transparent rounded-full" />
             </div>
           </div>
-          {campaignsLoading ? (
-            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="glass rounded-xl h-72 animate-pulse" />
-              ))}
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
-              {campaigns.map((c) => (
-                <DonationCard key={c.id} campaign={c} onDonate={handleDonate} onView={handleView} />
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
 
-      {/* Call to action for donors */}
-      <section className="text-center py-12 bg-muted/5 rounded-xl">
-        <h3 className="text-xl font-semibold mb-4">Ready to make a difference?</h3>
-        <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-          Donate with confidence knowing every rupee is tracked on-chain from source to impact.
-        </p>
-        <Button
-          className="btn-primary mt-6 px-8 py-3"
-          onClick={() => {
-            if (campaigns.length > 0) {
-              setSelectedCampaign(campaigns[0])
-              setDialogOpen(true)
-            }
-          }}
-        >
-          Start Donating
-        </Button>
-      </section>
+          {/* PANEL 2: SCRUBBING LIST */}
+          <div ref={panel2Ref} className="w-[100vw] h-full flex-shrink-0 flex items-center justify-center relative">
+            <div className="relative w-full max-w-5xl h-[600px] flex items-center justify-center" style={{ transformStyle: 'preserve-3d' }}>
+              {CHAIN_STEPS.map((step, i) => (
+                <div 
+                  key={i} 
+                  ref={el => journeyItemsRef.current[i] = el}
+                  className="absolute inset-0 flex flex-col items-center justify-center text-center opacity-0"
+                >
+                  <div className="w-32 h-32 rounded-full bg-foreground/5 backdrop-blur-xl border border-foreground/10 flex items-center justify-center text-foreground mb-12 shadow-2xl">
+                    <step.icon className="w-16 h-16" />
+                  </div>
+                  <h2 className="text-6xl md:text-8xl font-bold tracking-tighter text-foreground mb-8 text-balance leading-none">
+                    {step.title}
+                  </h2>
+                  <p className="text-3xl md:text-4xl text-foreground/50 text-pretty max-w-[30ch] leading-tight">
+                    {step.desc}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* PANEL 3: STATS */}
+          <div ref={panel3Ref} className="w-[100vw] h-full flex-shrink-0 flex items-center justify-center relative p-6">
+             <div className="grid grid-cols-2 gap-y-24 gap-x-32 text-center max-w-5xl">
+                <StatBlock value={impactMetrics.totalRaised} label="Rupees Raised" prefix="₹" trigger={triggerStats} />
+                <StatBlock value={impactMetrics.activeCampaigns} label="Active Campaigns" trigger={triggerStats} />
+                <StatBlock value={impactMetrics.milestonesCompleted} label="Milestones Completed" trigger={triggerStats} />
+                <StatBlock value={impactMetrics.totalDonors} label="Verified Donors" isFallback={true} trigger={triggerStats} />
+             </div>
+          </div>
+
+          {/* PANEL 4: CAMPAIGNS GRID */}
+          <div ref={panel4Ref} className="w-[100vw] h-full flex-shrink-0 flex flex-col items-center justify-center relative p-6">
+             <div className="w-full max-w-[1400px] mx-auto space-y-16">
+                <div className="text-center space-y-6">
+                  <h2 className="text-6xl md:text-8xl font-bold tracking-tighter text-foreground text-balance">Fund Verified Impact</h2>
+                  <p className="text-2xl text-foreground/50 text-pretty">
+                    Select a campaign to begin tracking your contribution on-chain.
+                  </p>
+                </div>
+                <div className="flex justify-center gap-8 w-full">
+                  {campaignsLoading ? (
+                    [1, 2, 3].map((i) => (
+                      <div key={i} className="w-[400px] h-[500px] shrink-0 bg-foreground/5 rounded-[2.5rem] animate-pulse" />
+                    ))
+                  ) : (
+                    (campaigns || []).slice(0, 3).map((c) => (
+                      <div key={c.id} className="w-[400px] shrink-0">
+                        <DonationCard 
+                          campaign={c} 
+                          onDonate={handleDonate} 
+                          onView={handleView} 
+                        />
+                      </div>
+                    ))
+                  )}
+                </div>
+             </div>
+          </div>
+
+          {/* PANEL 5: CTA */}
+          <div ref={panel5Ref} className="w-[100vw] h-full flex-shrink-0 flex flex-col items-center justify-center relative p-6">
+             <div className="text-center space-y-12">
+                <h2 className="text-7xl md:text-[8rem] font-bold tracking-tighter text-foreground text-balance leading-none max-w-5xl mx-auto">
+                  Demand more from your donations.
+                </h2>
+                <p className="text-3xl text-foreground/60 max-w-[40ch] mx-auto leading-relaxed text-pretty">
+                  Join the donors who refuse to settle for black-box charities. Trace every rupee.
+                </p>
+                <div className="pt-12">
+                  <Button
+                    className="group bg-foreground text-background hover:bg-foreground/90 text-2xl px-12 py-10 h-auto rounded-full font-bold transition-transform hover:scale-[0.98] shadow-2xl"
+                    onClick={() => navigate('/donor')}
+                  >
+                    Start Donating <ArrowRight className="ml-4 w-8 h-8 group-hover:translate-x-2 transition-transform" />
+                  </Button>
+                </div>
+             </div>
+          </div>
+
+        </div>
+      </div>
 
       <DonateDialog campaign={selectedCampaign} open={dialogOpen} onClose={() => setDialogOpen(false)} />
     </div>

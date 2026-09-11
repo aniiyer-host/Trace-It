@@ -54,7 +54,7 @@ apiClient.interceptors.response.use(
     }
 
     // Log error for debugging (remove in production)
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.error('API Error:', error)
     }
 
@@ -110,8 +110,8 @@ export const apiService = {
   // Campaigns
   campaigns: {
     getAll: async () => {
-      const res = await get<{ data: any[] }>('/public/campaigns');
-      return res.data;
+      const res = await get<any>('/public/campaigns');
+      return Array.isArray(res) ? res : (res?.data || []);
     },
     getById: (campaignId: string) => get(`/public/campaigns/${campaignId}`),
     create: (campaignData: any) => post('/charity/campaigns', campaignData),
