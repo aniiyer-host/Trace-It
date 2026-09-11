@@ -89,6 +89,12 @@ export const onboardNgo = async (
     if (!userId)
       return res.status(401).json({ error: "User not authenticated" });
 
+    if (req.user?.role === UserRole.ADMIN) {
+      return res
+        .status(403)
+        .json({ error: "Admin accounts cannot onboard as an NGO" });
+    }
+
     const {
       organisationName,
       registrationNo,

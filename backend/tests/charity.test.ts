@@ -13,6 +13,7 @@ import { StorageService } from "../src/services/storageService";
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "access_secret";
 
 import crypto from "crypto";
+import admin from "../src/routes/admin.js";
 
 describe("Charity API Integration Tests", () => {
   let charityToken: string;
@@ -191,6 +192,9 @@ describe("Charity API Role Enforcement", () => {
   let plainDonorToken: string;
   let plainDonorId: string;
 
+  let adminToken: string;
+  let adminUserId: string;
+
   beforeAll(async () => {
     // Used only for the onboarding test — will become CHARITY partway through
     const applicant = await prisma.profile.create({
@@ -199,6 +203,17 @@ describe("Charity API Role Enforcement", () => {
         role: UserRole.DONOR,
       },
     });
+    const adminProfile = await prisma.profile.create({
+      data: {
+        email: `admin-${crypto.randomUUID()}@example.com`,
+        role: UserRole.ADMIN,
+      },
+    });
+    adminUserId = adminProfile.id;
+    adminToken = jwt.sign({ userId: adminProfile.id }, JWT_ACCESS_SECRET, {
+      expiresIn: "1h",
+    });
+
     applicantDonorId = applicant.id;
     applicantDonorToken = jwt.sign(
       { userId: applicant.id },
@@ -224,6 +239,7 @@ describe("Charity API Role Enforcement", () => {
     await prisma.document.deleteMany({ where: { ownerId: plainDonorId } });
     await prisma.profile.delete({ where: { id: applicantDonorId } });
     await prisma.profile.delete({ where: { id: plainDonorId } });
+    await prisma.profile.delete({ where: { id: adminUserId } });
   });
 
   test("POST /api/charity/onboard - a plain DONOR CAN apply to become an NGO", async () => {
@@ -275,6 +291,15 @@ describe("Charity API Role Enforcement", () => {
       .post("/api/charity/documents/upload")
       .set("Authorization", `Bearer ${plainDonorToken}`)
       .attach("file", Buffer.from("dummy pdf content"), "test.pdf");
+
+    expect(res.status).toBe(403);
+  });
+
+  test("POST /api/charity/onboard - an ADMIN cannot onboard as an NGO", async () => {
+    const res = await request(app)
+      .post("/api/charity/onboard")
+      .set("Authorization", `Bearer ${adminToken}`) // reuse an admin fixture if one exists in this file, else create one
+      .send({ organisationName: "Sneaky NGO", registrationNo: "ADM001" });
 
     expect(res.status).toBe(403);
   });
