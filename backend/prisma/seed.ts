@@ -16,12 +16,7 @@ async function main() {
       isVerified: true,
       ngoStatus: "ACTIVE",
       organisationName: "TraceIt",
-      // Note: We are not setting authUserId because we are not using Supabase auth in seed.
-      // In a real scenario, authUserId would be set when the user signs up via Supabase.
-      // For seed, we leave it as null (or undefined) and rely on email and password for auth.
-      // However, note that the implementation plan uses email OTP for verification, not password login initially.
-      // We are adding passwordHash for bcrypt, but we'll set a placeholder for the admin.
-      passwordHash: await bcrypt.hash("admin-secret", 12), // We need to import bcrypt
+      passwordHash: await bcrypt.hash("admin-secret", 12),
     },
   });
   console.log(`Created admin: ${admin.email}`);
@@ -39,7 +34,7 @@ async function main() {
       ngoStatus: "ACTIVE",
       organisationName: "Hope Relief Foundation",
       registrationNo: "REG-001",
-      // passwordHash: await bcrypt.hash('ngo-secret', 12),
+      passwordHash: await bcrypt.hash("ngo-secret", 12),
     },
   });
   console.log(`Created NGO: ${ngo.email}`);
@@ -56,7 +51,7 @@ async function main() {
       isVerified: true,
       ngoStatus: "ACTIVE",
       kycStatus: "APPROVED",
-      // passwordHash: await bcrypt.hash('donor-secret', 12),
+      passwordHash: await bcrypt.hash("donor-secret", 12),
     },
   });
   console.log(`Created donor: ${donor1.email}`);
@@ -72,7 +67,7 @@ async function main() {
       isVerified: true,
       ngoStatus: "ACTIVE",
       kycStatus: "NOT_REQUIRED", // This donor hasn't done KYC yet
-      // passwordHash: await bcrypt.hash('donor2-secret', 12),
+      passwordHash: await bcrypt.hash("donor2-secret", 12),
     },
   });
   console.log(`Created donor2: ${donor2.email}`);
@@ -96,9 +91,6 @@ async function main() {
     },
   });
   console.log(`Created campaign: ${campaign1.title}`);
-
-  // We can create two more campaigns if needed, but the seed says 3 campaigns.
-  // Let's create two more.
 
   const campaign2 = await prisma.campaign.upsert({
     where: { slug: "education-for-all" },
@@ -159,6 +151,11 @@ async function main() {
   console.log(`Created donation: ${donation1.publicId}`);
 
   console.log("Seed completed.");
+  console.log("\nDemo login credentials:");
+  console.log("  admin@traceit.dev   / admin-secret");
+  console.log("  ngo@traceit.dev     / ngo-secret");
+  console.log("  donor@traceit.dev   / donor-secret");
+  console.log("  donor2@traceit.dev  / donor2-secret");
 }
 
 main()

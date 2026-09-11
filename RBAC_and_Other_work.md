@@ -136,7 +136,40 @@ All 17 pass; full existing suite passes after the `e2e.test.ts` fix noted above.
 
 - **`UserRole.AUDITOR` is unused.** It exists in the schema but no route references it. Left as-is pending a product decision: either wire it to read-only access on `/admin/audit-logs` and `/admin/government-requests`, or remove it from the enum if it's not planned.
 
-## 6. Explicitly out of scope for this round
+## Changes Made
 
-- `frontend/src/utils/apiClient.ts` still points at the old/incorrect paths (`/ngos/...`, root `/milestones/...`, root `/attestations/...`, `/donations/user/:userId`) and one call site (`ProofUploadDialog.tsx`) sends JSON where the backend now expects a real file upload. None of this affects backend correctness or security — the backend independently enforces RBAC and ownership regardless of what the frontend sends — but the frontend will get `404`s/`403`s against several of these endpoints until it's updated separately.
-- A UI issue was also spotted in passing: `NGODashboard.tsx` has a button that calls the milestone-approve endpoint directly from the NGO's own dashboard. The backend correctly rejects this (`403`, admin-only), so there's no security exposure, but the button is misleading in its current form and should probably be removed or reworked.
+### Backend — auth.ts
+
+POST /api/auth/login — response shape fix
+• Extended the existing prisma.profile.findUnique (already there for audit log) to also select email, fullName, role
+• Replaced { message, accessToken } response with { token, user: { id, email, name, role } } — the exact shape the frontend's
+apiClient and Login.tsx expect
+
+POST /api/auth/register — new alias route
+
+• Maps name → fullName (frontend sends name, backend schema uses fullName)
+• Calls the existing signup() service
+• Immediately mints an accessToken via generateAccessToken() and returns { token, user: { id, email, name, role } }
+• Added generateAccessToken to the import from authService.ts
+
+### Backend — validation.ts
+
+• Added name: Joi.string().optional() to signupSchema so the /register route doesn't get rejected by the unknown-key guard
+
+### Frontend — authStore.ts
+
+• Added role?: 'DONOR' | 'CHARITY' | 'ADMIN' and token?: string to the User interface — required for RBAC routing and the Bearer
+token interceptor in apiClient.ts
+
+### Frontend — Login.tsx + Signup.tsx
+
+• Replaced both navigate('/donor') TODO blocks with live RBAC routing:
+• role === 'ADMIN' → /admin
+• role === 'CHARITY' → /ngo
+• default → /donor
+
+### Backend -- package.json
+
+• Fixed an issue of override package cookie was before set to >=0.7.0, Made it 0.7.2
+
+• Updated seed.ts a little so that it prints testing values in terminal

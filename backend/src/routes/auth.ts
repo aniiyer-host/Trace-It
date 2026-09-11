@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { signupSchema, verifyEmailSchema, loginSchema } from '../utils/validation.js';
-import { signup, verifyEmail, login, refreshToken, logout } from '../services/authService.js';
+import { signup, verifyEmail, login, refreshToken, logout, generateAccessToken } from '../services/authService.js';
 import { authLimiter } from '../middleware/strictLimiter.js';
 import { writeAuditLog } from '../services/auditLogService.js';
 import { AuditActorType } from '../../generated/prisma/enums.js';
@@ -41,6 +41,48 @@ router.post('/signup', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+/**
+ * @route POST /api/auth/register
+ * @desc Alias for /signup — accepts { email, password, name } from the frontend
+ *       and returns the unified { token, user } shape so both auth endpoints
+ *       have a consistent response contract.
+ * @access Public
+ */
+router.post('/register', async (req, res) => {
+  try {
+    // Remap 'name' → 'fullName' so the existing signupSchema passes
+    const body = { ...req.body, fullName: req.body.fullName ?? req.body.name };
+    const { error, value } = signupSchema.validate(body);
+    if (error) {
+      return res.status(400).json({ error: error.details[0].message });
+    }
+
+    const { email, password, fullName, phone } = value;
+
+    const user = await signup(email, password, fullName, phone);
+
+    // Generate an access token immediately so the frontend can start authenticated requests
+    const accessToken = generateAccessToken(user.id);
+
+    res.status(201).json({
+      token: accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.fullName ?? undefined,
+        role: user.role,
+      },
+    });
+  } catch (err: any) {
+    if (err.message === 'User already exists') {
+      return res.status(409).json({ error: err.message });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 /**
  * @route POST /api/auth/verify-email
@@ -90,10 +132,10 @@ router.post('/login', async (req, res) => {
 
     const tokens = await login(email, password);
 
-    // Get user ID for audit log
+    // Get user for audit log AND response payload (single query, no extra round-trip)
     const user = await prisma.profile.findUnique({
       where: { email },
-      select: { id: true },
+      select: { id: true, email: true, fullName: true, role: true },
     });
 
     // Log successful login
@@ -117,9 +159,15 @@ router.post('/login', async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
+    // Return shape expected by the frontend: { token, user: { id, email, name, role } }
     res.status(200).json({
-      message: 'Login successful',
-      accessToken: tokens.accessToken,
+      token: tokens.accessToken,
+      user: {
+        id: user!.id,
+        email: user!.email,
+        name: user!.fullName ?? undefined,
+        role: user!.role,
+      },
     });
   } catch (err: any) {
     if (err.message === 'Invalid credentials') {

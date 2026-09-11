@@ -63,12 +63,9 @@ export default function Signup() {
       setStep('success')
 
       setTimeout(() => {
-        // TODO: RBAC redirect pending backend branch merge.
-        // Once `user.role` is returned from backend, route accordingly:
-        // if (user.role === 'admin') navigate('/admin')
-        // else if (user.role === 'ngo') navigate('/ngo')
-        // else navigate('/donor')
-        navigate('/donor')
+        if (user.role === 'ADMIN') navigate('/admin')
+        else if (user.role === 'CHARITY') navigate('/ngo')
+        else navigate('/donor')
       }, 1200)
     } catch {
       toast({ title: 'Signup failed', variant: 'destructive' })

@@ -4,6 +4,8 @@ export interface User {
   id: string
   email: string
   name?: string
+  role?: 'DONOR' | 'CHARITY' | 'ADMIN'
+  token?: string
 }
 
 export interface AuthState {
