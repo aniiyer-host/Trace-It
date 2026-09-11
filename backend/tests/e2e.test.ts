@@ -414,7 +414,7 @@ describe("End-to-End Flow Tests", () => {
       });
 
       const allocatedDonations = donations.filter(
-        (d) => d.status === 'ALLOCATED',
+        (d) => d.status === "ALLOCATED",
       );
 
       // Should have at least one allocated donation
@@ -572,9 +572,7 @@ describe("End-to-End Flow Tests", () => {
       expect(eightyGRes.body).toHaveProperty("donationsDetails");
       expect(Array.isArray(eightyGRes.body.donationsDetails)).toBe(true);
       expect(eightyGRes.body.donationsDetails.length).toBeGreaterThanOrEqual(1);
-      expect(eightyGRes.body.donationsDetails[0]).toHaveProperty(
-        "amount",
-      );
+      expect(eightyGRes.body.donationsDetails[0]).toHaveProperty("amount");
     });
   });
 
@@ -677,9 +675,9 @@ describe("End-to-End Flow Tests", () => {
         .get("/api/charity/campaigns")
         .set("Authorization", `Bearer ${donorToken}`); // Donor accessing charity endpoint
 
-      expect(res.status).toBe(200); // Authenticated but not NGO
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBe(0); // Should be empty for non-NGO users
+      expect(res.status).toBe(403); // Authenticated but not NGO
+      //expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBe(undefined); //Changed 0 to undefined since the response is an error object, not an array
     });
 
     it("should prevent donor without KYC from making large donations", async () => {

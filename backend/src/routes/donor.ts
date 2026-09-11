@@ -1,15 +1,27 @@
-import { Request, Response, NextFunction, Router } from 'express';
-import { prisma } from '../db/prisma.js';
-import { requireAuth } from '../middleware/requireAuth.js';
-import { requireRole } from '../middleware/requireRole.js';
-import { kycCheckMiddleware } from '../middleware/kycCheckMiddleware.js';
-import { UserRole, AuditActorType, PaymentMethod } from '../../generated/prisma/enums.js';
-import Joi from 'joi';
-import { createRazorpayOrder } from '../services/donationService.js';
-import { writeAuditLog } from '../services/auditLogService.js';
-import { generateAndStoreReceipt, getReceiptSignedUrl } from '../services/receiptService.js';
-import { allocateDonation, markDisbursed, markDelivered } from '../services/statusService.js';
-import { requireEnvironmentVariable } from '../utils/envValidator.js';
+import { Request, Response, NextFunction, Router } from "express";
+import { prisma } from "../db/prisma.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { requireRole } from "../middleware/requireRole.js";
+import { kycCheckMiddleware } from "../middleware/kycCheckMiddleware.js";
+import {
+  UserRole,
+  AuditActorType,
+  PaymentMethod,
+  AttestationType,
+} from "../../generated/prisma/enums.js";
+import Joi from "joi";
+import { createRazorpayOrder } from "../services/donationService.js";
+import { writeAuditLog } from "../services/auditLogService.js";
+import {
+  generateAndStoreReceipt,
+  getReceiptSignedUrl,
+} from "../services/receiptService.js";
+import {
+  allocateDonation,
+  markDisbursed,
+  markDelivered,
+} from "../services/statusService.js";
+import { requireEnvironmentVariable } from "../utils/envValidator.js";
 
 // ---------------------------------------------------------------------------
 // GET /api/donor/dashboard
@@ -22,12 +34,12 @@ import { requireEnvironmentVariable } from '../utils/envValidator.js';
 export const getDonorDashboard = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const donorId = req.user?.id;
     if (!donorId) {
-      return res.status(401).json({ error: 'User not authenticated' });
+      return res.status(401).json({ error: "User not authenticated" });
     }
 
     const donations = await prisma.donation.findMany({
@@ -57,7 +69,7 @@ export const getDonorDashboard = async (
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
 
     res.json({ donations });
@@ -75,7 +87,7 @@ const donateSchema = Joi.object({
   campaignId: Joi.string().required(),
   amount: Joi.number().positive().required(), // amount in INR
   paymentMethod: Joi.string()
-    .valid('UPI', 'CARD', 'NETBANKING', 'WALLET', 'SOLANA_STUB')
+    .valid("UPI", "CARD", "NETBANKING", "WALLET", "SOLANA_STUB")
     .required(),
 }).unknown(false);
 
@@ -91,7 +103,7 @@ const donateSchema = Joi.object({
 export const createDonation = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { error, value } = donateSchema.validate(req.body);
@@ -108,7 +120,7 @@ export const createDonation = async (
 
     const donorId = req.user?.id;
     if (!donorId) {
-      return res.status(401).json({ error: 'User not authenticated' });
+      return res.status(401).json({ error: "User not authenticated" });
     }
 
     // --- Validate NGO ---
@@ -117,18 +129,18 @@ export const createDonation = async (
       select: { id: true, ngoStatus: true },
     });
 
-    if (!ngoProfile || ngoProfile.ngoStatus !== 'ACTIVE') {
-      return res.status(400).json({ error: 'Invalid or inactive NGO' });
+    if (!ngoProfile || ngoProfile.ngoStatus !== "ACTIVE") {
+      return res.status(400).json({ error: "Invalid or inactive NGO" });
     }
 
     // --- Validate campaign ---
     const campaign = await prisma.campaign.findFirst({
-      where: { id: campaignId, ngoId, status: 'ACTIVE' },
+      where: { id: campaignId, ngoId, status: "ACTIVE" },
       select: { id: true },
     });
 
     if (!campaign) {
-      return res.status(400).json({ error: 'Invalid or inactive campaign' });
+      return res.status(400).json({ error: "Invalid or inactive campaign" });
     }
 
     // --- Create Razorpay order ---
@@ -141,9 +153,9 @@ export const createDonation = async (
         ngoId,
         campaignId,
         amount,
-        currencyCode: 'INR',
+        currencyCode: "INR",
         paymentMethod: paymentMethod as PaymentMethod,
-        status: 'INITIATED',
+        status: "INITIATED",
         razorpayOrderId: razorpayOrder.id,
       },
       select: {
@@ -157,9 +169,9 @@ export const createDonation = async (
     void writeAuditLog({
       actorType: AuditActorType.USER,
       actorId: donorId,
-      entityType: 'donation',
+      entityType: "donation",
       entityId: donation.id,
-      action: 'DONATION_INITIATED',
+      action: "DONATION_INITIATED",
       metadata: {
         amount,
         paymentMethod,
@@ -190,7 +202,7 @@ const kycSchema = Joi.object({
     .pattern(/^[A-Z]{5}[0-9]{4}[A-Z]$/)
     .required()
     .messages({
-      'string.pattern.base': 'PAN must be in the format AAAAA9999A',
+      "string.pattern.base": "PAN must be in the format AAAAA9999A",
     }),
 }).unknown(false);
 
@@ -205,7 +217,7 @@ const kycSchema = Joi.object({
 export const kycStub = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { error, value } = kycSchema.validate(req.body);
@@ -216,7 +228,7 @@ export const kycStub = async (
     const { pan } = value as { pan: string };
     const donorId = req.user?.id;
     if (!donorId) {
-      return res.status(401).json({ error: 'User not authenticated' });
+      return res.status(401).json({ error: "User not authenticated" });
     }
 
     // Prevent re-submission if already approved
@@ -224,21 +236,21 @@ export const kycStub = async (
       where: { id: donorId },
       select: { kycStatus: true },
     });
-    if (existing?.kycStatus === 'APPROVED') {
-      return res.status(409).json({ error: 'KYC already approved' });
+    if (existing?.kycStatus === "APPROVED") {
+      return res.status(409).json({ error: "KYC already approved" });
     }
 
     // HMAC-SHA512 of PAN using key from env (Vault integration in Phase 5)
-    const { createHmac } = await import('crypto');
-    const hmacKey = requireEnvironmentVariable('KYC_HMAC_KEY');
-    const panHash = createHmac('sha512', hmacKey).update(pan).digest('hex');
+    const { createHmac } = await import("crypto");
+    const hmacKey = requireEnvironmentVariable("KYC_HMAC_KEY");
+    const panHash = createHmac("sha512", hmacKey).update(pan).digest("hex");
 
     // Persist pan_hash + approve KYC
     await prisma.profile.update({
       where: { id: donorId },
       data: {
         panHash,
-        kycStatus: 'APPROVED',
+        kycStatus: "APPROVED",
       },
     });
 
@@ -246,9 +258,9 @@ export const kycStub = async (
     void writeAuditLog({
       actorType: AuditActorType.USER,
       actorId: donorId,
-      entityType: 'profile',
+      entityType: "profile",
       entityId: donorId,
-      action: 'KYC_APPROVED',
+      action: "KYC_APPROVED",
       metadata: {
         // Never log the raw PAN — only a short snippet of the hash for trace correlation
         panHashSnippet: panHash.slice(0, 16),
@@ -256,7 +268,7 @@ export const kycStub = async (
       ipAddress: req.ip,
     });
 
-    res.json({ message: 'KYC approved successfully' });
+    res.json({ message: "KYC approved successfully" });
   } catch (err) {
     next(err);
   }
@@ -276,13 +288,13 @@ export const kycStub = async (
 export const getDonorReceipt = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
-    const donationId = req.params['donationId'] as string;
+    const donationId = req.params["donationId"] as string;
     const donorId = req.user?.id;
     if (!donorId) {
-      return res.status(401).json({ error: 'User not authenticated' });
+      return res.status(401).json({ error: "User not authenticated" });
     }
 
     // Fetch donation — enforce ownership (IDOR guard)
@@ -302,16 +314,19 @@ export const getDonorReceipt = async (
 
     if (!donation) {
       // Return 404 regardless of whether the donation belongs to someone else
-      return res.status(404).json({ error: 'Donation not found' });
+      return res.status(404).json({ error: "Donation not found" });
     }
 
     // Receipts are only valid for successful donations
-    if (donation.status !== 'SUCCESS' &&
-        donation.status !== 'ALLOCATED' &&
-        donation.status !== 'DISBURSED' &&
-        donation.status !== 'DELIVERED') {
+    if (
+      donation.status !== "SUCCESS" &&
+      donation.status !== "ALLOCATED" &&
+      donation.status !== "DISBURSED" &&
+      donation.status !== "DELIVERED"
+    ) {
       return res.status(400).json({
-        error: 'Receipt not available: donation has not been confirmed as successful.',
+        error:
+          "Receipt not available: donation has not been confirmed as successful.",
         status: donation.status,
       });
     }
@@ -319,13 +334,18 @@ export const getDonorReceipt = async (
     // If receipt already generated, return a fresh signed URL
     if (donation.taxReceiptUrl) {
       const signedUrl = await getReceiptSignedUrl(donation.taxReceiptUrl);
-      return res.json({ receiptUrl: signedUrl, publicDonationId: donation.publicId });
+      return res.json({
+        receiptUrl: signedUrl,
+        publicDonationId: donation.publicId,
+      });
     }
 
     // Generate receipt on-demand (handles case where webhook fired before receipt service was ready)
     const signedUrl = await generateAndStoreReceipt(donation.id);
     if (!signedUrl) {
-      return res.status(500).json({ error: 'Failed to generate receipt. Please try again later.' });
+      return res
+        .status(500)
+        .json({ error: "Failed to generate receipt. Please try again later." });
     }
 
     res.json({ receiptUrl: signedUrl, publicDonationId: donation.publicId });
@@ -339,16 +359,17 @@ export const getDonorReceipt = async (
  * Only accessible by the donor who made the donation.
  * Returns ordered audit log entries for the donation.
  */
+
 export const getDonationTimeline = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
-    const donationId = req.params['id'] as string;
+    const donationId = req.params["id"] as string;
     const donorId = req.user?.id;
     if (!donorId) {
-      return res.status(401).json({ error: 'User not authenticated' });
+      return res.status(401).json({ error: "User not authenticated" });
     }
 
     // Verify ownership of the donation (IDOR protection)
@@ -358,13 +379,13 @@ export const getDonationTimeline = async (
     });
 
     if (!donation) {
-      return res.status(404).json({ error: 'Donation not found' });
+      return res.status(404).json({ error: "Donation not found" });
     }
 
     // Fetch audit logs for this donation, ordered by creation time
     const auditLogs = await prisma.auditLog.findMany({
       where: {
-        entityType: 'donation',
+        entityType: "donation",
         entityId: donationId,
       },
       select: {
@@ -376,7 +397,7 @@ export const getDonationTimeline = async (
         ipAddress: true,
       },
       orderBy: {
-        createdAt: 'asc',
+        createdAt: "asc",
       },
     });
 
@@ -392,6 +413,87 @@ export const getDonationTimeline = async (
   }
 };
 
+export const getDonationAttestation = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const donationId = req.params["id"] as string;
+    const donorId = req.user?.id;
+    if (!donorId)
+      return res.status(401).json({ error: "User not authenticated" });
+
+    const donation = await prisma.donation.findFirst({
+      where: { id: donationId, donorId },
+      select: { id: true },
+    });
+    if (!donation) return res.status(404).json({ error: "Donation not found" });
+
+    const attestations = await prisma.attestation.findMany({
+      where: { donationId },
+    });
+    res.json(attestations);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const requestDonationAttestation = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const donationId = req.params["id"] as string;
+    const donorId = req.user?.id;
+    if (!donorId)
+      return res.status(401).json({ error: "User not authenticated" });
+
+    const rawType = (req.body?.type ?? "").toString().toUpperCase();
+    if (!["RECEIPT", "DELIVERY"].includes(rawType)) {
+      return res
+        .status(400)
+        .json({ error: "type must be 'receipt' or 'delivery'" });
+    }
+
+    const donation = await prisma.donation.findFirst({
+      where: { id: donationId, donorId },
+    });
+    if (!donation) return res.status(404).json({ error: "Donation not found" });
+
+    try {
+      const attestation = await prisma.attestation.create({
+        data: {
+          donationId,
+          type: rawType as AttestationType,
+          requestedBy: donorId,
+        },
+      });
+
+      void writeAuditLog({
+        actorType: AuditActorType.USER,
+        actorId: donorId,
+        entityType: "attestation",
+        entityId: attestation.id,
+        action: "ATTESTATION_REQUESTED",
+        metadata: { donationId, type: rawType },
+      });
+
+      res.status(201).json(attestation);
+    } catch (e: any) {
+      if (e.code === "P2002") {
+        return res.status(409).json({
+          error:
+            "An attestation of this type has already been requested for this donation",
+        });
+      }
+      throw e;
+    }
+  } catch (err) {
+    next(err);
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Router
@@ -400,10 +502,32 @@ export const getDonationTimeline = async (
 const donorRouter = Router();
 donorRouter.use(requireAuth); // All donor routes require authentication
 
-donorRouter.get('/dashboard', requireRole(UserRole.DONOR), getDonorDashboard);
-donorRouter.post('/donate', requireRole(UserRole.DONOR), kycCheckMiddleware, createDonation);
-donorRouter.post('/kyc', requireRole(UserRole.DONOR), kycStub);
-donorRouter.get('/receipt/:donationId', requireRole(UserRole.DONOR), getDonorReceipt);
-donorRouter.get('/donations/:id/timeline', requireRole(UserRole.DONOR), getDonationTimeline);
-
+donorRouter.get("/dashboard", requireRole(UserRole.DONOR), getDonorDashboard);
+donorRouter.post(
+  "/donate",
+  requireRole(UserRole.DONOR),
+  kycCheckMiddleware,
+  createDonation,
+);
+donorRouter.post("/kyc", requireRole(UserRole.DONOR), kycStub);
+donorRouter.get(
+  "/receipt/:donationId",
+  requireRole(UserRole.DONOR),
+  getDonorReceipt,
+);
+donorRouter.get(
+  "/donations/:id/timeline",
+  requireRole(UserRole.DONOR),
+  getDonationTimeline,
+);
+donorRouter.get(
+  "/donations/:id/attestation",
+  requireRole(UserRole.DONOR),
+  getDonationAttestation,
+);
+donorRouter.post(
+  "/donations/:id/attestation",
+  requireRole(UserRole.DONOR),
+  requestDonationAttestation,
+);
 export default donorRouter;

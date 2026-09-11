@@ -2,7 +2,11 @@ import request from "supertest";
 import app from "../src/index.js";
 import { prisma } from "../src/db/prisma.js";
 import jwt from "jsonwebtoken";
-import { UserRole, NgoStatus, CampaignStatus } from "../generated/prisma/enums.js";
+import {
+  UserRole,
+  NgoStatus,
+  CampaignStatus,
+} from "../generated/prisma/enums.js";
 
 import { StorageService } from "../src/services/storageService";
 
@@ -179,5 +183,99 @@ describe("Charity API Integration Tests", () => {
     expect(res.body).toHaveProperty("ngoId", charityUserId);
     expect(res.body).toHaveProperty("totalDonations");
     expect(res.body).toHaveProperty("donationsDetails");
+  });
+});
+describe("Charity API Role Enforcement", () => {
+  let applicantDonorToken: string;
+  let applicantDonorId: string;
+  let plainDonorToken: string;
+  let plainDonorId: string;
+
+  beforeAll(async () => {
+    // Used only for the onboarding test — will become CHARITY partway through
+    const applicant = await prisma.profile.create({
+      data: {
+        email: `applicant-${crypto.randomUUID()}@example.com`,
+        role: UserRole.DONOR,
+      },
+    });
+    applicantDonorId = applicant.id;
+    applicantDonorToken = jwt.sign(
+      { userId: applicant.id },
+      JWT_ACCESS_SECRET,
+      { expiresIn: "1h" },
+    );
+
+    // Stays DONOR for the whole block — used for every rejection test
+    const plain = await prisma.profile.create({
+      data: {
+        email: `plain-${crypto.randomUUID()}@example.com`,
+        role: UserRole.DONOR,
+      },
+    });
+    plainDonorId = plain.id;
+    plainDonorToken = jwt.sign({ userId: plain.id }, JWT_ACCESS_SECRET, {
+      expiresIn: "1h",
+    });
+  });
+
+  afterAll(async () => {
+    await prisma.document.deleteMany({ where: { ownerId: applicantDonorId } });
+    await prisma.document.deleteMany({ where: { ownerId: plainDonorId } });
+    await prisma.profile.delete({ where: { id: applicantDonorId } });
+    await prisma.profile.delete({ where: { id: plainDonorId } });
+  });
+
+  test("POST /api/charity/onboard - a plain DONOR CAN apply to become an NGO", async () => {
+    const res = await request(app)
+      .post("/api/charity/onboard")
+      .set("Authorization", `Bearer ${applicantDonorToken}`)
+      .send({ organisationName: "Aspiring NGO", registrationNo: "ASP123" });
+
+    expect(res.status).toBe(200);
+
+    const updated = await prisma.profile.findUnique({
+      where: { id: applicantDonorId },
+    });
+    expect(updated?.role).toBe(UserRole.CHARITY);
+    expect(updated?.ngoStatus).toBe(NgoStatus.PENDING);
+  });
+
+  test("POST /api/charity/campaigns - a DONOR who has NOT onboarded is rejected", async () => {
+    const res = await request(app)
+      .post("/api/charity/campaigns")
+      .set("Authorization", `Bearer ${plainDonorToken}`)
+      .send({
+        title: "Should Not Work",
+        description: "blocked",
+        targetAmount: 1000,
+      });
+
+    expect(res.status).toBe(403);
+  });
+
+  test("GET /api/charity/documents - a DONOR who has NOT onboarded is rejected", async () => {
+    const res = await request(app)
+      .get("/api/charity/documents")
+      .set("Authorization", `Bearer ${plainDonorToken}`);
+
+    expect(res.status).toBe(403);
+  });
+
+  test("GET /api/charity/reports/fcra - a DONOR who has NOT onboarded is rejected", async () => {
+    const res = await request(app)
+      .get("/api/charity/reports/fcra")
+      .set("Authorization", `Bearer ${plainDonorToken}`);
+
+    expect(res.status).toBe(403);
+  });
+
+  test("POST /api/charity/documents/upload - a DONOR who has NOT onboarded is rejected", async () => {
+    const res = await request(app)
+      .post("/api/charity/documents/upload")
+      .set("Authorization", `Bearer ${plainDonorToken}`)
+      .attach("file", Buffer.from("dummy pdf content"), "test.pdf");
+
+    expect(res.status).toBe(403);
   });
 });

@@ -78,6 +78,7 @@ enum DisbursementStatus {
   SENT
   SETTLED
   FAILED
+  REJECTED
 }
 
 enum GovernmentRequestStatus {
@@ -102,6 +103,17 @@ enum AuditActorType {
   ADMIN
 }
 
+enum AttestationType {
+  RECEIPT
+  DELIVERY
+}
+
+enum AttestationStatus {
+  PENDING
+  NGO_SIGNED
+  APPROVED
+  REJECTED
+}
 // MODELS
 
 // Profiles table -> model Profile
@@ -216,6 +228,7 @@ model Donation {
   solanaTxHash       String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  attestations Attestation[]
 
   donor       Profile @relation("DonorDonations", fields: [donorId], references: [id])
   ngo         Profile @relation("NgoDonations", fields: [ngoId], references: [id])
@@ -269,6 +282,9 @@ model Disbursement {
   blockscoutUrl      String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
+  proofSubmittedAt DateTime?   // new — set when NGO uploads proof post-creation
+  rejectionReason  String?     // new — set by admin on reject
 
   campaign Campaign @relation("campaignDisbursements", fields: [campaignId], references: [id])
   ngo    Profile   @relation("disbursementsAsNgo", fields: [ngoId], references: [id])
@@ -400,4 +416,27 @@ model BlockchainRetryQueue {
   @@index([lastAttempt])
   @@index([operationType])
   @@map("BlockchainRetryQueue")
+}
+
+//Attestations
+model Attestation {
+  id              String            @id @default(uuid())
+  donationId      String
+  type            AttestationType
+  status          AttestationStatus @default(PENDING)
+  requestedBy     String            // donor's profile id
+  ngoSignedBy     String?           // ngo's profile id, set on NGO sign-off
+  ngoSignedAt     DateTime?
+  approvedBy      String?           // admin's profile id
+  approvedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  donation Donation @relation(fields: [donationId], references: [id])
+
+  @@unique([donationId, type])   // one RECEIPT + one DELIVERY attestation per donation, not duplicates
+  @@index([donationId])
+  @@index([status])
+  @@map("attestations")
 }
