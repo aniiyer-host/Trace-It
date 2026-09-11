@@ -42,6 +42,11 @@ apiClient.interceptors.response.use(
         case 404:
           // Not found
           break
+        case 409:
+          if (error.config?.url?.includes('attestation')) {
+            error.message = 'This attestation has already been requested.';
+          }
+          break
         case 429:
           // Rate limit exceeded
           break
@@ -99,12 +104,15 @@ export const apiService = {
 
   // Donations
   donations: {
-    getByUser: (userId: string) => get<any[]>(`/donations/user/${userId}`),
-    create: (donationData: any) => post('/donations', donationData),
+    getByUser: async (userId: string) => {
+      const data = await get<any>(`/donor/dashboard`);
+      return data.donations;
+    },
+    create: (donationData: any) => post('/donor/donate', donationData),
     getAttestation: (donationId: string) =>
-      get(`/donations/${donationId}/attestation`),
+      get(`/donor/donations/${donationId}/attestation`),
     requestAttestation: (donationId: string, type: 'receipt' | 'delivery') =>
-      post(`/donations/${donationId}/attestation`, { type }),
+      post(`/donor/donations/${donationId}/attestation`, { type }),
   },
 
   // Campaigns
@@ -119,27 +127,44 @@ export const apiService = {
 
   // Milestones
   milestones: {
-    approve: (milestoneId: string) => post(`/milestones/${milestoneId}/approve`),
+    approve: (milestoneId: string) => post(`/admin/milestones/${milestoneId}/approve`),
     reject: (milestoneId: string, reason: string) =>
-      post(`/milestones/${milestoneId}/reject`, { reason }),
-    uploadProof: (milestoneId: string, proofData: any) =>
-      post(`/milestones/${milestoneId}/proof`, proofData),
+      post(`/admin/milestones/${milestoneId}/reject`, { reason }),
+    uploadProof: async (milestoneId: string, proofData: any) => {
+      const formData = new FormData();
+      formData.append('file', proofData);
+      const response = await apiClient.post(`/charity/disburse/${milestoneId}/proof`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return response.data;
+    },
   },
 
   // Attestations
   attestations: {
     getById: (attestationId: string) => get(`/attestations/${attestationId}`),
     verify: (attestationId: string) => get(`/attestations/${attestationId}/verify`),
-    approve: (attestationId: string) => post(`/attestations/${attestationId}/approve`),
+    approve: (attestationId: string) => post(`/admin/attestations/${attestationId}/approve`),
     reject: (attestationId: string, reason: string) =>
-      post(`/attestations/${attestationId}/reject`, { reason }),
+      post(`/admin/attestations/${attestationId}/reject`, { reason }),
+  },
+
+  // Charity
+  charity: {
+    onboard: (data: {
+      organisationName: string,
+      registrationNo: string,
+      description?: string,
+      fcraNumber?: string,
+      taxExemptionNo80g?: string
+    }) => post('/charity/onboard', data),
   },
 
   // NGOs
   ngos: {
-    getPendingAttestations: () => get<any[]>('/ngos/attestations/pending'),
+    getPendingAttestations: () => get<any[]>('/charity/attestations/pending'),
     signAttestation: (donationId: string, type: 'receipt' | 'delivery') =>
-      post(`/ngos/attestations`, { donationId, type }),
+      post(`/charity/attestations`, { donationId, type: type.toUpperCase() }),
   },
 
   // Admin

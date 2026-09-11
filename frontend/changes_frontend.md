@@ -188,3 +188,58 @@ This document logs all modifications made to the frontend to complete the Phase 
 - Restructured as a strict single-column settings page with heavy typography and minimalist `bg-foreground/[0.02]` bounding boxes for editable regions.
 - Maintained all existing data connections (`useUIStore` for `user`, `setUser`, and `apiService.auth.logout()`).
 - Form inputs now fully match the high-contrast aesthetic established on the authentication pages.
+
+
+## GROUP 1
+- `apiService.milestones.uploadProof`: Changed endpoint from `/api/milestones/:id/proof` to `/api/charity/disburse/:id/proof`. Request is now sent as `multipart/form-data` with `file` field.
+- `apiService.ngos.getPendingAttestations`: Changed endpoint from `/api/ngos/attestations/pending` to `/api/charity/attestations/pending`.
+- `apiService.ngos.signAttestation`: Changed endpoint from `/api/ngos/attestations` to `/api/charity/attestations`. `type` property in payload is explicitly uppercased.
+
+## GROUP 2
+- `apiClient.interceptors.response.use`: Added specific 409 handling for attestation endpoints (URLs containing 'attestation'), setting error message to "This attestation has already been requested."
+- `apiService.donations.requestAttestation`: Changed endpoint from `POST /donations/:id/attestation` to `POST /donor/donations/:id/attestation`. Payload remains `{ type }` (lowercase).
+- `apiService.donations.getAttestation`: Changed endpoint from `GET /donations/:id/attestation` to `GET /donor/donations/:id/attestation`.
+- `apiService.attestations.approve`: Changed endpoint from `POST /attestations/:id/approve` to `POST /admin/attestations/:id/approve`.
+- `apiService.attestations.reject`: Changed endpoint from `POST /attestations/:id/reject` to `POST /admin/attestations/:id/reject`.
+- `apiService.admin` endpoints for attestations were reviewed and found to already match the required `/admin/attestations/` paths.
+
+## GROUP 3
+- `apiService.milestones.approve`: Changed endpoint from `POST /milestones/:id/approve` to `POST /admin/milestones/:id/approve`.
+- `apiService.milestones.reject`: Changed endpoint from `POST /milestones/:id/reject` to `POST /admin/milestones/:id/reject`.
+- `apiService.admin` endpoints for milestones were reviewed and found to already match the required `/admin/milestones/` paths. (Function names and parameters remained as "milestone" to respect frontend naming).
+
+## GROUP 4
+- `apiService.donations.getByUser`: Changed endpoint from `GET /donations/user/:userId` to `GET /donor/dashboard`. Added logic to extract and return `.donations` from the response to match the frontend's expected array format.
+- `apiService.donations.create`: Changed endpoint from `POST /donations` to `POST /donor/donate`.
+
+## SECTION A — Architecture Notes
+- **Single Signup Flow**: Every new user signs up through a single flow and defaults to the `DONOR` role.
+- **NGO Onboarding**: NGO registration is a separate post-signup step. A `POST /api/charity/onboard` request is used to apply.
+- **Admin Approval**: An admin must manually approve the NGO application via the admin panel. This flips the `ngoStatus` from `PENDING` to `ACTIVE`.
+- **Known Backend Bug**: The onboard endpoint fails to set `role: CHARITY`. Without this, role-based routing will break for NGOs. 
+- **Frontend Status**: The frontend `ProtectedRoute` and role-based redirect logic is already implemented. It will automatically start working once the backend bug is fixed and `user.role` is returned upon login.
+
+## Backend Team — Action Required
+
+### 1. LOGIN RESPONSE SHAPE (highest priority)
+- **Current response:** `{ message, accessToken }`
+- **Required response:** `{ token: string, user: { id, email, name, role: 'DONOR' | 'CHARITY' | 'ADMIN' } }`
+- **Why:** The frontend `ProtectedRoute` and role-based redirect are fully implemented and waiting on this. The moment this change lands, RBAC will be fully active end-to-end with no further frontend changes needed.
+
+### 2. ONBOARD ENDPOINT BUG
+- **The Bug:** The `POST /api/charity/onboard` endpoint correctly sets `organisationName`, `registrationNo`, and `ngoStatus: PENDING` — but it does not set `role: CHARITY` on the user record.
+- **Fix needed:** Add `role: UserRole.CHARITY` to the same Prisma update call inside the onboard handler.
+- **Impact:** Without this, admin approval (which filters on `role === CHARITY`) does not work, and NGO users cannot be routed to the NGO dashboard after login.
+
+### 3. SIGNUP RESPONSE INCONSISTENCY
+- **Login returns:** `{ message, accessToken }` (no user object, and token is named `accessToken`)
+- **Signup returns:** `{ message, user: { ... } }` (has user, but no token field)
+- **Required:** Both endpoints should return the same shape: `{ token: string, user: { id, email, name, role } }`
+- **Why:** The frontend auth store and interceptor are wired to expect one consistent shape from both endpoints.
+
+
+## NGO ONBOARDING UI IMPLEMENTATION
+- `frontend/src/utils/apiClient.ts`: Added `apiService.charity.onboard` mapped to `POST /charity/onboard`.
+- `frontend/src/pages/Profile.tsx`: Added Zod schema (`NgoOnboardSchema`) and an "Institution Registration" section below the personal information section. Includes a brutalist form for `organisationName`, `registrationNo`, `description`, `fcraNumber`, `taxExemptionNo80g`. The form safely handles undefined roles and conditionally renders only for DONOR or undefined roles, displaying a success message if the role is CHARITY.
+- `frontend/src/pages/DonorDashboard.tsx`: Added a subtle banner beneath the portfolio statistics prompting users ("Are you an NGO? Apply for institution status") to navigate to `/profile`. Conditionally visible only for DONOR or undefined roles.
+

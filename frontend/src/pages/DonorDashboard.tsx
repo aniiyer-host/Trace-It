@@ -190,6 +190,18 @@ export default function DonorDashboard() {
         </div>
       </div>
 
+      {/* NGO ONBOARDING BANNER */}
+      {(!('role' in user) || (user as any).role === 'DONOR') && (
+        <div className="bg-foreground/[0.02] border border-foreground/10 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <span className="text-sm font-medium text-foreground/70">
+            Are you an NGO? Apply for institution status
+          </span>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/profile">Apply Now</Link>
+          </Button>
+        </div>
+      )}
+
       {/* MAIN ZONE - JOURNEY VIEW OR EMPTY STATE */}
       {isZeroState ? (
         <div className="flex flex-col items-center text-center space-y-8 py-32 border-t border-foreground/10">
