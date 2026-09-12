@@ -24,9 +24,22 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    credentials: true,
+  }),
+);
+
 app.use(cookieParser());
-app.use(express.json({ verify: (req, res, buf) => { (req as any).rawBody = buf; } }));
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      (req as any).rawBody = buf;
+    },
+  }),
+);
 // Removed mongoSanitize as Prisma parameterizes queries, and express-mongo-sanitize crashes Express 5
 // Request ID middleware
 import { requestIdMiddleware } from "./middleware/requestIdMiddleware.js";
