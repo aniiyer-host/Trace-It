@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -17,6 +18,7 @@ export function AuthDialog({ open, onClose }: Props) {
     const [loading, setLoading] = useState(false)
     const { login } = useAuthStore()
     const { toast } = useToast()
+    const navigate = useNavigate()
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -26,6 +28,10 @@ export function AuthDialog({ open, onClose }: Props) {
             login(user, token)
             toast({ title: 'Welcome to TraceIt!', description: `Logged in as ${user.email}` })
             onClose()
+            
+            if (user.role === 'ADMIN') navigate('/admin')
+            else if (user.role === 'CHARITY') navigate('/ngo')
+            else navigate('/donor')
         } catch {
             toast({ title: 'Authentication failed', variant: 'destructive' })
         } finally {

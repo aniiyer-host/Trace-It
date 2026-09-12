@@ -461,3 +461,9 @@ This document logs all modifications made to the frontend to complete the Phase 
 - **File path**: `frontend/src/components/DonateDialog.tsx`
 - **What changed**: Added a null check before calling `shortenHash(successDonation.txHash)` in the success view.
 - **Why it changed**: `txHash` is handled asynchronously by the backend and returns as `undefined` in the initial creation payload. Passing `undefined` to `shortenHash` caused a fatal React crash (blank screen).
+
+## FIX: AUTHENTICATION REDIRECT AND NAVIGATION
+- **File path**: `frontend/src/components/AuthDialog.tsx`
+- **What changed**: Added role-based `navigate()` redirect logic following a successful login (Admin goes to `/admin`, Charity to `/ngo`, otherwise `/donor`).
+- **File path**: `frontend/src/components/NavBar.tsx`
+- **What changed**: Updated the `NAV_LINKS` filter to hide the `/donor` link for logged-in NGO and Admin users.

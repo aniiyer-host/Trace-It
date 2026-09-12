@@ -45,6 +45,7 @@ export function NavBar() {
           <nav className="flex items-center gap-1">
             {NAV_LINKS.filter(link => {
               if (link.to === '/login') return !user
+              if (link.to === '/donor') return !user || user.role === 'DONOR' || !user.role
 
               return true
             }).map(({ to, label, end }) => {
