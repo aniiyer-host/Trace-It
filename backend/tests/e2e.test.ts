@@ -738,4 +738,20 @@ describe("End-to-End Flow Tests", () => {
       });
     });
   });
+
+  describe('Public Routes - NGO Directory', () => {
+    it('GET /api/public/ngos returns array of active NGOs with stats', async () => {
+      const res = await request(app)
+        .get('/api/public/ngos')
+      expect(res.status).toBe(200)
+      expect(Array.isArray(res.body)).toBe(true)
+      if (res.body.length > 0) {
+        expect(res.body[0]).toHaveProperty('id')
+        expect(res.body[0]).toHaveProperty('name')
+        expect(res.body[0]).toHaveProperty('totalCampaigns')
+        expect(res.body[0]).toHaveProperty('activeCampaigns')
+        expect(res.body[0]).toHaveProperty('totalRaised')
+      }
+    })
+  })
 });

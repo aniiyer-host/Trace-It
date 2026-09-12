@@ -62,9 +62,11 @@ export default function NGODashboard() {
     const ngoCampaigns = campaigns.filter((c) => NGO_CAMPAIGN_IDS.includes(c.id))
 
     useEffect(() => {
-        loadCampaigns();
-        fetchPendingAttestations();
-    }, [loadCampaigns, fetchPendingAttestations]);
+        if (user && user.role === 'CHARITY') {
+            loadCampaigns();
+            fetchPendingAttestations();
+        }
+    }, [user, loadCampaigns, fetchPendingAttestations]);
 
     const handleApprove = async (ms: Milestone) => {
         setApprovingId(ms.id)

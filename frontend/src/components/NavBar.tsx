@@ -43,10 +43,21 @@ export function NavBar() {
 
           {/* Nav */}
           <nav className="flex items-center gap-1">
-            {NAV_LINKS.map(({ to, label, end }) => (
+            {NAV_LINKS.filter(link => {
+              if (link.to === '/login') return !user
+
+              return true
+            }).map(({ to, label, end }) => {
+              let finalTo = to;
+              if (to === '/ngo') {
+                // @ts-ignore - role exists on User but interface might need update
+                const isCharityOrAdmin = user && (user.role === 'CHARITY' || user.role === 'ADMIN');
+                finalTo = isCharityOrAdmin ? '/ngo' : '/ngos';
+              }
+              return (
               <NavLink
-                key={to}
-                to={to}
+                key={finalTo}
+                to={finalTo}
                 end={end}
                 className={({ isActive }) =>
                   `px-3 py-1.5 rounded-md text-sm transition-colors ${isActive
@@ -57,7 +68,7 @@ export function NavBar() {
               >
                 {label}
               </NavLink>
-            ))}
+            )})}
           </nav>
 
           <div className="flex items-center gap-3">

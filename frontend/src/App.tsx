@@ -11,6 +11,7 @@ import AdminPanel from '@/pages/AdminPanel'
 import Login from '@/pages/Login'
 import Signup from '@/pages/Signup'
 import Profile from '@/pages/Profile'
+import { NgoDirectory } from '@/pages/NgoDirectory'
 // Placeholder for attestation verification page (to be implemented)
 import AttestationVerify from '@/pages/AttestationVerify'
 import PageTransition from '@/components/PageTransition'
@@ -28,6 +29,7 @@ export default function App() {
               <Route path="/campaigns" element={<Campaigns />} />
               <Route path="/donor" element={<DonorDashboard />} />
               <Route path="/ngo" element={<NGODashboard />} />
+              <Route path="/ngos" element={<NgoDirectory />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/attestation/verify/:attestationId" element={<AttestationVerify />} />
               <Route path="/login" element={<Login />} />

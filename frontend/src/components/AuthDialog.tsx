@@ -15,7 +15,7 @@ export function AuthDialog({ open, onClose }: Props) {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
-    const { setUser } = useAuthStore()
+    const { login } = useAuthStore()
     const { toast } = useToast()
 
     const handleAuth = async (e: React.FormEvent) => {
@@ -23,7 +23,7 @@ export function AuthDialog({ open, onClose }: Props) {
         setLoading(true)
         try {
             const { user, token } = await apiService.auth.login(email, password)
-            setUser({ ...user, token })
+            login(user, token)
             toast({ title: 'Welcome to TraceIt!', description: `Logged in as ${user.email}` })
             onClose()
         } catch {

@@ -23,7 +23,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   
-  const { setUser } = useAuthStore()
+  const { login } = useAuthStore()
   const { toast } = useToast()
   const navigate = useNavigate()
 
@@ -37,7 +37,7 @@ export default function Login() {
     setLoading(true)
     try {
       const { user, token } = await apiService.auth.login(email, password)
-      setUser({ ...user, token })
+      login(user, token)
       
       setSuccess(true)
       

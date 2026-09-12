@@ -23,6 +23,7 @@ export type PaymentMethod = 'upi' | 'sol'
 export interface Campaign {
     id: string
     title: string
+    ngoId: string
     ngo: string
     description: string
     targetAmount: number   // in INR

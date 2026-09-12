@@ -20,7 +20,7 @@ function StatBlock({ value, label, prefix = '', suffix = '' }: { value: number, 
       <div className="font-bold tabular-nums tracking-tighter text-foreground" style={{ fontSize: 'clamp(3.5rem, 6vw, 6rem)', lineHeight: 1 }}>
         {prefix}{count.toLocaleString()}{suffix}
       </div>
-      <div className="text-sm md:text-base text-foreground/40 uppercase tracking-widest font-semibold">
+      <div className="text-sm md:text-base text-foreground/40 tracking-widest font-semibold">
         {label}
       </div>
     </div>
@@ -34,7 +34,7 @@ function SmallStatBlock({ value, label, prefix = '', suffix = '' }: { value: num
       <div className="text-4xl md:text-5xl font-bold tabular-nums tracking-tighter text-foreground">
         {prefix}{count.toLocaleString()}{suffix}
       </div>
-      <div className="text-xs text-foreground/40 uppercase tracking-widest font-semibold">
+      <div className="text-xs text-foreground/40 tracking-widest font-semibold">
         {label}
       </div>
     </div>
@@ -112,7 +112,7 @@ export default function DonorDashboard() {
   }, [fundedCampaigns, selectedCampaign])
 
   const summary = useMemo(() => {
-    const totalDonated = donations.reduce((sum, d) => sum + d.amount, 0)
+    const totalDonated = donations.reduce((sum, d) => sum + Number(d.amount), 0)
     const uniqueNGOs = new Set(donations.map(d => {
        const camp = campaigns.find(c => c.id === d.campaignId)
        return camp?.ngo || ''
@@ -166,7 +166,7 @@ export default function DonorDashboard() {
       <div className="space-y-16">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground/80">
-            Portfolio for {user.email.split('@')[0]}
+            Portfolio for {user?.name || user?.email?.split('@')[0] || 'Donor'}
           </h1>
           <div className="flex items-center gap-4">
              {/* 
@@ -190,17 +190,7 @@ export default function DonorDashboard() {
         </div>
       </div>
 
-      {/* NGO ONBOARDING BANNER */}
-      {(!('role' in user) || (user as any).role === 'DONOR') && (
-        <div className="bg-foreground/[0.02] border border-foreground/10 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="text-sm font-medium text-foreground/70">
-            Are you an NGO? Apply for institution status
-          </span>
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/profile">Apply Now</Link>
-          </Button>
-        </div>
-      )}
+
 
       {/* MAIN ZONE - JOURNEY VIEW OR EMPTY STATE */}
       {isZeroState ? (
@@ -228,7 +218,7 @@ export default function DonorDashboard() {
                 {fundedCampaigns.map((camp) => {
                   const isSelected = selectedCampaign?.id === camp.id
                   const campDonations = donations.filter(d => d.campaignId === camp.id)
-                  const total = campDonations.reduce((sum, d) => sum + d.amount, 0)
+                  const total = campDonations.reduce((sum, d) => sum + Number(d.amount), 0)
                   
                   const hasDelivered = campDonations.some(d => d.status === 'delivered')
                   const hasDisbursed = campDonations.some(d => d.status === 'disbursed')
@@ -341,6 +331,18 @@ export default function DonorDashboard() {
           onClose={handleCloseAttestationModal}
         />
       )}
+
+      {/* NGO ONBOARDING BANNER */}
+      {(!('role' in user) || (user as any).role === 'DONOR') && (
+        <div className="bg-foreground/[0.02] border border-foreground/10 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <span className="text-sm font-medium text-foreground/70">
+            Are you an NGO? Apply for institution status
+          </span>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/profile">Apply Now</Link>
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -349,8 +351,9 @@ export default function DonorDashboard() {
 function buildJourney(campaign: Campaign, allDonations: Donation[]) {
   const campDonations = allDonations.filter(d => d.campaignId === campaign.id)
   const hasDonation = campDonations.length > 0
-  const hasMilestones = campaign.milestones.length > 0
-  const hasProof = campaign.milestones.some(m => !!m.proofCid)
+  const milestones = campaign.milestones || []
+  const hasMilestones = milestones.length > 0
+  const hasProof = milestones.some(m => !!m.proofCid)
   const isDisbursed = campDonations.some(d => d.status === 'disbursed' || d.status === 'delivered')
   const isDelivered = campDonations.some(d => d.status === 'delivered')
 

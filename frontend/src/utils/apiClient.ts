@@ -14,9 +14,9 @@ const apiClient = axios.create({
 // Request interceptor to add auth token
 apiClient.interceptors.request.use(
   (config) => {
-    const { user } = useAuthStore.getState()
-    if (user?.token) {
-      config.headers.Authorization = `Bearer ${user.token}`
+    const { token } = useAuthStore.getState()
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
     }
     return config
   },
@@ -34,8 +34,8 @@ apiClient.interceptors.response.use(
       // Server responded with error status
       switch (error.response.status) {
         case 401:
-          // Unauthorized - clear auth state
-          useAuthStore.getState().setUser(null)
+          // Unauthorized - clear auth state completely
+          useAuthStore.getState().logout()
           break
         case 403:
           // Forbidden
@@ -107,7 +107,13 @@ export const apiService = {
   donations: {
     getByUser: async (userId: string) => {
       const data = await get<any>(`/donor/dashboard`);
-      return data.donations;
+      return (data.donations || []).map((d: any) => ({
+        ...d,
+        campaignTitle: d.project?.title,
+        campaignId: d.project?.id,
+        ngoName: d.ngo?.organisationName,
+        ngoId: d.ngo?.id,
+      }));
     },
     create: (donationData: any) => post('/donor/donate', donationData),
     getAttestation: (donationId: string) =>
@@ -180,6 +186,11 @@ export const apiService = {
       post(`/admin/milestones/${milestoneId}/approve`),
     rejectMilestone: (milestoneId: string, reason: string) =>
       post(`/admin/milestones/${milestoneId}/reject`, { reason }),
+  },
+
+  // Public
+  public: {
+    getNgos: () => get<{ id: string, name: string, totalCampaigns: number, activeCampaigns: number, totalRaised: number }[]>('/public/ngos'),
   },
 }
 

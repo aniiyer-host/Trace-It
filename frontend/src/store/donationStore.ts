@@ -18,7 +18,7 @@ interface DonationStore {
     fetchDonations: (userId: string) => Promise<void>
     addDonation: (d: Donation) => void
     setDonations: (d: Donation[]) => void
-    createDonation: (campaign: Campaign, amount: number, paymentMethod: 'upi' | 'sol', orderId: string, txHash: string, walletAddress: string) => Promise<Donation>
+    createDonation: (campaign: Campaign, amount: number, paymentMethod: 'upi' | 'sol', ngoId: string) => Promise<Donation>
 
     // ── Attestation Management ───────────────────────
     attestationStatus: Record<string, 'pending' | 'receipt_confirmed' | 'delivery_confirmed' | 'loading'>
@@ -66,9 +66,14 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
     },
     addDonation: (d) => set((s) => ({ donations: [d, ...s.donations] })),
     setDonations: (d) => set({ donations: d }),
-    createDonation: async (campaign, amount, paymentMethod, orderId, txHash, walletAddress) => {
+    createDonation: async (campaign, amount, paymentMethod, ngoId) => {
         try {
-            const donation = await apiService.donations.create({ campaignId: campaign.id, amount, paymentMethod, orderId, txHash, walletAddress }) as Donation
+            const donation = await apiService.donations.create({
+                campaignId: campaign.id,
+                ngoId: ngoId,
+                amount: amount,
+                paymentMethod: paymentMethod.toUpperCase()
+            }) as Donation
             get().addDonation(donation)
             return donation
         } catch (error) {
@@ -199,12 +204,8 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
         const campaign = campaigns.find((c) => c.id === campaignId)
         if (!campaign) throw new Error('Campaign not found')
 
-        // Generate a mock orderId and txHash
-        const orderId = `demo_order_${Date.now()}`
-        const txHash = `demo_tx_${Date.now()}`
-
         // Create the donation
-        await get().createDonation(campaign, amount, paymentMethod, orderId, txHash, 'demo_wallet_address')
+        await get().createDonation(campaign, amount, paymentMethod, (campaign as any).ngoId || (campaign as any).ngo?.id || (campaign as any).ngo)
 
         // Optionally, we could also update a milestone status here for demo purposes
         // For simplicity, we'll just create the donation.

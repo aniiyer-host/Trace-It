@@ -286,3 +286,178 @@ This document logs all modifications made to the frontend to complete the Phase 
 - **File path**: `frontend/src/components/NavBar.tsx`, `frontend/src/components/AuthDialog.tsx`, `frontend/src/pages/Profile.tsx`, `frontend/src/components/DonateDialog.tsx`
 - **What changed**: Replaced `useUIStore` with `useAuthStore` across all components that manage authentication state or require the current `user` object.
 - **Why it changed**: There was an architectural flaw where `Login.tsx` and the Dashboard pages used `useAuthStore` to set/read the user, but the `NavBar` and modal `AuthDialog` read/set from `useUIStore`. This caused a split state where logging in via `/login` left the navbar showing "Sign In", and logging in via the modal gave the dashboard "Access Denied". Unifying them all on `useAuthStore` fixes the desync.
+
+## FIX BUG A: TOKEN NOT SENT IN AXIOS INTERCEPTOR
+- **File path**: `frontend/src/utils/apiClient.ts`
+- **What changed**: Updated the request interceptor to pull the `token` from the root of `useAuthStore.getState()` instead of `user.token`.
+- **Why it changed**: The token lives at the root level of `useAuthStore`, not nested inside the `user` object. The previous code was always finding `user.token` as undefined, thus omitting the `Authorization` header and causing 401 errors.
+
+## FIX BUG B: CAMPAIGN ROW CRASH IN ADMIN PANEL
+- **File path**: `frontend/src/pages/AdminPanel.tsx`
+- **What changed**: 
+  1. Line 95: Changed `{campaign.milestones.length}` to `{(campaign.milestones || []).length}`
+  2. Line 124: Changed `c.milestones.some(...)` to `(c.milestones || []).some(...)`
+- **Why it changed**: If the backend API returns campaigns without a populated `milestones` array, `campaign.milestones` is evaluated as `undefined`. Any array operation (`.length`, `.some`) on it will crash the component with a `TypeError`. These fallbacks defensively guard against missing data.
+
+## FIX CRITICAL AUTH BUG: PERSIST SESSION ON REFRESH
+- **File path**: `frontend/src/store/authStore.ts`
+- **What changed**: Wrapped the `useAuthStore` with Zustand's `persist` middleware (from `zustand/middleware`).
+- **Why it changed**: The application had no backend `/me` endpoint to restore the `user` object from a valid session cookie, meaning page refreshes completely cleared the strictly in-memory Zustand store. By persisting `user`, `token`, and `isAuthenticated` to `localStorage` (via the `partialize` configuration), the frontend can survive page refreshes instantly.
+
+## FIX CRITICAL AUTH BUG: USE LOGIN ACTION IN COMPONENTS
+- **File path**: `frontend/src/pages/Login.tsx` and `frontend/src/components/AuthDialog.tsx`
+- **What changed**: 
+  1. Updated the destructured import from `const { setUser } = useAuthStore()` to `const { login } = useAuthStore()`.
+  2. Replaced the `setUser({ ...user, token })` call with `login(user, token)`.
+- **Why it changed**: Calling `setUser` was mistakenly injecting the access token deeply into the `user` object rather than setting it at the root of the Zustand state. Because the token wasn't in the root state, the new `persist` middleware saved `{ token: null }` to localStorage, and `apiClient`'s interceptor read `null`. Calling the proper `login` action sets both `user` and `token` correctly at the root level so they are saved to localStorage and persist across refreshes.
+
+## FIX NAVBAR: HIDE LOGIN LINK WHEN AUTHENTICATED
+- **File path**: `frontend/src/components/NavBar.tsx`
+- **What changed**: Added `.filter(...)` right before `.map(...)` on `NAV_LINKS` inside the `<nav>` render block.
+- **Why it changed**: Previously, the static `NAV_LINKS` array was blindly mapped, showing "Login", "Donor", "NGO", and "Profile" links to all users regardless of their authentication state. The new filter hides `/login` when `user` is not null, and hides the protected routes (`/donor`, `/ngo`, `/profile`) when `user` is null.
+
+## BACKEND CHANGES
+- **File path**: `backend/src/routes/public.ts`, `backend/tests/e2e.test.ts`
+- **Reason**: Added public NGO directory endpoint and e2e test for donor-facing NGO listing.
+
+## BUILD NGO DIRECTORY PAGE
+- **Files touched**:
+  1. `frontend/src/utils/apiClient.ts` (added `apiService.public.getNgos`)
+  2. `frontend/src/pages/NgoDirectory.tsx` (created new page with strict "Living Trust" aesthetics: flat cards, tabular numbers, green verified dots, clean empty/loading states)
+  3. `frontend/src/App.tsx` (added `<Route path="/ngos" element={<NgoDirectory />} />`)
+  4. `frontend/src/components/NavBar.tsx` (updated `NAV_LINKS` mapping to route `CHARITY` / `ADMIN` users to `/ngo`, and `DONOR` / unauthenticated users to `/ngos`)
+- **Nav Routing logic**: Verified that the "NGO" label navigates dynamically to either the operational dashboard or the public directory depending on `user.role`.
+- **API Call Auth**: Confirmed that `get('/public/ngos')` runs without any explicit authorization headers, as it's part of the public unauthenticated namespace in Axios.
+
+## RESTORE DONOR AND PROFILE TABS
+- **File path**: `frontend/src/components/NavBar.tsx`
+- **What changed**: Removed the condition that hid `/donor` and `/profile` when `!user`. 
+- **Why it changed**: The user clarified that those tabs should always remain visible in the Navbar. Clicking them while logged out correctly handles the access denial on the page level rather than hiding the links outright. The `/login` tab remains the only one dynamically hidden upon authentication.
+
+## FIX AUTH / LOGOUT AND PREVENT 401 SPAM
+- **File path**: `frontend/src/utils/apiClient.ts`
+- **What changed**: In the Axios response interceptor, when a 401 error is encountered, it now correctly calls `useAuthStore.getState().logout()` instead of `setUser(null)`. This ensures that an expired or invalid token is fully purged from `localStorage`.
+- **File path**: `frontend/src/pages/AdminPanel.tsx`
+- **File path**: `frontend/src/pages/NGODashboard.tsx`
+- **What changed**: Added role-based condition checks (`if (user?.role === '...')`) inside the main `useEffect` data-fetching blocks. This prevents the dashboards from firing `/api/admin/...` or `/api/charity/...` endpoints while a non-authenticated user is routing through or visiting the pages, eliminating the console spam of 401 errors.
+
+## FIX ISSUE 1: REMOVE DUPLICATE HEADER AND REFRESH
+- **File path**: `frontend/src/components/DonationHistoryTable.tsx`
+- **What changed**: Removed the duplicate `<h2>My Donation History</h2>` header and the duplicate "Refresh" button block from within the table component.
+- **Why it changed**: The parent `DonorDashboard.tsx` already renders a "Transaction History" header and handles the refresh button.
+
+## FIX ISSUE 2: MAP NESTED CAMPAIGN DATA TO FLAT FIELDS
+- **File path**: `frontend/src/utils/apiClient.ts`
+- **What changed**: Updated `apiService.donations.getByUser` to map `d.project?.title` to `campaignTitle` (and mapped other nested `project`/`ngo` fields).
+- **Why it changed**: The backend returns nested `project` and `ngo` objects for a donation, but `DonationHistoryTable.tsx` expects flattened fields like `campaignTitle`. This mapping ensures the table populates the campaign names correctly.
+
+## FIX ISSUE 2: MAP NESTED CAMPAIGN DATA TO FLAT FIELDS WITH DEFENSIVE MILESTONES
+- **File path**: `frontend/src/utils/apiClient.ts`
+- **What changed**: Updated `apiService.donations.getByUser` to map `d.project?.title` to `campaignTitle` (and mapped other nested `project`/`ngo` fields).
+- **File path**: `frontend/src/pages/DonorDashboard.tsx`
+- **What changed**: Updated `buildJourney` to use `const milestones = campaign.milestones || []`.
+- **Why it changed**: The previous mapping attempt caused a crash because successfully resolving `campaignId` unblocked `buildJourney`, which then tried to read `.length` on `campaign.milestones`. Since the public campaigns API does not return milestones, this was `undefined`. This two-part fix safely maps the data and prevents the crash.
+
+## FIX ISSUE 3: FIX AMOUNT FORMATTING AND BADGE STYLING
+- **File path**: `frontend/src/components/DonationHistoryTable.tsx`
+- **What changed**: 
+  1. Wrapped `donation.amount` in `Number()` before calling `.toLocaleString()` to fix string numbers rendering as `₹05000` instead of `₹5,000`.
+  2. Replaced the old text-heavy status badge with a minimal inline indicator (a colored 2x2 dot) mapped to Success/Pending/Failed, and capitalized the status text.
+
+## FIX ISSUE 4: REPLACE HEAVY ATTESTATION PILL WITH MINIMAL BADGE
+- **File path**: `frontend/src/components/DonationHistoryTable.tsx`
+- **What changed**: 
+  1. Replaced the `<AttestationVerificationBadge>` component call with an inline minimal button using the requested `w-2 h-2 rounded-full` dot pattern.
+  2. Removed the unused `AttestationVerificationBadge` import at the top of the file.
+  3. Green dot maps to 'Receipt Confirmed' and yellow dot maps to 'Pending NGO Confirmation'.
+
+## FIX ISSUE 5: RESTYLE TABLE ACTION BUTTONS
+- **File path**: `frontend/src/components/DonationHistoryTable.tsx`
+- **What changed**: Updated the "Verify Integrity" `<button>` and "View on Explorer" `<a>` tags. Replaced their `cn()` button classes with the requested inline minimal text link classes (`text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline transition-colors bg-transparent border-none p-0 cursor-pointer`). 
+- **Why it changed**: To clean up the visual hierarchy and prevent the secondary actions from looking like heavy primary UI buttons.
+
+## FIX ISSUE 5: MOVE TABLE ACTIONS TO CORRECT COLUMN
+- **File path**: `frontend/src/components/DonationHistoryTable.tsx`
+- **What changed**: Moved the "Verify Integrity" and "View on Explorer" links out of the Attestation column and into the final Actions column. Restyled the "Details" button to match the requested minimal text link style and grouped all three actions into a unified flex row (`<div className="flex items-center gap-3 justify-center">`). 
+- **Why it changed**: To clean up the layout and keep all table actions correctly constrained to the final table column.
+
+## FIX ISSUE 6: REPOSITION NGO ONBOARDING BANNER
+- **File path**: `frontend/src/pages/DonorDashboard.tsx`
+- **What changed**: Moved the "Are you an NGO? Apply for institution status" banner block from its original position (between the portfolio stats and the Active Deployments section) to the very bottom of the page, immediately preceding the closing wrapper `</div>`.
+- **Why it changed**: To stop the banner from interrupting the primary view of active deployments, serving instead as a footer call-to-action.
+
+## FIX ISSUE 7: FIX "NGOS BACKED" CAPITALIZATION
+- **File path**: `frontend/src/pages/DonorDashboard.tsx`
+- **What changed**: Removed the `uppercase` tailwind class from the `StatBlock` and `SmallStatBlock` components so that labels like "NGOs Backed" and "Impact Verified" render in title case rather than all-caps.
+
+## FIX ISSUE 8: FIX PORTFOLIO TITLE NAME FALLBACK
+- **File path**: `frontend/src/pages/DonorDashboard.tsx`
+- **What changed**: Updated the main portfolio `h1` tag to use `Portfolio for {user?.name || user?.email?.split('@')[0] || 'Donor'}`.
+- **Why it changed**: To correctly use the user's name if available, fallback to the email prefix, and finally fallback to "Donor" safely using optional chaining.
+
+## FIX ISSUE 9: FIX HOMEPAGE STATS CALCULATION
+- **File path**: `frontend/src/pages/Home.tsx`
+- **What changed**: 
+  1. Wrapped `c.raisedAmount` in `Number()` inside the `totalRaised` reduce function so that Prisma Decimal strings map to numbers correctly rather than concatenating as string zeroes.
+  2. Changed the hardcoded `totalDonors: "—"` to sum up `c.successDonationCount` from the campaigns array.
+  3. Removed the `isFallback={true}` prop from the "Verified Donors" `<StatBlock>` so that it correctly fires the count-up animation for the total donors.
+
+## FIX ISSUE 10: FIX DONATION PAYLOAD TO BACKEND
+- **File path**: `frontend/src/components/DonateDialog.tsx`
+- **What changed**: 
+  1. Bypassed `donationStore.createDonation` to call `apiService.donations.create` directly.
+  2. Removed `orderId`, `txHash`, and `walletAddr` from the payload sent to the backend.
+  3. Added `ngoId` extracted from `campaign.ngoId || campaign.ngo?.id`.
+  4. Formatted `paymentMethod` as uppercase (e.g., `'UPI'`) to match Prisma enum requirements.
+
+## FIX ISSUE 11: FIX DONATION STORE SIGNATURE
+- **File path**: `frontend/src/store/donationStore.ts`
+- **What changed**: 
+  1. Updated the `createDonation` signature (both interface and implementation) to take `(campaign, amount, paymentMethod, ngoId)`.
+  2. Removed `orderId`, `txHash`, and `walletAddress` arguments.
+  3. Mapped the internal API call `apiService.donations.create` to strictly match the required endpoint payload: `{ campaignId, ngoId, amount, paymentMethod: paymentMethod.toUpperCase() }`.
+  4. Updated `simulateDonationFlow` to respect the new 4-argument signature.
+
+## Backend Changes
+
+### FIX: ADD NGO ID TO PUBLIC CAMPAIGNS ENDPOINT
+- **File path**: `backend/src/routes/public.ts`
+- **What changed**: 
+  1. Updated the Prisma select query in `GET /public/campaigns` to include `id: true` inside the `ngo` relation.
+  2. Updated the response mapping to return `ngoId: campaign.ngo?.id ?? null` alongside the existing `ngoName`.
+- **Why it changed**: To provide the frontend with the `ngoId` necessary for submitting donation payloads successfully.
+
+## FIX: ADD NGO ID TO CAMPAIGN TYPE AND DONATE PAYLOAD
+- **File path**: `frontend/src/types/index.ts`
+- **What changed**: Added `ngoId: string` to the `Campaign` interface.
+- **File path**: `frontend/src/components/DonateDialog.tsx`
+- **What changed**: Removed the temporary `(campaign as any)` typecast when constructing the `ngoId` for the donation payload, now using strictly typed `campaign.ngoId` directly.
+
+## FIX: RESOLVE AMOUNT CONCATENATION BUG IN DASHBOARD
+- **File path**: `frontend/src/pages/DonorDashboard.tsx`
+- **What changed**: Wrapped `d.amount` inside `Number()` in both the `totalDonated` calculation and the ledger card `total` calculation (`campDonations.reduce`).
+- **Why it changed**: Amounts from Prisma Decimal types were being serialized as strings (e.g. `"5000"`), leading to string concatenation instead of addition. This caused the UI to show `05000...` instead of a sum.
+
+
+## FIX: REMOVE REDUNDANT STATUS DOT
+- **File path**: `frontend/src/components/DonationHistoryTable.tsx`
+- **What changed**: Removed the colored dot indicator (`●`) from the `Status` column. The status text remains intact.
+- **Why it changed**: To correctly align with the design intent, leaving the colored dot exclusively in the `Attestation` column.
+
+## FIX: ATTESTATION MODAL DETAILS
+- **File path**: `frontend/src/components/AttestationDetailsModal.tsx`
+- **What changed**: 
+  1. Removed manual numbers from the steps arrays to fix double-numbering since `<ol>` adds its own.
+  2. Moved the close `✕` button out of the header flow and into an absolute top-right position.
+  3. Corrected the blockchain language in the pending description.
+  4. Updated the footer text to remove Solana specific wording.
+
+## FIX: REPLACE FABRICATED ATTESTATION ID WITH DONATION ID
+- **File path**: `frontend/src/components/AttestationDetailsModal.tsx`
+- **What changed**: Changed the label "Attestation ID" to "Donation ID" and removed the fake `att-` prefix.
+- **Why it changed**: To provide honest tracking data by showing the actual database donation reference instead of a fabricated attestation hash.
+
+## FIX: PREVENT SUCCESS DIALOG CRASH
+- **File path**: `frontend/src/components/DonateDialog.tsx`
+- **What changed**: Added a null check before calling `shortenHash(successDonation.txHash)` in the success view.
+- **Why it changed**: `txHash` is handled asynchronously by the backend and returns as `undefined` in the initial creation payload. Passing `undefined` to `shortenHash` caused a fatal React crash (blank screen).

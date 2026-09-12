@@ -92,7 +92,7 @@ function CampaignRow({ campaign }: { campaign: Campaign }) {
                     {campaign.raisedAmount >= campaign.targetAmount ? 'Funded' : 'Active'}
                 </span>
             </td>
-            <td className="py-4 px-4 text-right tabular-nums">{campaign.milestones.length}</td>
+            <td className="py-4 px-4 text-right tabular-nums">{(campaign.milestones || []).length}</td>
             <td className="py-4 px-4 text-right tabular-nums">{formatUSD(campaign.raisedAmount)}</td>
             <td className="py-4 px-4 text-right tabular-nums font-semibold">{formatUSD(campaign.targetAmount)}</td>
         </tr>
@@ -113,15 +113,17 @@ export default function AdminPanel() {
     const [loadingId, setLoadingId] = useState<string | null>(null)
 
     useEffect(() => {
-        loadCampaigns();
-        fetchPendingAttestations();
-        fetchPendingMilestoneApprovals();
-    }, [loadCampaigns, fetchPendingAttestations, fetchPendingMilestoneApprovals]);
+        if (user && user.role === 'ADMIN') {
+            loadCampaigns();
+            fetchPendingAttestations();
+            fetchPendingMilestoneApprovals();
+        }
+    }, [user, loadCampaigns, fetchPendingAttestations, fetchPendingMilestoneApprovals]);
 
     const actionItems = useMemo(() => {
         const items: any[] = [];
         Object.entries(pendingMilestoneApprovals).forEach(([key, ms]: [string, any]) => {
-            const camp = campaigns.find(c => c.milestones.some(m => m.id === ms.id))
+            const camp = campaigns.find(c => (c.milestones || []).some(m => m.id === ms.id))
             items.push({
                 type: 'milestone',
                 id: key,

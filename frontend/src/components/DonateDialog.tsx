@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { useAuthStore } from '@/store/authStore'
 import { useDonationStore } from '@/store/donationStore'
+import { apiService } from '@/utils/apiClient'
 import { initiateUpiPayment } from '@/services/mockPayments'
 import { formatUSD, shortenHash } from '@/lib/utils'
 import type { Campaign, PaymentMethod, Donation } from '@/types'
@@ -48,18 +49,18 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
         }
         setLoading(true)
         try {
-            let orderId: string
-            let txHash: string
-
             // TODO: Replace with real Razorpay checkout
-            const result = await initiateUpiPayment(finalAmount)
-            orderId = result.orderId
-            txHash = result.razorpayPaymentId
+            await initiateUpiPayment(finalAmount)
 
-            const walletAddr = ''
-            const donation = await donationStore.createDonation(
-                campaign, finalAmount, method, orderId, txHash, walletAddr,
-            )
+            // Construct exact payload requested
+            const payload = {
+                campaignId: campaign.id,
+                ngoId: campaign.ngoId,
+                amount: finalAmount,
+                paymentMethod: method.toUpperCase(),
+            }
+            const donation = await apiService.donations.create(payload) as Donation
+            donationStore.addDonation(donation)
             setSuccessDonation(donation)
             toast({ title: `${formatUSD(finalAmount)} donation successful! 🎉` })
         } catch (_error) {
@@ -89,7 +90,9 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                     <div className="text-center space-y-4 py-4">
                         <p className="text-4xl">🎉</p>
                         <p className="font-semibold text-emerald-400">Donation Confirmed!</p>
-                        <p className="text-sm text-muted-foreground">Tx: {shortenHash(successDonation.txHash)}</p>
+                        <p className="text-sm text-muted-foreground">
+                            Tx: {successDonation.txHash ? shortenHash(successDonation.txHash) : 'Pending blockchain confirmation'}
+                        </p>
                         <a
                             href={`https://explorer.solana.com/tx/${successDonation.txHash}?cluster=devnet`}
                             target="_blank"

@@ -119,8 +119,8 @@ export default function Home() {
   }, { scope: pinRef })
 
   const impactMetrics = {
-    totalRaised: campaigns.reduce((sum, c) => sum + (c.raisedAmount || 0), 0),
-    totalDonors: "—", 
+    totalRaised: campaigns.reduce((sum, c) => sum + (Number(c.raisedAmount) || 0), 0),
+    totalDonors: campaigns.reduce((sum, c) => sum + (Number((c as any).successDonationCount) || 0), 0),
     activeCampaigns: campaigns.length,
     milestonesCompleted: campaigns.reduce((sum, c) => sum + (c.milestones || []).filter(m => m.status === 'delivered').length, 0),
   }
@@ -184,7 +184,7 @@ export default function Home() {
                 <StatBlock value={impactMetrics.totalRaised} label="Rupees Raised" prefix="₹" trigger={triggerStats} />
                 <StatBlock value={impactMetrics.activeCampaigns} label="Active Campaigns" trigger={triggerStats} />
                 <StatBlock value={impactMetrics.milestonesCompleted} label="Milestones Completed" trigger={triggerStats} />
-                <StatBlock value={impactMetrics.totalDonors} label="Verified Donors" isFallback={true} trigger={triggerStats} />
+                <StatBlock value={impactMetrics.totalDonors} label="Verified Donors" trigger={triggerStats} />
              </div>
           </div>
 

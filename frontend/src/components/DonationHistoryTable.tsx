@@ -1,7 +1,7 @@
 import { Loader2, DollarSign } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Donation } from '@/types'
-import AttestationVerificationBadge from './AttestationVerificationBadge'
+
 
 interface DonationHistoryTableProps {
   donations: Donation[]
@@ -51,31 +51,6 @@ export default function DonationHistoryTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <h2 className="text-2xl font-bold">My Donation History</h2>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={onRefresh}
-            className={cn(
-              'outline',
-              'size-sm',
-              loading && 'opacity-50',
-              'disabled:opacity-50',
-              !loading && 'hover:bg-muted/50'
-            )}
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                Refreshing...
-              </>
-            ) : (
-              'Refresh'
-            )}
-          </button>
-        </div>
-      </div>
 
       <div className="space-y-4">
         <table className="w-full">
@@ -99,47 +74,45 @@ export default function DonationHistoryTable({
                   {donation.campaignTitle}
                 </td>
                 <td className="text-center text-font-medium py-4">
-                  ₹{donation.amount.toLocaleString()}
+                  ₹{Number(donation.amount).toLocaleString()}
                 </td>
                 <td className="text-center py-4">
-                  <span
-                    className={cn(
-                      'px-2.5 py-0.5 rounded text-xs font-medium',
-                      donation.status === 'delivered'
-                        ? 'bg-green-50 text-green-600'
-                        : donation.status === 'disbursed'
-                        ? 'bg-blue-50 text-blue-600'
-                        : donation.status === 'allocated'
-                        ? 'bg-yellow-50 text-yellow-600'
-                        : 'bg-muted/50 text-muted-foreground'
-                    )}
-                  >
-                    {donation.status
-                      .split(/(?=[A-Z])/)
-                      .join(' ')
-                      .toLowerCase()}
+                  <span className="flex items-center justify-center gap-2 text-xs font-medium">
+                    {donation.status.charAt(0).toUpperCase() + donation.status.slice(1).toLowerCase()}
                   </span>
                 </td>
                 <td className="text-center py-4">
-                  <AttestationVerificationBadge
-                    attestationStatus={
-                      donation.status === 'delivered' || donation.status === 'disbursed'
-                        ? 'receipt_confirmed'
-                        : 'pending'
-                    }
+                  <button
                     onClick={() => onViewAttestation(donation.id)}
-                    size="sm"
+                    className="flex items-center justify-center gap-2 text-xs font-medium w-full hover:opacity-80"
                   >
-                  </AttestationVerificationBadge>
-                  <div className="mt-2 flex items-center gap-2 text-xs">
+                    <span
+                      className={cn(
+                        'w-2 h-2 rounded-full inline-block',
+                        donation.status === 'delivered' || donation.status === 'disbursed'
+                          ? 'bg-green-500'
+                          : 'bg-yellow-500'
+                      )}
+                    />
+                    {donation.status === 'delivered' || donation.status === 'disbursed'
+                      ? 'Receipt Confirmed'
+                      : 'Pending NGO Confirmation'}
+                  </button>
+                </td>
+                <td className="text-center text-xs py-4">
+                  {new Date(donation.createdAt).toLocaleDateString()}
+                </td>
+                <td className="text-center py-4">
+                  <div className="flex items-center gap-3 justify-center">
+                    <button
+                      onClick={() => alert(`View donation ${donation.id} details`)}
+                      className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors bg-transparent border-none p-0 cursor-pointer"
+                    >
+                      Details
+                    </button>
                     <button
                       onClick={() => onVerifyIntegrity(donation.id)}
-                      className={cn(
-                        'outline',
-                        'size-xs',
-                        'hover:bg-muted/50',
-                        'text-muted-foreground hover:text-primary'
-                      )}
+                      className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors bg-transparent border-none p-0 cursor-pointer"
                     >
                       Verify Integrity
                     </button>
@@ -147,32 +120,11 @@ export default function DonationHistoryTable({
                       href={donation.explorerUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={cn(
-                        'outline',
-                        'size-xs',
-                        'hover:bg-muted/50',
-                        'text-muted-foreground hover:text-primary'
-                      )}
+                      className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors"
                     >
                       View on Explorer
                     </a>
                   </div>
-                </td>
-                <td className="text-center text-xs py-4">
-                  {new Date(donation.createdAt).toLocaleDateString()}
-                </td>
-                <td className="text-center py-4 space-x-2">
-                  <button
-                    onClick={() => alert(`View donation ${donation.id} details`)}
-                    className={cn(
-                      'outline',
-                      'size-sm',
-                      'hover:bg-muted/50',
-                      'text-muted-foreground hover:text-primary'
-                    )}
-                  >
-                    Details
-                  </button>
                 </td>
               </tr>
             ))}
