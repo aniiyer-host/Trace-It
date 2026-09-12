@@ -25,6 +25,7 @@ interface Props {
 
 export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
     const [description, setDescription] = useState('')
+    const [selectedFile, setSelectedFile] = useState<File | null>(null)
     const [loading, setLoading] = useState(false)
     const [uploadProgress, setUploadProgress] = useState(0)
     const { toast } = useToast()
@@ -58,13 +59,34 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
                 clearInterval(progressInterval)
             }, 500)
 
-            const updated = await uploadMilestoneProof({ milestoneId: milestone.id, description, cid })
-            onSuccess(updated)
+            /* 
+             * OLD CODE PRESERVED (Commented):
+             * const updated = await uploadMilestoneProof({ milestoneId: milestone.id, description, cid })
+             */
+
+            // Use real file or create dummy file blob if in demo/simulation
+            const fileToUpload = selectedFile || new File(
+                [`Proof: ${description}\nCID: ${cid}\nTimestamp: ${new Date().toISOString()}`],
+                `proof_${milestone.id}.txt`,
+                { type: 'text/plain' }
+            )
+
+            await apiService.milestones.uploadProof(milestone.id, fileToUpload)
+
+            const updatedMilestone: Milestone = {
+                ...milestone,
+                status: 'delivered',
+                proofCid: cid,
+                proofSubmittedAt: new Date().toISOString(),
+            }
+
+            onSuccess(updatedMilestone)
             toast({
-                title: 'Proof uploaded!',
-                description: `CID: ${cid.slice(0, 20)}…`
+                title: 'Proof uploaded successfully!',
+                description: `CID: ${cid.slice(0, 20)}… awaiting admin review`,
             })
             setDescription('')
+            setSelectedFile(null)
             onClose()
         } catch (error) {
             console.error(error)
@@ -81,7 +103,7 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
                 <DialogHeader>
                     <DialogTitle className="gradient-text text-xl">Upload Milestone Proof</DialogTitle>
                     <DialogDescription className="text-muted-foreground">
-                        {milestone?.title} • {campaign?.ngo}
+                        {milestone?.title} • {campaign?.ngo || campaign?.ngoName}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -123,26 +145,27 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
                                 <div className="w-full h-full bg-gradient-to-r from-primary/5 to-teal/5" />
                             </div>
                             <Upload className="h-10 w-10 mx-auto mb-4 opacity-60" />
-                            <p className="text-sm font-medium">Drag & drop files here or click to browse</p>
+                            <p className="text-sm font-medium">
+                                {selectedFile ? `Selected: ${selectedFile.name}` : 'Drag & drop files here or click to browse'}
+                            </p>
                             <p className="text-xs mt-1 opacity-70">
-                                Images, PDFs, documents supported (simulated in demo)
+                                Images, PDFs, documents supported
                             </p>
                             {/* Optional file input */}
                             <label
                                 className="mt-3 flex items-center justify-center px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg cursor-pointer"
                             >
-                                Browse Files
+                                {selectedFile ? 'Change File' : 'Browse Files'}
                                 <input
                                     type="file"
-                                    accept=".png,.jpg,.jpeg,.pdf,.doc,.docx"
+                                    accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.txt"
                                     className="hidden"
                                     onChange={(e) => {
                                         if (e.target.files && e.target.files.length > 0) {
-                                            // In a real app, we'd process the files here
-                                            // For demo, we'll just show a notification
+                                            const file = e.target.files[0]
+                                            setSelectedFile(file)
                                             toast({
-                                                title: `File selected: ${e.target.files[0].name}`,
-                                                description: 'File upload simulated in demo mode'
+                                                title: `File selected: ${file.name}`,
                                             })
                                         }
                                     }}

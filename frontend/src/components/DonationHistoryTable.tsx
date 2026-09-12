@@ -1,7 +1,10 @@
-import { Loader2, DollarSign } from 'lucide-react'
+import { useState } from 'react'
+import { Loader2, DollarSign, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Donation } from '@/types'
-
+import { StatusBadge } from '@/components/StatusBadge'
+import { apiService } from '@/utils/apiClient'
+import { useToast } from '@/hooks/use-toast'
 
 interface DonationHistoryTableProps {
   donations: Donation[]
@@ -18,6 +21,23 @@ export default function DonationHistoryTable({
   onViewAttestation,
   onVerifyIntegrity,
 }: DonationHistoryTableProps) {
+  const [simulatingId, setSimulatingId] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  const handleSimulatePayment = async (donationId: string) => {
+    setSimulatingId(donationId)
+    try {
+      await apiService.webhooks.simulateSuccess(donationId)
+      toast({ title: 'Payment simulated successfully! Donation is now SUCCESS.' })
+      onRefresh()
+    } catch (err) {
+      console.error('Simulation error:', err)
+      toast({ title: 'Simulation failed', variant: 'destructive' })
+    } finally {
+      setSimulatingId(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -51,8 +71,7 @@ export default function DonationHistoryTable({
 
   return (
     <div className="space-y-4">
-
-      <div className="space-y-4">
+      <div className="space-y-4 overflow-x-auto">
         <table className="w-full">
           <caption className="text-left text-sm font-medium text-muted-foreground mb-2">
             Showing {donations.length} donation{donations.length === 1 ? '' : 's'}
@@ -68,66 +87,85 @@ export default function DonationHistoryTable({
             </tr>
           </thead>
           <tbody>
-            {donations.map((donation) => (
-              <tr key={donation.id} className="border-t">
-                <td className="font-medium text-left max-w-xs truncate py-4">
-                  {donation.campaignTitle}
-                </td>
-                <td className="text-center text-font-medium py-4">
-                  ₹{Number(donation.amount).toLocaleString()}
-                </td>
-                <td className="text-center py-4">
-                  <span className="flex items-center justify-center gap-2 text-xs font-medium">
-                    {donation.status.charAt(0).toUpperCase() + donation.status.slice(1).toLowerCase()}
-                  </span>
-                </td>
-                <td className="text-center py-4">
-                  <button
-                    onClick={() => onViewAttestation(donation.id)}
-                    className="flex items-center justify-center gap-2 text-xs font-medium w-full hover:opacity-80"
-                  >
-                    <span
-                      className={cn(
-                        'w-2 h-2 rounded-full inline-block',
-                        donation.status === 'delivered' || donation.status === 'disbursed'
-                          ? 'bg-green-500'
-                          : 'bg-yellow-500'
+            {donations.map((donation) => {
+              const normStatus = (donation.status || '').toString().toUpperCase()
+              const isInitiated = normStatus === 'INITIATED' || normStatus === 'PENDING'
+              const isConfirmed = normStatus === 'SUCCESS' || normStatus === 'DELIVERED' || normStatus === 'DISBURSED' || normStatus === 'ALLOCATED'
+
+              return (
+                <tr key={donation.id} className="border-t">
+                  <td className="font-medium text-left max-w-xs truncate py-4">
+                    {donation.campaignTitle || 'Campaign'}
+                  </td>
+                  <td className="text-center font-medium py-4">
+                    ₹{Number(donation.amount).toLocaleString()}
+                  </td>
+                  <td className="text-center py-4">
+                    <div className="flex flex-col items-center gap-1.5">
+                      <StatusBadge status={donation.status} size="sm" />
+                      {/* DEV ONLY SIMULATION BUTTON */}
+                      {import.meta.env.DEV && isInitiated && (
+                        <button
+                          onClick={() => handleSimulatePayment(donation.id)}
+                          disabled={simulatingId === donation.id}
+                          className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition-colors cursor-pointer"
+                        >
+                          {simulatingId === donation.id ? (
+                            <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                          ) : (
+                            <Zap className="h-2.5 w-2.5" />
+                          )}
+                          Simulate Payment
+                        </button>
                       )}
-                    />
-                    {donation.status === 'delivered' || donation.status === 'disbursed'
-                      ? 'Receipt Confirmed'
-                      : 'Pending NGO Confirmation'}
-                  </button>
-                </td>
-                <td className="text-center text-xs py-4">
-                  {new Date(donation.createdAt).toLocaleDateString()}
-                </td>
-                <td className="text-center py-4">
-                  <div className="flex items-center gap-3 justify-center">
+                    </div>
+                  </td>
+                  <td className="text-center py-4">
                     <button
-                      onClick={() => alert(`View donation ${donation.id} details`)}
-                      className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors bg-transparent border-none p-0 cursor-pointer"
+                      onClick={() => onViewAttestation(donation.id)}
+                      className="flex items-center justify-center gap-2 text-xs font-medium w-full hover:opacity-80"
                     >
-                      Details
+                      <span
+                        className={cn(
+                          'w-2 h-2 rounded-full inline-block',
+                          isConfirmed ? 'bg-green-500' : 'bg-yellow-500'
+                        )}
+                      />
+                      {isConfirmed ? 'Receipt Confirmed' : 'Pending NGO Confirmation'}
                     </button>
-                    <button
-                      onClick={() => onVerifyIntegrity(donation.id)}
-                      className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors bg-transparent border-none p-0 cursor-pointer"
-                    >
-                      Verify Integrity
-                    </button>
-                    <a
-                      href={donation.explorerUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors"
-                    >
-                      View on Explorer
-                    </a>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="text-center text-xs py-4">
+                    {new Date(donation.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="text-center py-4">
+                    <div className="flex items-center gap-3 justify-center">
+                      <button
+                        onClick={() => alert(`View donation ${donation.id} details`)}
+                        className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors bg-transparent border-none p-0 cursor-pointer"
+                      >
+                        Details
+                      </button>
+                      <button
+                        onClick={() => onVerifyIntegrity(donation.id)}
+                        className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors bg-transparent border-none p-0 cursor-pointer"
+                      >
+                        Verify Integrity
+                      </button>
+                      {donation.explorerUrl && (
+                        <a
+                          href={donation.explorerUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors"
+                        >
+                          View on Explorer
+                        </a>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

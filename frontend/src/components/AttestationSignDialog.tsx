@@ -3,7 +3,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Loader2, CheckCircle2, Shield } from 'lucide-react'
+// import { Loader2, CheckCircle2, Shield } from 'lucide-react'
+import { Loader2, Shield } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { apiService } from '@/utils/apiClient'
 import type { Donation } from '@/types'
@@ -36,7 +37,8 @@ export default function AttestationSignDialog({
 
       toast({
         title: `${attestationType === 'receipt' ? 'Receipt' : 'Delivery'} attestation signed!`,
-        description: `Attestation stored on-chain with ID: ${result?.id || 'pending-tx'}`,
+        // description: `Attestation stored on-chain with ID: ${result?.id || 'pending-tx'}`,
+        description: `Attestation stored on-chain with ID: ${(result as any)?.id || 'pending-tx'}`,
       })
 
       onAttestationSigned()

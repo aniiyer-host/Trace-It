@@ -8,6 +8,12 @@ interface AdminStore {
     campaignsLoading: boolean
     loadCampaigns: () => Promise<void>
 
+    // ── Campaign Approval Management ──────────────────
+    pendingCampaigns: any[]
+    pendingCampaignsLoading: boolean
+    fetchPendingCampaigns: () => Promise<void>
+    approveCampaign: (campaignId: string) => Promise<void>
+
     // ── Attestation Management for Admin ─────────────
     pendingAttestations: Record<string, {
         id: string;
@@ -39,9 +45,34 @@ interface AdminStore {
 export const useAdminStore = create<AdminStore>((set, get) => ({
     campaigns: [],
     campaignsLoading: false,
+    pendingCampaigns: [],
+    pendingCampaignsLoading: false,
     pendingAttestations: {},
     attestationStatus: {},
     pendingMilestoneApprovals: {},
+
+    fetchPendingCampaigns: async () => {
+        set({ pendingCampaignsLoading: true })
+        try {
+            const pending = await apiService.admin.getPendingCampaigns()
+            set({ pendingCampaigns: Array.isArray(pending) ? pending : [], pendingCampaignsLoading: false })
+        } catch (error) {
+            console.error('Failed to fetch pending campaigns:', error)
+            set({ pendingCampaignsLoading: false })
+        }
+    },
+
+    approveCampaign: async (campaignId: string) => {
+        try {
+            await apiService.admin.approveCampaign(campaignId)
+            set((state) => ({
+                pendingCampaigns: state.pendingCampaigns.filter((c: any) => c.id !== campaignId),
+            }))
+        } catch (error) {
+            console.error('Failed to approve campaign:', error)
+            throw error
+        }
+    },
 
     loadCampaigns: async () => {
         set({ campaignsLoading: true })

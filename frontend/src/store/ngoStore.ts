@@ -127,7 +127,8 @@ export const useNGOStore = create<NGOStore>((set, get) => ({
             throw error
         }
     },
-    cycleMilestoneStatus: async (milestoneId) => {
+    // cycleMilestoneStatus: async (milestoneId) => {
+    cycleMilestoneStatus: async (_milestoneId) => {
         throw new Error('Not implemented')
     },
 

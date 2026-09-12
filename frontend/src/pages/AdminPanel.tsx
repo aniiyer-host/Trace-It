@@ -107,18 +107,36 @@ export default function AdminPanel() {
     const { campaigns, loadCampaigns } = useDonationStore()
     const { 
         pendingAttestations, fetchPendingAttestations, approveAttestation, rejectAttestation, 
-        pendingMilestoneApprovals, fetchPendingMilestoneApprovals, approveMilestone, rejectMilestone 
+        pendingMilestoneApprovals, fetchPendingMilestoneApprovals, approveMilestone, rejectMilestone,
+        pendingCampaigns, fetchPendingCampaigns, approveCampaign
     } = useAdminStore()
 
     const [loadingId, setLoadingId] = useState<string | null>(null)
+    const [approvingCampId, setApprovingCampId] = useState<string | null>(null)
 
     useEffect(() => {
         if (user && user.role === 'ADMIN') {
             loadCampaigns();
             fetchPendingAttestations();
             fetchPendingMilestoneApprovals();
+            fetchPendingCampaigns();
         }
-    }, [user, loadCampaigns, fetchPendingAttestations, fetchPendingMilestoneApprovals]);
+    }, [user, loadCampaigns, fetchPendingAttestations, fetchPendingMilestoneApprovals, fetchPendingCampaigns]);
+
+    const handleApproveCampaign = async (campaignId: string) => {
+        setApprovingCampId(campaignId)
+        try {
+            await approveCampaign(campaignId)
+            await fetchPendingCampaigns()
+            await loadCampaigns()
+            toast({ title: 'Campaign approved and set to ACTIVE!' })
+        } catch (err) {
+            console.error('Approve campaign error:', err)
+            toast({ title: 'Failed to approve campaign', variant: 'destructive' })
+        } finally {
+            setApprovingCampId(null)
+        }
+    }
 
     const actionItems = useMemo(() => {
         const items: any[] = [];
@@ -150,7 +168,7 @@ export default function AdminPanel() {
 
     const totalTarget = campaigns.reduce((sum, c) => sum + c.targetAmount, 0);
     const totalRaised = campaigns.reduce((sum, c) => sum + c.raisedAmount, 0);
-    const pendingCount = actionItems.length;
+    const pendingCount = actionItems.length + pendingCampaigns.length;
 
     const handleApprove = async (id: string, type: 'milestone' | 'attestation') => {
         setLoadingId(id)
@@ -230,11 +248,72 @@ export default function AdminPanel() {
                 </div>
             </div>
 
+            {/* PENDING CAMPAIGNS APPROVAL QUEUE */}
+            <div className="space-y-6">
+                <div className="flex items-baseline justify-between">
+                    <h2 className="text-2xl font-bold tracking-tight">Pending Campaign Approvals</h2>
+                    <span className="text-sm text-muted-foreground">
+                        {pendingCampaigns.length} pending approval
+                    </span>
+                </div>
+
+                <div className="w-full overflow-x-auto">
+                    <table className="w-full text-sm text-left whitespace-nowrap">
+                        <thead>
+                            <tr className="border-b border-border/20 text-muted-foreground">
+                                <th className="py-3 px-4 font-medium w-1/3">Campaign Title</th>
+                                <th className="py-3 px-4 font-medium w-1/4">NGO</th>
+                                <th className="py-3 px-4 font-medium text-right w-1/6">Target Amount</th>
+                                <th className="py-3 px-4 font-medium text-right w-1/6">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {pendingCampaigns.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                                        No campaigns currently awaiting approval.
+                                    </td>
+                                </tr>
+                            ) : (
+                                pendingCampaigns.map((camp: any) => (
+                                    <tr key={camp.id} className="border-b border-border/10 hover:bg-muted/10 transition-colors">
+                                        <td className="py-4 px-4 font-medium">
+                                            <div>{camp.title}</div>
+                                            <div className="text-xs text-muted-foreground line-clamp-1 max-w-md">{camp.description}</div>
+                                        </td>
+                                        <td className="py-4 px-4 text-muted-foreground">
+                                            {camp.ngo?.organisationName || camp.ngoId}
+                                        </td>
+                                        <td className="py-4 px-4 text-right tabular-nums font-semibold">
+                                            {formatUSD(Number(camp.targetAmount))}
+                                        </td>
+                                        <td className="py-4 px-4 text-right">
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10"
+                                                disabled={approvingCampId === camp.id}
+                                                onClick={() => handleApproveCampaign(camp.id)}
+                                            >
+                                                {approvingCampId === camp.id ? (
+                                                    <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                                                ) : null}
+                                                Approve Campaign
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             {/* ZONE 1: Action Queue */}
             <div className="space-y-6">
                 <div className="flex items-baseline justify-between">
-                    <h2 className="text-2xl font-bold tracking-tight">Action Queue</h2>
-                    {pendingCount === 0 && <span className="text-sm text-muted-foreground">All caught up</span>}
+                    <h2 className="text-2xl font-bold tracking-tight">Milestone & Attestation Queue</h2>
+                    {actionItems.length === 0 && <span className="text-sm text-muted-foreground">All caught up</span>}
                 </div>
                 
                 <div className="w-full overflow-x-auto">

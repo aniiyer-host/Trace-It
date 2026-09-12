@@ -27,8 +27,8 @@ export default function AttestationRequestDialog({
   const handleRequestAttestation = async () => {
     setLoading(true)
     try {
-      // Request receipt attestation (NGO confirming receipt of funds)
-      await requestAttestation(donation.id, 'receipt')
+      // await requestAttestation(donation.id, 'receipt')
+      await apiService.donations.requestAttestation(donation.id, 'receipt')
       toast({
         title: 'Attestation requested successfully!',
         description: 'The NGO has been notified to confirm receipt of this donation.',

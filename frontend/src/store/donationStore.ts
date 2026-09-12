@@ -186,7 +186,8 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
             throw error
         }
     },
-    cycleMilestoneStatus: async (milestoneId) => {
+    // cycleMilestoneStatus: async (milestoneId) => {
+    cycleMilestoneStatus: async (_milestoneId) => {
         throw new Error('Not implemented')
     },
 

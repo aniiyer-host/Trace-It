@@ -67,8 +67,8 @@ app.use("/api/public", publicRoutes);
 app.use("/api/donor", donorRoutes);
 app.use("/api/charity", charityRoutes);
 app.use("/api/admin", adminRoutes);
-//RazorPay
-//app.use("/api/webhooks", webhookRoutes);
+// Webhook Routes (Razorpay & Simulation)
+app.use("/api/webhooks", webhookRoutes);
 app.use("/api/webhooks/razorpay", webhookRoutes);
 
 //debugging line starts here

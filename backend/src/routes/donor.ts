@@ -10,7 +10,7 @@ import {
   AttestationType,
 } from "../../generated/prisma/enums.js";
 import Joi from "joi";
-import { createRazorpayOrder } from "../services/donationService.js";
+import { createRazorpayOrder, completeDonationSuccess } from "../services/donationService.js";
 import { writeAuditLog } from "../services/auditLogService.js";
 import {
   generateAndStoreReceipt,
@@ -182,7 +182,23 @@ export const createDonation = async (
       ipAddress: req.ip,
     });
 
+    // Dev-only auto-transition: simulate Razorpay webhook after ~15s without needing live gateway
+    // if (process.env.NODE_ENV !== "production") {
+    if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
+      setTimeout(() => {
+        void completeDonationSuccess(donation.id, {
+          razorpayOrderId: razorpayOrder.id,
+        }).catch((err) => {
+          console.error(
+            `[DevAutoTransition] Error auto-completing donation ${donation.id}:`,
+            err,
+          );
+        });
+      }, 15000);
+    }
+
     res.status(201).json({
+      id: donation.id,
       orderId: razorpayOrder.id,
       publicDonationId: donation.publicId,
     });

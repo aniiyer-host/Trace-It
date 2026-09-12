@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, Upload, Loader2, Bell, CheckCircle } from 'lucide-react'
+// import { Upload, Bell, CheckCircle, Plus, Clock } from 'lucide-react'
+import { Upload, Bell, CheckCircle, Plus, Clock, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/authStore'
 import { StatusBadge } from '@/components/StatusBadge'
 import { MilestoneTimeline } from '@/components/MilestoneTimeline'
 import { ProofUploadDialog } from '@/components/ProofUploadDialog'
+import { CreateCampaignDialog } from '@/components/CreateCampaignDialog'
 import AttestationSignDialog from '@/components/AttestationSignDialog'
 import { useDonationStore } from '@/store/donationStore'
 import { useNGOStore } from '@/store/ngoStore'
@@ -17,10 +19,9 @@ import { useCountUp } from '@/hooks/useCountUp'
 import type { Campaign, Milestone } from '@/types'
 
 /* 
- * TODO: RBAC-pending — replace with apiService.campaigns.getByNgo(user.id) 
- * once backend branch merges 
+ * OLD CODE PRESERVED (Commented):
+ * const NGO_CAMPAIGN_IDS = ['camp-001', 'camp-002']
  */
-const NGO_CAMPAIGN_IDS = ['camp-001', 'camp-002']
 
 function AnimatedStat({ value, label, isCurrency }: { value: number, label: string, isCurrency?: boolean }) {
     const count = useCountUp(value, 1500, true)
@@ -37,16 +38,19 @@ function AnimatedStat({ value, label, isCurrency }: { value: number, label: stri
 }
 
 export default function NGODashboard() {
-    const { campaigns, loadCampaigns, updateMilestoneStatus, campaignsLoading } = useDonationStore()
+    const { campaigns: _storeCampaigns, updateMilestoneStatus } = useDonationStore()
     const { pendingAttestations, fetchPendingAttestations, attestationStatus } = useNGOStore()
     
     // selectedView: 'inbox' | campaignId
     const [selectedView, setSelectedView] = useState<string>('inbox')
     
+    const [ngoCampaigns, setNgoCampaigns] = useState<Campaign[]>([])
+    const [loadingData, setLoadingData] = useState(false)
+    const [createCampaignOpen, setCreateCampaignOpen] = useState(false)
+
     const [proofMs, setProofMs] = useState<Milestone | null>(null)
     const [proofCampaign, setProofCampaign] = useState<Campaign | null>(null)
     const [proofOpen, setProofOpen] = useState(false)
-    const [approvingId, setApprovingId] = useState<string | null>(null)
     const [attestationDialogOpen, setAttestationDialogOpen] = useState(false)
     const [selectedAttestation, setSelectedAttestation] = useState<{
         donationId: string;
@@ -59,30 +63,84 @@ export default function NGODashboard() {
     const { user } = useAuthStore()
     const navigate = useNavigate()
 
-    const ngoCampaigns = campaigns.filter((c) => NGO_CAMPAIGN_IDS.includes(c.id))
+    const fetchNgoData = useCallback(async () => {
+        setLoadingData(true)
+        try {
+            const [rawCampaigns, rawDisbursements] = await Promise.all([
+                apiService.campaigns.getByNgo(),
+                apiService.charity.getDisbursements(),
+            ])
+
+            // Stitch disbursements onto campaigns client-side as milestones
+            const stitched: Campaign[] = (rawCampaigns || []).map((camp: any) => {
+                const relatedDisbursements = (rawDisbursements || []).filter(
+                    (d: any) => d.campaignId === camp.id
+                )
+
+                const milestones: Milestone[] = relatedDisbursements.length > 0
+                    ? relatedDisbursements.map((d: any) => ({
+                        id: d.id,
+                        campaignId: camp.id,
+                        title: d.cohort?.name || `Disbursement: ₹${Number(d.amountInr).toLocaleString()}`,
+                        description: d.fieldReportUrl ? `Report attached` : `Disbursement request for ₹${Number(d.amountInr).toLocaleString()} (${d.status})`,
+                        targetAmount: Number(d.amountInr),
+                        status: (d.status === 'SETTLED' ? 'delivered' : d.status === 'APPROVED' ? 'disbursed' : 'allocated') as any,
+                        proofSubmittedAt: d.proofSubmittedAt,
+                        rejectionReason: d.rejectionReason,
+                        txHash: d.solanaTxHash,
+                    }))
+                    : (camp.milestones || [])
+
+                return {
+                    id: camp.id,
+                    title: camp.title,
+                    ngoId: camp.ngoId,
+                    ngo: camp.ngo?.organisationName || camp.ngo || 'My NGO',
+                    ngoName: camp.ngo?.organisationName || camp.ngo || 'My NGO',
+                    description: camp.description,
+                    targetAmount: Number(camp.targetAmount),
+                    raisedAmount: Number(camp.raisedAmount || 0),
+                    status: camp.status,
+                    milestones,
+                    category: camp.category || 'education',
+                }
+            })
+
+            setNgoCampaigns(stitched)
+        } catch (err) {
+            console.error('Failed to fetch NGO campaigns/disbursements:', err)
+        } finally {
+            setLoadingData(false)
+        }
+    }, [])
 
     useEffect(() => {
         if (user && user.role === 'CHARITY') {
-            loadCampaigns();
-            fetchPendingAttestations();
+            fetchNgoData()
+            fetchPendingAttestations()
         }
-    }, [user, loadCampaigns, fetchPendingAttestations]);
+    }, [user, fetchNgoData, fetchPendingAttestations])
 
-    const handleApprove = async (ms: Milestone) => {
-        setApprovingId(ms.id)
-        try {
-            await apiService.milestones.approve(ms.id)
-            updateMilestoneStatus(ms.id, 'delivered')
-            toast({ title: `Milestone "${ms.title}" approved & funds released!` })
-        } catch {
-            toast({ title: 'Approval failed', variant: 'destructive' })
-        } finally {
-            setApprovingId(null)
-        }
-    }
+    /* 
+     * OLD CODE PRESERVED (Commented):
+     * The old handleApprove called the admin-only endpoint from NGO dashboard, causing 403 Forbidden.
+     * const handleApproveOld = async (ms: Milestone) => {
+     *     setApprovingId(ms.id)
+     *     try {
+     *         await apiService.milestones.approve(ms.id)
+     *         updateMilestoneStatus(ms.id, 'delivered')
+     *         toast({ title: `Milestone "${ms.title}" approved & funds released!` })
+     *     } catch {
+     *         toast({ title: 'Approval failed', variant: 'destructive' })
+     *     } finally {
+     *         setApprovingId(null)
+     *     }
+     * }
+     */
 
     const handleProofSuccess = (ms: Milestone) => {
         updateMilestoneStatus(ms.id, ms.status)
+        fetchNgoData()
         toast({ title: 'Proof submitted — awaiting admin approval' })
     }
 
@@ -99,7 +157,7 @@ export default function NGODashboard() {
 
     // Collect all pending milestone actions across NGO campaigns
     const pendingMilestoneActions = ngoCampaigns.flatMap(camp => {
-        return camp.milestones
+        return (camp.milestones || [])
           .filter(m => m.status === 'allocated' || m.status === 'disbursed' || m.status === 'delivered')
           .map(m => ({ campaign: camp, milestone: m }))
     })
@@ -121,6 +179,16 @@ export default function NGODashboard() {
             
             {/* LEFT PANE - Typographic Sidebar (Mobile Sticky Ribbon) */}
             <div className="md:w-64 shrink-0 md:pr-8 lg:pr-12 border-b md:border-b-0 border-foreground/10 md:border-none sticky top-[64px] md:top-32 z-40 bg-background md:bg-transparent pt-4 md:pt-0">
+                <div className="mb-4 hidden md:block">
+                    <Button
+                        onClick={() => setCreateCampaignOpen(true)}
+                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center gap-2"
+                        size="sm"
+                    >
+                        <Plus className="h-4 w-4" /> Create Campaign
+                    </Button>
+                </div>
+
                 <div className="flex md:flex-col overflow-x-auto snap-x snap-mandatory hide-scrollbar [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     <button
                         onClick={() => setSelectedView('inbox')}
@@ -172,9 +240,20 @@ export default function NGODashboard() {
                             transition={{ duration: 0.3 }}
                             className="space-y-12"
                         >
-                            <div>
-                                <h1 className="text-4xl lg:text-5xl font-bold tracking-tighter">Action Inbox</h1>
-                                <p className="text-foreground/50 mt-2">Global tasks requiring your signature or proof upload.</p>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div>
+                                    <h1 className="text-4xl lg:text-5xl font-bold tracking-tighter flex items-center gap-3">
+                                        Action Inbox
+                                        {loadingData && <Loader2 className="h-6 w-6 animate-spin text-foreground/40" />}
+                                    </h1>
+                                    <p className="text-foreground/50 mt-2">Global tasks requiring your signature or proof upload.</p>
+                                </div>
+                                <Button
+                                    onClick={() => setCreateCampaignOpen(true)}
+                                    className="sm:hidden bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2"
+                                >
+                                    <Plus className="h-4 w-4" /> Create Campaign
+                                </Button>
                             </div>
 
                             <div className="space-y-4">
@@ -233,18 +312,12 @@ export default function NGODashboard() {
                                                         <Upload className="mr-2 h-4 w-4" /> Upload Proof
                                                     </Button>
                                                 )}
+                                                {/* Fixed: NGO view for disbursed milestones - does not call admin endpoint */}
                                                 {milestone.status === 'disbursed' && (
-                                                    <Button
-                                                        size="lg"
-                                                        className="w-full bg-foreground text-background hover:bg-foreground/90"
-                                                        disabled={approvingId === milestone.id}
-                                                        onClick={() => handleApprove(milestone)}
-                                                    >
-                                                        {approvingId === milestone.id
-                                                            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                            : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                                                        Admin Approve & Release
-                                                    </Button>
+                                                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-foreground/5 border border-foreground/10 text-sm font-medium text-foreground/70">
+                                                        <Clock className="h-4 w-4 text-primary animate-pulse" />
+                                                        Awaiting Admin Release
+                                                    </div>
                                                 )}
                                                 {milestone.status === 'delivered' && attestationStatus[`don-${milestone.id}`] !== 'confirmed' && (
                                                     <Button
@@ -319,6 +392,14 @@ export default function NGODashboard() {
             </div>
 
             {/* MODALS */}
+            <CreateCampaignDialog
+                open={createCampaignOpen}
+                onClose={() => setCreateCampaignOpen(false)}
+                onSuccess={() => {
+                    fetchNgoData()
+                }}
+            />
+
             <ProofUploadDialog
                 data={proofMs && proofCampaign ? { milestone: proofMs, campaign: proofCampaign } : null}
                 open={proofOpen}

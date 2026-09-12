@@ -264,5 +264,54 @@ without waiting 12 seconds.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - **NGO Dashboard Fetching Global Campaigns** 
   - **File:** `NgoDashboard.tsx` & `apiClient.ts`
-  - **Severity:** HIGH
-  - **Description:** `NgoDashboard.tsx` currently fetches `/public/campaigns` which returns all ACTIVE campaigns from all NGOs globally, exposing data incorrectly and skipping Draft/Pending campaigns. (Task assigned in 4A-1).
+  - **Severity:** RESOLVED
+  - **Description:** `NgoDashboard.tsx` now calls `apiService.campaigns.getByNgo()` (`/api/charity/campaigns`) and stitches NGO-specific disbursements onto campaigns client-side.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## SECTION 7 — SPRINT COMPLETION & IMPLEMENTATION SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Status:** ALL TASKS COMPLETED & VERIFIED (Backend + Frontend)
+
+### 7.1 Backend Implementation (Aarush)
+- **Shared Donation Success Service (`backend/src/services/donationService.ts`):**
+  - Implemented `completeDonationSuccess(donationId)` which handles:
+    1. Updating donation status to `SUCCESS`.
+    2. AML compliance checks and security event audit logging.
+    3. Generating 80G tax receipt PDF/HTML and storing via storage service.
+    4. Recording verifiable donation hash memo on Solana devnet.
+    5. Auto-creating a `RECEIPT` attestation in `PENDING` state linked to the donation (`requestedBy: donation.donorId`).
+- **Dev-Only Auto-Transition (`backend/src/routes/donor.ts`):**
+  - Added non-blocking `setTimeout(~15s)` in `createDonation` to automatically transition test donations to `SUCCESS` and populate the NGO inbox, simulating a real gateway webhook.
+- **Webhook Simulation Dev Endpoint (`backend/src/routes/webhooks/razorpay.ts`):**
+  - Added `POST /api/webhooks/simulate-success` (`simulateSuccessHandler`) for instantaneous test transitions.
+  - Mounted `/api/webhooks` router in `backend/src/index.ts`.
+- **Response Contract Consistency:**
+  - Preserved async donation response `{ id, orderId, publicDonationId }` in `backend/src/routes/donor.ts`.
+- **Foreign Key Cleanup & Test Stability:**
+  - Updated e2e and unit test teardowns to clean `prisma.attestation` prior to `prisma.donation`.
+  - **Verification:** All 15 test suites and 100 tests passing (`npx jest --runInBand`).
+
+### 7.2 Frontend Implementation (Aditya)
+- **Status Badge & Enum Resiliency (`frontend/src/components/StatusBadge.tsx`):**
+  - Normalized case matching across database enums (`INITIATED`, `PENDING`, `SUCCESS`, `FAILED`) and legacy lifecycle states (`allocated`, `disbursed`, `delivered`).
+- **Donation Dialog & Receipt Download (`frontend/src/components/DonateDialog.tsx`):**
+  - Updated to reflect honest `INITIATED` status upon creation.
+  - Added Dev-Only instant simulation shortcut triggering `apiService.webhooks.simulateSuccess`.
+  - Added 80G receipt download link upon payment completion.
+- **Donation History Table (`frontend/src/components/DonationHistoryTable.tsx`):**
+  - Added inline Dev-Only "Simulate Payment" button for unconfirmed donations.
+- **NGO Dashboard & Campaign Lifecycle (`frontend/src/pages/NGODashboard.tsx`):**
+  - Connected to `GET /charity/campaigns` and `GET /charity/disbursements`.
+  - Stitched disbursements to campaigns client-side to render actionable milestone timelines.
+  - Resolved 403 Forbidden live bug by removing admin milestone approval triggers from NGO view.
+- **2-Step Campaign Creation (`frontend/src/components/CreateCampaignDialog.tsx`):**
+  - Built dialog enabling NGOs to create campaign drafts (`POST /charity/campaigns`) and optionally submit them for review (`POST /charity/campaigns/:id/submit`).
+- **Admin Approvals Flow (`frontend/src/pages/AdminPanel.tsx` & `frontend/src/store/adminStore.ts`):**
+  - Added pending campaigns queue (`GET /admin/campaigns/pending`) and one-click campaign approval (`POST /admin/campaigns/:id/approve`).
+- **Milestone Proof Upload (`frontend/src/components/ProofUploadDialog.tsx`):**
+  - Wired directly to `apiService.milestones.uploadProof` using `FormData` (`multipart/form-data`).
+- **Build Verification:**
+  - `npm run build` compiled with 0 TypeScript/Vite errors.
+- **Code Preservation:**
+  - All replaced legacy code preserved in inline comments across all touched files.

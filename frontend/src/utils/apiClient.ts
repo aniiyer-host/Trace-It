@@ -105,7 +105,8 @@ export const apiService = {
 
   // Donations
   donations: {
-    getByUser: async (userId: string) => {
+    // getByUser: async (userId: string) => {
+    getByUser: async (_userId?: string) => {
       const data = await get<any>(`/donor/dashboard`);
       return (data.donations || []).map((d: any) => ({
         ...d,
@@ -129,7 +130,12 @@ export const apiService = {
       return Array.isArray(res) ? res : (res?.data || []);
     },
     getById: (campaignId: string) => get(`/public/campaigns/${campaignId}`),
+    getByNgo: async () => {
+      const res = await get<any>('/charity/campaigns');
+      return Array.isArray(res) ? res : (res?.data || []);
+    },
     create: (campaignData: any) => post('/charity/campaigns', campaignData),
+    submit: (campaignId: string) => post(`/charity/campaigns/${campaignId}/submit`),
   },
 
   // Milestones
@@ -165,6 +171,10 @@ export const apiService = {
       fcraNumber?: string,
       taxExemptionNo80g?: string
     }) => post('/charity/onboard', data),
+    getDisbursements: async () => {
+      const res = await get<any>('/charity/disbursements');
+      return Array.isArray(res) ? res : (res?.data || []);
+    },
   },
 
   // NGOs
@@ -176,6 +186,9 @@ export const apiService = {
 
   // Admin
   admin: {
+    getPendingCampaigns: () => get<any[]>('/admin/campaigns/pending'),
+    approveCampaign: (campaignId: string) =>
+      post(`/admin/campaigns/${campaignId}/approve`),
     getPendingAttestations: () => get<any[]>('/admin/attestations/pending'),
     getPendingMilestones: () => get<any[]>('/admin/milestones/pending'),
     approveAttestation: (attestationId: string) =>
@@ -186,6 +199,12 @@ export const apiService = {
       post(`/admin/milestones/${milestoneId}/approve`),
     rejectMilestone: (milestoneId: string, reason: string) =>
       post(`/admin/milestones/${milestoneId}/reject`, { reason }),
+  },
+
+  // Webhooks / Simulation
+  webhooks: {
+    simulateSuccess: (donationId: string) =>
+      post<{ success: boolean; message: string }>('/webhooks/simulate-success', { donationId }),
   },
 
   // Public

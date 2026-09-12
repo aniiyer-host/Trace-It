@@ -26,9 +26,8 @@ export default function AttestationVerificationDialog({
   const verifyAttestation = async () => {
     setVerifying(true)
     try {
-      // In a real app, this would verify the attestation on-chain
-      // For demo, we'll just fetch the attestation data
-      const result = await getAttestationByDonationId(donation.id, 'receipt')
+      // const result = await getAttestationByDonationId(donation.id, 'receipt')
+      const result = await apiService.donations.getAttestation(donation.id)
       setAttestation(result)
       toast({
         title: 'Attestation verified successfully!',

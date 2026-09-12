@@ -27,7 +27,8 @@ export default function MilestoneApprovalDialog({
   const handleApproveMilestone = async () => {
     setLoading(true)
     try {
-      await approveMilestone(milestone.id)
+      // await approveMilestone(milestone.id)
+      await apiService.admin.approveMilestone(milestone.id)
       toast({
         title: 'Milestone approved successfully!',
         description: `Funds for "${milestone.title}" have been approved for disbursement.`,

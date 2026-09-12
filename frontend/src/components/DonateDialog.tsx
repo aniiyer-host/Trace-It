@@ -26,13 +26,49 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
     const [custom, setCustom] = useState('')
     const method: PaymentMethod = 'upi'
     const [loading, setLoading] = useState(false)
-    const [successDonation, setSuccessDonation] = useState<Donation | null>(null)
+    const [createdDonation, setCreatedDonation] = useState<Donation | null>(null)
+    const [isSimulating, setIsSimulating] = useState(false)
 
     const { user } = useAuthStore()
     const donationStore = useDonationStore()
     const { toast } = useToast()
 
     const finalAmount = custom ? parseInt(custom, 10) || 0 : amount
+
+    /* --- OLD DONATE LOGIC (preserved/commented) ---
+    const handleDonateOld = async () => {
+        if (!campaign) {
+            toast({ title: 'Select a campaign', variant: 'destructive' })
+            return
+        }
+        if (!user) {
+            toast({ title: 'Sign in to donate', variant: 'destructive' })
+            return
+        }
+        if (finalAmount < 1) {
+            toast({ title: 'Enter a valid amount', variant: 'destructive' })
+            return
+        }
+        setLoading(true)
+        try {
+            await initiateUpiPayment(finalAmount)
+            const payload = {
+                campaignId: campaign.id,
+                ngoId: campaign.ngoId,
+                amount: finalAmount,
+                paymentMethod: method.toUpperCase(),
+            }
+            const donation = await apiService.donations.create(payload) as Donation
+            donationStore.addDonation(donation)
+            toast({ title: `${formatUSD(finalAmount)} donation successful! 🎉` })
+        } catch (_error) {
+            console.error(_error)
+            toast({ title: 'Donation failed', variant: 'destructive' })
+        } finally {
+            setLoading(false)
+        }
+    }
+    ------------------------------------------------ */
 
     const handleDonate = async () => {
         if (!campaign) {
@@ -49,20 +85,33 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
         }
         setLoading(true)
         try {
-            // TODO: Replace with real Razorpay checkout
             await initiateUpiPayment(finalAmount)
 
-            // Construct exact payload requested
             const payload = {
                 campaignId: campaign.id,
                 ngoId: campaign.ngoId,
                 amount: finalAmount,
                 paymentMethod: method.toUpperCase(),
             }
-            const donation = await apiService.donations.create(payload) as Donation
-            donationStore.addDonation(donation)
-            setSuccessDonation(donation)
-            toast({ title: `${formatUSD(finalAmount)} donation successful! 🎉` })
+            const res = await apiService.donations.create(payload) as any
+            
+            const newDonation: Donation = {
+                id: res.id || `don-${Date.now()}`,
+                publicId: res.publicDonationId,
+                campaignId: campaign.id,
+                campaignTitle: campaign.title,
+                amount: finalAmount,
+                paymentMethod: method,
+                orderId: res.orderId || `order_${Date.now()}`,
+                status: 'INITIATED',
+                createdAt: new Date().toISOString(),
+                walletAddress: 'donor_wallet',
+                explorerUrl: `https://explorer.solana.com/?cluster=devnet`
+            }
+
+            donationStore.addDonation(newDonation)
+            setCreatedDonation(newDonation)
+            toast({ title: `Donation initiated for ${formatUSD(finalAmount)}!` })
         } catch (_error) {
             console.error(_error)
             toast({ title: 'Donation failed', variant: 'destructive' })
@@ -71,8 +120,28 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
         }
     }
 
+    const handleSimulatePayment = async () => {
+        if (!createdDonation) return
+        setIsSimulating(true)
+        try {
+            await apiService.webhooks.simulateSuccess(createdDonation.id)
+            const updated: Donation = {
+                ...createdDonation,
+                status: 'SUCCESS',
+                txHash: `sim_tx_${createdDonation.id.slice(0, 8)}`,
+            }
+            setCreatedDonation(updated)
+            toast({ title: 'Payment confirmed & attestation generated! 🎉' })
+        } catch (err) {
+            console.error('Simulation error:', err)
+            toast({ title: 'Simulation failed', variant: 'destructive' })
+        } finally {
+            setIsSimulating(false)
+        }
+    }
+
     const handleClose = () => {
-        setSuccessDonation(null)
+        setCreatedDonation(null)
         setCustom('')
         setAmount(50)
         onClose()
@@ -86,48 +155,79 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                     <DialogDescription>{campaign?.title}</DialogDescription>
                 </DialogHeader>
 
-                {successDonation ? (
+                {createdDonation ? (
                     <div className="text-center space-y-4 py-4">
-                        <p className="text-4xl">🎉</p>
-                        <p className="font-semibold text-emerald-400">Donation Confirmed!</p>
-                        <p className="text-sm text-muted-foreground">
-                            Tx: {successDonation.txHash ? shortenHash(successDonation.txHash) : 'Pending blockchain confirmation'}
-                        </p>
-                        <a
-                            href={`https://explorer.solana.com/tx/${successDonation.txHash}?cluster=devnet`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-primary text-sm hover:underline"
-                        >
-                            <ExternalLink className="h-3 w-3" /> View on Solana Explorer
-                        </a>
+                        {createdDonation.status === 'SUCCESS' ? (
+                            <>
+                                <p className="text-4xl">🎉</p>
+                                <p className="font-semibold text-emerald-400">Payment Confirmed!</p>
+                                <p className="text-sm text-muted-foreground">
+                                    Tx: {createdDonation.txHash ? shortenHash(createdDonation.txHash) : 'Recorded on Solana devnet'}
+                                </p>
+                                {createdDonation.txHash && (
+                                    <a
+                                        href={`https://explorer.solana.com/tx/${createdDonation.txHash}?cluster=devnet`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-primary text-sm hover:underline"
+                                    >
+                                        <ExternalLink className="h-3 w-3" /> View on Solana Explorer
+                                    </a>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                <div className="inline-flex p-3 rounded-full bg-primary/10 text-primary animate-pulse">
+                                    <Loader2 className="h-8 w-8 animate-spin" />
+                                </div>
+                                <p className="font-semibold text-primary">Payment Initiated</p>
+                                <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                                    Awaiting gateway webhook confirmation (~15 seconds).
+                                </p>
+                                {import.meta.env.DEV && (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={isSimulating}
+                                        onClick={handleSimulatePayment}
+                                        className="text-xs bg-muted/40 hover:bg-primary/20 border-primary/40 text-primary"
+                                    >
+                                        {isSimulating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                                        ⚡ Dev: Instant Simulate Payment
+                                    </Button>
+                                )}
+                            </>
+                        )}
 
-                        {successDonation.paymentMethod === 'upi' && (
-                            <div className="mt-4 p-4 rounded-lg border border-border bg-muted/20 text-left space-y-2 text-sm">
-                                <h3 className="font-semibold border-b border-border/50 pb-2 mb-2">Donation Receipt</h3>
-                                <div className="flex justify-between"><span className="text-muted-foreground">Date:</span> <span>{new Date(successDonation.createdAt).toLocaleString()}</span></div>
-                                <div className="flex justify-between"><span className="text-muted-foreground">Order ID:</span> <span className="font-mono text-xs">{successDonation.orderId}</span></div>
-                                <div className="flex justify-between"><span className="text-muted-foreground">Campaign:</span> <span className="truncate ml-4">{successDonation.campaignTitle}</span></div>
-                                <div className="flex justify-between"><span className="text-muted-foreground">Amount:</span> <span className="font-semibold">{formatUSD(successDonation.amount)}</span></div>
-                                <div className="flex justify-between"><span className="text-muted-foreground">Payment:</span> <span className="uppercase">{successDonation.paymentMethod}</span></div>
+                        <div className="mt-4 p-4 rounded-lg border border-border bg-muted/20 text-left space-y-2 text-sm">
+                            <h3 className="font-semibold border-b border-border/50 pb-2 mb-2">
+                                {createdDonation.status === 'SUCCESS' ? 'Donation Receipt' : 'Order Details'}
+                            </h3>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Date:</span> <span>{new Date(createdDonation.createdAt).toLocaleString()}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Order ID:</span> <span className="font-mono text-xs">{createdDonation.orderId}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Campaign:</span> <span className="truncate ml-4">{campaign?.title || createdDonation.campaignTitle}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Amount:</span> <span className="font-semibold">{formatUSD(createdDonation.amount)}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Status:</span> <span className="font-medium uppercase">{createdDonation.status}</span></div>
+
+                            {createdDonation.status === 'SUCCESS' && (
                                 <Button
                                     variant="outline"
                                     className="w-full mt-4"
                                     onClick={() => {
-                                        const text = `TRACE-IT DONATION RECEIPT\n--------------------------\nDate: ${new Date(successDonation.createdAt).toLocaleString()}\nOrder ID: ${successDonation.orderId}\nCampaign: ${successDonation.campaignTitle}\nAmount: ${formatUSD(successDonation.amount)}\nPayment Method: ${successDonation.paymentMethod.toUpperCase()}\nSolana TX: ${successDonation.txHash}\n\nThank you for your contribution!`;
+                                        const text = `TRACE-IT DONATION RECEIPT\n--------------------------\nDate: ${new Date(createdDonation.createdAt).toLocaleString()}\nOrder ID: ${createdDonation.orderId}\nCampaign: ${campaign?.title || createdDonation.campaignTitle}\nAmount: ${formatUSD(createdDonation.amount)}\nPayment Method: ${createdDonation.paymentMethod.toUpperCase()}\nStatus: SUCCESS\n\nThank you for your contribution!`;
                                         const blob = new Blob([text], { type: 'text/plain' });
                                         const url = URL.createObjectURL(blob);
                                         const a = document.createElement('a');
                                         a.href = url;
-                                        a.download = `Receipt_${successDonation.orderId}.txt`;
+                                        a.download = `Receipt_${createdDonation.orderId}.txt`;
                                         a.click();
                                         URL.revokeObjectURL(url);
                                     }}
                                 >
                                     Download Receipt
                                 </Button>
-                            </div>
-                        )}
+                            )}
+                        </div>
 
                         <Button className="w-full" onClick={handleClose}>Done</Button>
                     </div>

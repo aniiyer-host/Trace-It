@@ -3,10 +3,11 @@ import { Request, Response, NextFunction, Router } from 'express';
 import { prisma } from '../../db/prisma.js';
 import crypto from 'crypto';
 import { writeAuditLog } from '../../services/auditLogService.js';
-import { AuditActorType } from '../../../generated/prisma/enums.js';
+import { AuditActorType, AttestationType, AttestationStatus } from '../../../generated/prisma/enums.js';
 import { generateAndStoreReceipt } from '../../services/receiptService.js';
 import { notifyAdmin } from '../../services/emailService.js';
 import { getBlockchainService } from '../../services/blockchainInstance.js';
+import { completeDonationSuccess } from '../../services/donationService.js';
 
 interface RawRequest extends Request {
   rawBody: Buffer;
@@ -207,6 +208,27 @@ export const razorpayWebhookHandler = async (
             ipAddress: req.ip,
           });
         });
+
+      // Auto-create RECEIPT attestation for NGO action inbox
+      try {
+        await prisma.attestation.upsert({
+          where: {
+            donationId_type: {
+              donationId: donation.id,
+              type: AttestationType.RECEIPT,
+            },
+          },
+          update: {},
+          create: {
+            donationId: donation.id,
+            type: AttestationType.RECEIPT,
+            status: AttestationStatus.PENDING,
+            requestedBy: donation.donorId,
+          },
+        });
+      } catch (attError) {
+        console.error(`Failed to auto-create attestation for donation ${donation.id}:`, attError);
+      }
 
       // BLOCKCHAIN INTEGRATION: Record donation on-chain after successful payment
       try {
@@ -485,6 +507,52 @@ async function addToBlockchainRetryQueue(data: {
   }
 }
 
+// Dev-only endpoint to simulate payment webhook success and trigger attestation + receipt generation
+export const simulateSuccessHandler = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ error: 'Simulation is disabled in production' });
+    }
+
+    let donationId: string | undefined;
+    if (typeof req.body === 'string' || Buffer.isBuffer(req.body)) {
+      try {
+        const parsed = JSON.parse(req.body.toString());
+        donationId = parsed.donationId;
+      } catch {
+        donationId = undefined;
+      }
+    } else if (req.body && typeof req.body === 'object') {
+      donationId = req.body.donationId;
+    }
+
+    if (!donationId) {
+      return res.status(400).json({ error: 'donationId is required' });
+    }
+
+    const donation = await completeDonationSuccess(donationId, {
+      ipAddress: req.ip,
+      actorType: AuditActorType.SYSTEM,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Donation transitioned to SUCCESS',
+      donation: {
+        id: donation.id,
+        status: donation.status,
+        razorpayPaymentId: donation.razorpayPaymentId,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Router setup
 const razorpayRouter = Router();
 
@@ -494,5 +562,6 @@ razorpayRouter.use(express.raw({ type: '*/*' }));
 
 razorpayRouter.post('/', razorpayWebhookHandler);
 razorpayRouter.post('/refund', razorpayRefundWebhookHandler);
+razorpayRouter.post('/simulate-success', simulateSuccessHandler);
 
 export default razorpayRouter;
