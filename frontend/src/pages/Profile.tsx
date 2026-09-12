@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { apiService } from '@/utils/apiClient'
-import { useUIStore } from '@/store/uiStore'
+import { useAuthStore } from '@/store/authStore'
 
 const ProfileFormSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters"),
@@ -24,7 +24,7 @@ const NgoOnboardSchema = z.object({
 })
 
 export default function Profile() {
-    const { user, setUser } = useUIStore()
+    const { user, setUser } = useAuthStore()
     const { toast } = useToast()
     const navigate = useNavigate()
 

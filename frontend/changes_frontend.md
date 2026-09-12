@@ -276,3 +276,13 @@ This document logs all modifications made to the frontend to complete the Phase 
 - **File path**: `frontend/src/pages/Home.tsx`
 - **What changed**: Added `(c.milestones || [])` fallback before calling `.filter()` and `(c.raisedAmount || 0)` when calculating `impactMetrics`.
 - **Why it changed**: The backend was returning some campaigns without a `milestones` array (likely unpopulated in the DB), causing a `TypeError: Cannot read properties of undefined (reading 'filter')` that crashed the entire Home component. Adding the fallback array allows it to render safely.
+
+## FIX BUG 3 (REDO): ADD WITHCREDENTIALS TO AXIOS
+- **File path**: `frontend/src/utils/apiClient.ts`
+- **What changed**: Added `withCredentials: true` to the `axios.create` configuration object.
+- **Why it changed**: This ensures cookies (like refresh tokens) are included in cross-origin requests to the backend. The backend CORS configuration has now been updated to support `credentials: true` and a specific origin.
+
+## FIX BUG 1 + 2: RESOLVE DUAL STORE MISMATCH
+- **File path**: `frontend/src/components/NavBar.tsx`, `frontend/src/components/AuthDialog.tsx`, `frontend/src/pages/Profile.tsx`, `frontend/src/components/DonateDialog.tsx`
+- **What changed**: Replaced `useUIStore` with `useAuthStore` across all components that manage authentication state or require the current `user` object.
+- **Why it changed**: There was an architectural flaw where `Login.tsx` and the Dashboard pages used `useAuthStore` to set/read the user, but the `NavBar` and modal `AuthDialog` read/set from `useUIStore`. This caused a split state where logging in via `/login` left the navbar showing "Sign In", and logging in via the modal gave the dashboard "Access Denied". Unifying them all on `useAuthStore` fixes the desync.

@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import { useUIStore } from '@/store/uiStore'
+import { useAuthStore } from '@/store/authStore'
 import { apiService } from '@/utils/apiClient'
 
 interface Props {
@@ -15,7 +15,7 @@ export function AuthDialog({ open, onClose }: Props) {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
-    const { setUser } = useUIStore()
+    const { setUser } = useAuthStore()
     const { toast } = useToast()
 
     const handleAuth = async (e: React.FormEvent) => {

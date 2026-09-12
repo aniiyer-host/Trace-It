@@ -5,7 +5,7 @@ import { GitBranch, UserCircle, LogOut, Bell } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AuthDialog } from '@/components/AuthDialog'
 import { ModeToggle } from '@/components/ModeToggle'
-import { useUIStore } from '@/store/uiStore'
+import { useAuthStore } from '@/store/authStore'
 import { useNGOStore } from '@/store/ngoStore'
 import { apiService } from '@/utils/apiClient'
 
@@ -19,7 +19,7 @@ const NAV_LINKS = [
 ]
 
 export function NavBar() {
-  const { user, setUser } = useUIStore()
+  const { user, setUser } = useAuthStore()
   const { pendingAttestations } = useNGOStore()
   const [authOpen, setAuthOpen] = useState(false)
   const location = useLocation()

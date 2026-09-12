@@ -6,7 +6,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import { useUIStore } from '@/store/uiStore'
+import { useAuthStore } from '@/store/authStore'
 import { useDonationStore } from '@/store/donationStore'
 import { initiateUpiPayment } from '@/services/mockPayments'
 import { formatUSD, shortenHash } from '@/lib/utils'
@@ -27,7 +27,7 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
     const [loading, setLoading] = useState(false)
     const [successDonation, setSuccessDonation] = useState<Donation | null>(null)
 
-    const { user } = useUIStore()
+    const { user } = useAuthStore()
     const donationStore = useDonationStore()
     const { toast } = useToast()
 
