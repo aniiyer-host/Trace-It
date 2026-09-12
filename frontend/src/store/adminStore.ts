@@ -137,7 +137,7 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
                 const campaigns = state.campaigns.map((c) => ({
                     ...c,
                     milestones: c.milestones.map((m) =>
-                        m.id === milestoneId ? { ...m, status: 'delivered' } : m,
+                        m.id === milestoneId ? { ...m, status: 'delivered' as const } : m,
                     ),
                 }))
                 return { ...state, campaigns }

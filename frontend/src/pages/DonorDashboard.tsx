@@ -46,7 +46,7 @@ export default function DonorDashboard() {
   const navigate = useNavigate()
   
   // -- CONSTRAINTS PRESERVED --
-  const { campaigns, loadCampaigns, setDonations, campaignsLoading } = useDonationStore()
+  const { campaigns, loadCampaigns, setDonations } = useDonationStore()
   const { user, setUser } = useAuthStore()
   
   /* 
@@ -355,11 +355,11 @@ function buildJourney(campaign: Campaign, allDonations: Donation[]) {
   const isDelivered = campDonations.some(d => d.status === 'delivered')
 
   return [
-    { id: 'capital', label: 'Capital Deployed', status: hasDonation ? 'completed' : 'pending' },
-    { id: 'milestone', label: 'Milestone Active', status: hasMilestones ? 'completed' : 'pending' },
-    { id: 'proof', label: 'Proof Uploaded', status: hasProof ? 'completed' : 'pending' },
+    { id: 'capital', label: 'Capital Deployed', status: hasDonation ? 'completed' : 'pending', isAttestation: false },
+    { id: 'milestone', label: 'Milestone Active', status: hasMilestones ? 'completed' : 'pending', isAttestation: false },
+    { id: 'proof', label: 'Proof Uploaded', status: hasProof ? 'completed' : 'pending', isAttestation: false },
     { id: 'attestation', label: 'Attestation Signed', status: isDisbursed ? 'completed' : 'pending', isAttestation: true },
-    { id: 'impact', label: 'Impact Verified', status: isDelivered ? 'completed' : 'pending' },
+    { id: 'impact', label: 'Impact Verified', status: isDelivered ? 'completed' : 'pending', isAttestation: false },
   ] as const
 }
 

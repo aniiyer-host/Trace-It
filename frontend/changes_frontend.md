@@ -243,3 +243,36 @@ This document logs all modifications made to the frontend to complete the Phase 
 - `frontend/src/pages/Profile.tsx`: Added Zod schema (`NgoOnboardSchema`) and an "Institution Registration" section below the personal information section. Includes a brutalist form for `organisationName`, `registrationNo`, `description`, `fcraNumber`, `taxExemptionNo80g`. The form safely handles undefined roles and conditionally renders only for DONOR or undefined roles, displaying a success message if the role is CHARITY.
 - `frontend/src/pages/DonorDashboard.tsx`: Added a subtle banner beneath the portfolio statistics prompting users ("Are you an NGO? Apply for institution status") to navigate to `/profile`. Conditionally visible only for DONOR or undefined roles.
 
+
+## FIX REACT 19 TYPESCRIPT ERROR
+- **File path**: `frontend/src/pages/Home.tsx`
+- **What changed**: Modified the `ref` assignment inside the `CHAIN_STEPS.map` loop from `ref={el => journeyItemsRef.current[i] = el}` to `ref={el => { journeyItemsRef.current[i] = el }}`.
+- **Why it changed**: React 19 typings strictly require `ref` callbacks to return either `void` or a cleanup function. Implicitly returning the element (`HTMLDivElement | null`) via a concise arrow function causes a TypeScript compilation error, failing the build and rendering a blank screen.
+
+## FIX TYPESCRIPT ERRORS IN DONORDASHBOARD.TSX
+- **File path**: `frontend/src/pages/DonorDashboard.tsx`
+- **What changed**:
+  1. Removed `campaignsLoading` from `useDonationStore` destructuring (line 49).
+  2. Added `isAttestation: false` to all non-attestation steps in the `buildJourney` array (lines 358-362).
+- **Why it changed**:
+  1. `campaignsLoading` was declared but its value was never read, causing a `TS6133` error due to strict `noUnusedLocals` in `tsconfig.app.json`.
+  2. Because the array was cast with `as const`, TypeScript created a literal tuple where only the 4th element had the `isAttestation` property. Accessing `step.isAttestation` on the union type of elements threw a `TS2339` error since the property didn't exist on the other steps. Adding it explicitly to all objects normalizes the type shape.
+
+## FIX ZODERROR TYPES IN PROFILE.TSX
+- **File path**: `frontend/src/pages/Profile.tsx`
+- **What changed**: Changed `result.error.errors[0].message` to `result.error.issues[0].message` in both `handleNgoOnboard` and `handleUpdateProfile`.
+- **Why it changed**: The TypeScript definitions for `ZodError` in the installed version of `zod` do not include an `.errors` property (though it might exist at runtime as an alias). Accessing `.issues` is the strictly-typed approach to read validation errors.
+
+## FIX TYPESCRIPT ERRORS IN STORES
+- **File path**: `frontend/src/store/adminStore.ts`, `donationStore.ts`, `ngoStore.ts`, `uiStore.ts`
+- **What changed**:
+  1. `adminStore.ts`: Cast `'delivered'` to `const` so it matches `DonationStatus`.
+  2. `donationStore.ts`: Cast API responses to `any` or `Donation` instead of implicit `unknown`. Throw "Not implemented" in `cycleMilestoneStatus` (which referenced a deleted mock function).
+  3. `ngoStore.ts`: Removed unused `Milestone` import. Fixed state reference to `get().pendingAttestations` inside `signAttestation`. Renamed `ngoName` to `_ngoName` since it was unused. Replaced `cycleMilestoneStatus` with an explicit throw.
+  4. `uiStore.ts`: Removed unused `shortenHash` import. Removed invalid `avatarUrl` property from the `User` mock object literal.
+- **Why it changed**: These were all causing hard TypeScript compilation failures during a full `tsc` pass because of strict unused locals, implicit `unknown` responses from Axios wrapper functions, and strict literal typing enforcement.
+
+## FIX RUNTIME CRASH IN HOME.TSX
+- **File path**: `frontend/src/pages/Home.tsx`
+- **What changed**: Added `(c.milestones || [])` fallback before calling `.filter()` and `(c.raisedAmount || 0)` when calculating `impactMetrics`.
+- **Why it changed**: The backend was returning some campaigns without a `milestones` array (likely unpopulated in the DB), causing a `TypeError: Cannot read properties of undefined (reading 'filter')` that crashed the entire Home component. Adding the fallback array allows it to render safely.

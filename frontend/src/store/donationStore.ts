@@ -68,7 +68,7 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
     setDonations: (d) => set({ donations: d }),
     createDonation: async (campaign, amount, paymentMethod, orderId, txHash, walletAddress) => {
         try {
-            const donation = await apiService.donations.create({ campaignId: campaign.id, amount, paymentMethod, orderId, txHash, walletAddress })
+            const donation = await apiService.donations.create({ campaignId: campaign.id, amount, paymentMethod, orderId, txHash, walletAddress }) as Donation
             get().addDonation(donation)
             return donation
         } catch (error) {
@@ -89,7 +89,7 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
 
         try {
             // Request attestation from real API
-            const result = await apiService.donations.requestAttestation(donationId, type)
+            const result = await apiService.donations.requestAttestation(donationId, type) as any
 
             // Update state with result
             set(state => ({
@@ -121,7 +121,7 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
 
         // Try to fetch from API
         try {
-            const attestation = await apiService.donations.getAttestation(donationId)
+            const attestation = await apiService.donations.getAttestation(donationId) as any
             if (!attestation) {
                 return null
             }
@@ -182,13 +182,7 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
         }
     },
     cycleMilestoneStatus: async (milestoneId) => {
-        try {
-            const newStatus = await cycleMilestoneStatus(milestoneId)
-            get().updateMilestoneStatus(milestoneId, newStatus)
-        } catch (error) {
-            console.error('Failed to cycle milestone status:', error)
-            throw error
-        }
+        throw new Error('Not implemented')
     },
 
     resetStore: () => {

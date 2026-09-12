@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Campaign, Milestone } from '@/types'
+import type { Campaign } from '@/types'
 // import { cycleMilestoneStatus } from '@/services/mockApi'
 import { apiService } from '@/utils/apiClient'
 
@@ -65,10 +65,10 @@ export const useNGOStore = create<NGOStore>((set, get) => ({
         }
     },
 
-    signAttestation: async (donationId: string, type: 'receipt' | 'delivery', ngoName: string) => {
+    signAttestation: async (donationId: string, type: 'receipt' | 'delivery', _ngoName: string) => {
         try {
             // Call real backend API for NGO attestation
-            const result = await apiService.ngos.signAttestation(donationId, type)
+            await apiService.ngos.signAttestation(donationId, type)
 
             // Update attestation status
             set(state => ({
@@ -79,7 +79,7 @@ export const useNGOStore = create<NGOStore>((set, get) => ({
             }))
 
             // Remove from pending attestations
-            const { [donationId]: removed, ...rest } = state.pendingAttestations
+            const { [donationId]: removed, ...rest } = get().pendingAttestations
             set({ pendingAttestations: rest })
 
         } catch (error) {
@@ -128,13 +128,7 @@ export const useNGOStore = create<NGOStore>((set, get) => ({
         }
     },
     cycleMilestoneStatus: async (milestoneId) => {
-        try {
-            const newStatus = await cycleMilestoneStatus(milestoneId)
-            get().updateMilestoneStatus(milestoneId, newStatus)
-        } catch (error) {
-            console.error('Failed to cycle milestone status:', error)
-            throw error
-        }
+        throw new Error('Not implemented')
     },
 
     resetStore: () => {

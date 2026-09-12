@@ -30,7 +30,7 @@ export default function Profile() {
 
     const [loading, setLoading] = useState(false)
     const [email, setEmail] = useState(user?.email || '')
-    // @ts-expect-error user.name is not in the type definition, falling back nicely
+    // "@ts-expect-error" user.name is not in the type definition, falling back nicely
     const [name, setName] = useState(user?.name || '')
 
     const handlePreferenceToggle = (setting: string, state: boolean) => {
@@ -62,7 +62,7 @@ export default function Profile() {
         if (!result.success) {
             toast({
                 title: 'Validation Error',
-                description: result.error.errors[0].message,
+                description: result.error.issues[0].message,
                 variant: 'destructive'
             })
             return
@@ -94,7 +94,7 @@ export default function Profile() {
         if (!result.success) {
             toast({
                 title: 'Validation Error',
-                description: result.error.errors[0].message,
+                description: result.error.issues[0].message,
                 variant: 'destructive'
             })
             return

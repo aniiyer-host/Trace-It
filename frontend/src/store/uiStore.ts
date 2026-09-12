@@ -3,7 +3,7 @@
 
 import { create } from 'zustand'
 import type { User } from '@/types'
-import { shortenHash } from '@/lib/utils'
+
 
 interface UIStore {
     // ── Auth ──────────────────────────────────────
@@ -47,7 +47,6 @@ export const useUIStore = create<UIStore>((set, get) => ({
             id: 'user_' + Date.now(),
             email,
             name: email.split('@')[0],
-            avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(email.split('@')[0])}&background=random`,
         }
         set({ user: mockUser })
     },

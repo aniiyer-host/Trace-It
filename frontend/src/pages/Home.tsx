@@ -119,10 +119,10 @@ export default function Home() {
   }, { scope: pinRef })
 
   const impactMetrics = {
-    totalRaised: campaigns.reduce((sum, c) => sum + c.raisedAmount, 0),
+    totalRaised: campaigns.reduce((sum, c) => sum + (c.raisedAmount || 0), 0),
     totalDonors: "—", 
     activeCampaigns: campaigns.length,
-    milestonesCompleted: campaigns.reduce((sum, c) => sum + c.milestones.filter(m => m.status === 'delivered').length, 0),
+    milestonesCompleted: campaigns.reduce((sum, c) => sum + (c.milestones || []).filter(m => m.status === 'delivered').length, 0),
   }
 
   const handleDonate = (c: Campaign) => { setSelectedCampaign(c); setDialogOpen(true) }
@@ -161,7 +161,7 @@ export default function Home() {
               {CHAIN_STEPS.map((step, i) => (
                 <div 
                   key={i} 
-                  ref={el => journeyItemsRef.current[i] = el}
+                  ref={el => { journeyItemsRef.current[i] = el }}
                   className="absolute inset-0 flex flex-col items-center justify-center text-center opacity-0"
                 >
                   <div className="w-32 h-32 rounded-full bg-foreground/5 backdrop-blur-xl border border-foreground/10 flex items-center justify-center text-foreground mb-12 shadow-2xl">
