@@ -15,8 +15,8 @@ interface DonationCardProps {
 }
 
 export function DonationCard({ campaign, onDonate, onView, compact = false, glass = false }: DonationCardProps) {
-    const isFunded = campaign.raisedAmount >= campaign.targetAmount
-    const progress = Math.min(100, Math.round((campaign.raisedAmount / campaign.targetAmount) * 100))
+    const isFunded = Number(campaign.raisedAmount) >= Number(campaign.targetAmount)
+    const progress = Math.min(100, Math.round((Number(campaign.raisedAmount) / Number(campaign.targetAmount)) * 100))
 
     return (
         <Card className={cn(
@@ -61,8 +61,8 @@ export function DonationCard({ campaign, onDonate, onView, compact = false, glas
 
                 <div className="space-y-3 pt-2">
                     <div className="flex justify-between text-sm items-end">
-                        <span className="font-bold text-foreground text-lg tabular-nums tracking-tight">₹{campaign.raisedAmount.toLocaleString()}</span>
-                        <span className="text-muted-foreground font-medium tracking-tight">of ₹{campaign.targetAmount.toLocaleString()}</span>
+                        <span className="font-bold text-foreground text-lg tabular-nums tracking-tight">₹{Number(campaign.raisedAmount).toLocaleString()}</span>
+                        <span className="text-muted-foreground font-medium tracking-tight">of ₹{Number(campaign.targetAmount).toLocaleString()}</span>
                     </div>
                     <Progress value={progress} className="h-2 bg-muted" indicatorClassName={cn("transition-all duration-1000", isFunded ? 'bg-emerald-500' : 'bg-foreground')} />
                 </div>

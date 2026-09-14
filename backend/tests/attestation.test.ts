@@ -192,7 +192,7 @@ describe("Attestation & Milestone API Integration Tests", () => {
       .send({ donationId, type: "receipt" });
 
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe(AttestationStatus.NGO_SIGNED);
+    expect(res.body.status).toBe(AttestationStatus.APPROVED);
   });
 
   test("POST /api/charity/attestations - signing again is rejected (already signed)", async () => {
@@ -204,18 +204,30 @@ describe("Attestation & Milestone API Integration Tests", () => {
     expect(res.status).toBe(409);
   });
 
+  let deliveryAttestationId = "";
+  test("POST /api/charity/attestations - NGO signs DELIVERY attestation", async () => {
+    const res = await request(app)
+      .post("/api/charity/attestations")
+      .set("Authorization", `Bearer ${ngoToken}`)
+      .send({ donationId, type: "delivery" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe(AttestationStatus.NGO_SIGNED);
+    deliveryAttestationId = res.body.id;
+  });
+
   test("GET /api/admin/attestations/pending - admin sees the NGO-signed attestation", async () => {
     const res = await request(app)
       .get("/api/admin/attestations/pending")
       .set("Authorization", `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.some((a: any) => a.id === attestationId)).toBe(true);
+    expect(res.body.some((a: any) => a.id === deliveryAttestationId)).toBe(true);
   });
 
   test("POST /api/admin/attestations/:id/approve - a DONOR cannot approve (RBAC)", async () => {
     const res = await request(app)
-      .post(`/api/admin/attestations/${attestationId}/approve`)
+      .post(`/api/admin/attestations/${deliveryAttestationId}/approve`)
       .set("Authorization", `Bearer ${donorToken}`);
 
     expect(res.status).toBe(403);
@@ -223,7 +235,7 @@ describe("Attestation & Milestone API Integration Tests", () => {
 
   test("POST /api/admin/attestations/:id/approve - admin approves", async () => {
     const res = await request(app)
-      .post(`/api/admin/attestations/${attestationId}/approve`)
+      .post(`/api/admin/attestations/${deliveryAttestationId}/approve`)
       .set("Authorization", `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
@@ -232,7 +244,7 @@ describe("Attestation & Milestone API Integration Tests", () => {
 
   test("POST /api/admin/attestations/:id/reject - cannot reject an already-approved attestation", async () => {
     const res = await request(app)
-      .post(`/api/admin/attestations/${attestationId}/reject`)
+      .post(`/api/admin/attestations/${deliveryAttestationId}/reject`)
       .set("Authorization", `Bearer ${adminToken}`)
       .send({ reason: "too late" });
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Loader2, Plus, Target, FileText } from 'lucide-react'
+import { Loader2, Plus, Target, FileText, Wallet, CheckCircle2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { apiService } from '@/utils/apiClient'
 import type { Campaign } from '@/types'
+import { BeneficiaryWalletDialog } from './BeneficiaryWalletDialog'
 
 interface Props {
   open: boolean
@@ -33,6 +34,9 @@ export function CreateCampaignDialog({ open, onClose, onSuccess }: Props) {
   const [targetAmount, setTargetAmount] = useState('')
   const [category, setCategory] = useState('education')
   const [loading, setLoading] = useState(false)
+  const [step, setStep] = useState<'wallet-check' | 'form'>('wallet-check')
+  const [beneficiaryWalletId, setBeneficiaryWalletId] = useState('')
+  const [showWalletDialog, setShowWalletDialog] = useState(false)
   const { toast } = useToast()
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -60,6 +64,7 @@ export function CreateCampaignDialog({ open, onClose, onSuccess }: Props) {
         targetAmount: amountNum,
         category,
         currencyCode: 'INR',
+        beneficiaryId: beneficiaryWalletId,
       }
       const draftCampaign = (await apiService.campaigns.create(draftPayload)) as any
 
@@ -68,8 +73,9 @@ export function CreateCampaignDialog({ open, onClose, onSuccess }: Props) {
       if (draftCampaign?.id) {
         try {
           submittedCampaign = await apiService.campaigns.submit(draftCampaign.id)
-        } catch (submitErr) {
+        } catch (submitErr: any) {
           console.warn('Auto-submit after draft failed; remaining in draft:', submitErr)
+          throw submitErr;
         }
       }
 
@@ -97,20 +103,71 @@ export function CreateCampaignDialog({ open, onClose, onSuccess }: Props) {
     setDescription('')
     setTargetAmount('')
     setCategory('education')
+    setStep('wallet-check')
+    setBeneficiaryWalletId('')
+    setShowWalletDialog(false)
     onClose()
   }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="glass border-border/60 max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="gradient-text text-xl flex items-center gap-2">
-            <Plus className="h-5 w-5 text-primary" /> Create New Campaign
-          </DialogTitle>
-          <DialogDescription>
-            Draft your campaign and submit it for admin verification.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="border border-border/20 max-w-lg bg-background">
+        {step === 'wallet-check' ? (
+          <>
+            <DialogHeader>
+              <DialogTitle className="gradient-text text-xl flex items-center gap-2">
+                <Target className="h-5 w-5 text-primary" /> Campaign Beneficiary
+              </DialogTitle>
+              <DialogDescription>
+                Before creating your campaign, confirm your beneficiary's wallet status.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+              <div 
+                onClick={() => setStep('form')}
+                className="border border-foreground/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] cursor-pointer rounded-lg p-6 flex flex-col items-start transition-colors"
+              >
+                <CheckCircle2 className="h-8 w-8 mb-3 text-primary" />
+                <h3 className="font-semibold text-lg mb-1">I have a Wallet ID</h3>
+                <p className="text-sm text-muted-foreground leading-snug">
+                  I already have the beneficiary's wallet ID ready
+                </p>
+              </div>
+
+              <div 
+                onClick={() => setShowWalletDialog(true)}
+                className="border border-foreground/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] cursor-pointer rounded-lg p-6 flex flex-col items-start transition-colors"
+              >
+                <Plus className="h-8 w-8 mb-3 text-primary" />
+                <h3 className="font-semibold text-lg mb-1">Create a Wallet</h3>
+                <p className="text-sm text-muted-foreground leading-snug">
+                  Generate a new wallet ID for this campaign's beneficiary
+                </p>
+              </div>
+            </div>
+
+            {showWalletDialog && (
+              <BeneficiaryWalletDialog
+                onWalletCreated={(id) => {
+                  setBeneficiaryWalletId(id)
+                  setShowWalletDialog(false)
+                  setStep('form')
+                }}
+                onClose={() => setShowWalletDialog(false)}
+              />
+            )}
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle className="gradient-text text-xl flex items-center gap-2">
+                <Plus className="h-5 w-5 text-primary" /> Create New Campaign
+              </DialogTitle>
+              <DialogDescription>
+                Draft your campaign and submit it for admin verification.
+              </DialogDescription>
+            </DialogHeader>
 
         <form onSubmit={handleCreate} className="space-y-4 pt-2">
           <div className="space-y-1.5">
@@ -175,6 +232,22 @@ export function CreateCampaignDialog({ open, onClose, onSuccess }: Props) {
             />
           </div>
 
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Wallet className="h-3.5 w-3.5" /> Beneficiary Wallet ID
+            </label>
+            <Input
+              placeholder="SOL... paste or enter wallet ID"
+              value={beneficiaryWalletId}
+              onChange={(e) => setBeneficiaryWalletId(e.target.value)}
+              disabled={loading}
+              required
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Securely hashed and stored. Used to verify fund delivery.
+            </p>
+          </div>
+
           <div className="pt-2 flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={handleClose} disabled={loading}>
               Cancel
@@ -190,6 +263,8 @@ export function CreateCampaignDialog({ open, onClose, onSuccess }: Props) {
             </Button>
           </div>
         </form>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )

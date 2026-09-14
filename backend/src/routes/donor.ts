@@ -68,6 +68,14 @@ export const getDonorDashboard = async (
             organisationName: true,
           },
         },
+        attestations: {
+          select: {
+            id: true,
+            type: true,
+            status: true,
+            createdAt: true,
+          }
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -158,11 +166,6 @@ export const createDonation = async (
         status: "INITIATED",
         razorpayOrderId: razorpayOrder.id,
       },
-      select: {
-        id: true,
-        publicId: true,
-        razorpayOrderId: true,
-      },
     });
 
     // Audit log — non-blocking
@@ -199,8 +202,14 @@ export const createDonation = async (
 
     res.status(201).json({
       id: donation.id,
-      orderId: razorpayOrder.id,
-      publicDonationId: donation.publicId,
+      publicId: donation.publicId,
+      amount: donation.amount,
+      status: donation.status,
+      paymentMethod: donation.paymentMethod,
+      createdAt: donation.createdAt,
+      campaignId: donation.campaignId,
+      ngoId: donation.ngoId,
+      razorpayOrderId: razorpayOrder.id
     });
   } catch (err) {
     next(err);

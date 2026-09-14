@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Loader2, DollarSign, Zap } from 'lucide-react'
+import { DollarSign } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Donation } from '@/types'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -10,7 +10,14 @@ interface DonationHistoryTableProps {
   donations: Donation[]
   loading: boolean
   onRefresh: () => void
-  onViewAttestation: (donationId: string) => void
+  onViewAttestation: (data: {
+    donationId: string;
+    attestationStatus: 'pending' | 'receipt_confirmed' | 'delivery_confirmed';
+    amount?: number;
+    campaignTitle?: string;
+    confirmedAt?: string;
+    donationDate?: string;
+  }) => void
   onVerifyIntegrity: (donationId: string) => void
 }
 
@@ -21,22 +28,7 @@ export default function DonationHistoryTable({
   onViewAttestation,
   onVerifyIntegrity,
 }: DonationHistoryTableProps) {
-  const [simulatingId, setSimulatingId] = useState<string | null>(null)
   const { toast } = useToast()
-
-  const handleSimulatePayment = async (donationId: string) => {
-    setSimulatingId(donationId)
-    try {
-      await apiService.webhooks.simulateSuccess(donationId)
-      toast({ title: 'Payment simulated successfully! Donation is now SUCCESS.' })
-      onRefresh()
-    } catch (err) {
-      console.error('Simulation error:', err)
-      toast({ title: 'Simulation failed', variant: 'destructive' })
-    } finally {
-      setSimulatingId(null)
-    }
-  }
 
   if (loading) {
     return (
@@ -88,50 +80,51 @@ export default function DonationHistoryTable({
           </thead>
           <tbody>
             {donations.map((donation) => {
-              const normStatus = (donation.status || '').toString().toUpperCase()
-              const isInitiated = normStatus === 'INITIATED' || normStatus === 'PENDING'
-              const isConfirmed = normStatus === 'SUCCESS' || normStatus === 'DELIVERED' || normStatus === 'DISBURSED' || normStatus === 'ALLOCATED'
+              
+              
+              const hasReceiptConfirmed = donation.attestations && Array.isArray(donation.attestations) 
+                ? donation.attestations.some((a: any) => a.type === 'RECEIPT' && a.status === 'APPROVED')
+                : false;
+                
+              const hasDeliveryConfirmed = donation.attestations && Array.isArray(donation.attestations)
+                ? donation.attestations.some((a: any) => a.type === 'DELIVERY' && a.status === 'APPROVED')
+                : false;
+
+              const attestationStatus = hasDeliveryConfirmed ? 'delivery_confirmed' : (hasReceiptConfirmed ? 'receipt_confirmed' : 'pending');
+              const confirmedAtt = donation.attestations?.find((a: any) => a.type === (hasDeliveryConfirmed ? 'DELIVERY' : 'RECEIPT') && a.status === 'APPROVED');
+              
+              const attestationData = {
+                donationId: donation.id,
+                attestationStatus: attestationStatus as 'pending' | 'receipt_confirmed' | 'delivery_confirmed',
+                amount: Number(donation.amount),
+                campaignTitle: donation.campaignTitle || `Campaign ${donation.campaignId?.substring(0, 8)}`,
+                confirmedAt: confirmedAtt ? new Date(confirmedAtt.createdAt).toISOString() : undefined,
+                donationDate: donation.createdAt,
+              };
 
               return (
                 <tr key={donation.id} className="border-t">
                   <td className="font-medium text-left max-w-xs truncate py-4">
-                    {donation.campaignTitle || 'Campaign'}
+                    {donation.campaignTitle || `Campaign ${donation.campaignId?.substring(0, 8)}`}
                   </td>
                   <td className="text-center font-medium py-4">
                     ₹{Number(donation.amount).toLocaleString()}
                   </td>
                   <td className="text-center py-4">
-                    <div className="flex flex-col items-center gap-1.5">
-                      <StatusBadge status={donation.status} size="sm" />
-                      {/* DEV ONLY SIMULATION BUTTON */}
-                      {import.meta.env.DEV && isInitiated && (
-                        <button
-                          onClick={() => handleSimulatePayment(donation.id)}
-                          disabled={simulatingId === donation.id}
-                          className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition-colors cursor-pointer"
-                        >
-                          {simulatingId === donation.id ? (
-                            <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                          ) : (
-                            <Zap className="h-2.5 w-2.5" />
-                          )}
-                          Simulate Payment
-                        </button>
-                      )}
-                    </div>
+                    <StatusBadge status={donation.status} size="sm" />
                   </td>
                   <td className="text-center py-4">
                     <button
-                      onClick={() => onViewAttestation(donation.id)}
+                      onClick={() => onViewAttestation(attestationData)}
                       className="flex items-center justify-center gap-2 text-xs font-medium w-full hover:opacity-80"
                     >
                       <span
                         className={cn(
                           'w-2 h-2 rounded-full inline-block',
-                          isConfirmed ? 'bg-green-500' : 'bg-yellow-500'
+                          hasDeliveryConfirmed ? 'bg-green-500' : (hasReceiptConfirmed ? 'bg-blue-500' : 'bg-yellow-500')
                         )}
                       />
-                      {isConfirmed ? 'Receipt Confirmed' : 'Pending NGO Confirmation'}
+                      {hasDeliveryConfirmed ? 'Delivery Confirmed' : (hasReceiptConfirmed ? 'Receipt Confirmed' : 'Pending NGO Confirmation')}
                     </button>
                   </td>
                   <td className="text-center text-xs py-4">
@@ -140,13 +133,15 @@ export default function DonationHistoryTable({
                   <td className="text-center py-4">
                     <div className="flex items-center gap-3 justify-center">
                       <button
-                        onClick={() => alert(`View donation ${donation.id} details`)}
+                        onClick={() => onViewAttestation(attestationData)}
                         className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors bg-transparent border-none p-0 cursor-pointer"
                       >
                         Details
                       </button>
                       <button
-                        onClick={() => onVerifyIntegrity(donation.id)}
+                        onClick={() => {
+                          toast({ title: 'Blockchain verification will be available once on-chain recording is active.' });
+                        }}
                         className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors bg-transparent border-none p-0 cursor-pointer"
                       >
                         Verify Integrity

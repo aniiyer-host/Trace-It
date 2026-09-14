@@ -234,65 +234,68 @@ export const razorpayWebhookHandler = async (
       try {
         const blockchainService = await getBlockchainService();
 
-        
-        // Prepare donation data for on-chain recording
-        const donationData = {
-          donationId: donation.id, // UUID from Postgres
-          donorUserId: donation.donorId, // Raw user ID (will be hashed by service)
-          ngoId: donation.ngoId,
-          campaignId: donation.campaignId ?? '',
-          amountInr: donation.amount.toNumber(), // Amount in INR
-          currency: 'INR',
-          timestamp: new Date() // Current timestamp
-        };
+        if (blockchainService) {
+          // Prepare donation data for on-chain recording
+          const donationData = {
+            donationId: donation.id, // UUID from Postgres
+            donorUserId: donation.donorId, // Raw user ID (will be hashed by service)
+            ngoId: donation.ngoId,
+            campaignId: donation.campaignId ?? '',
+            amountInr: donation.amount.toNumber(), // Amount in INR
+            currency: 'INR',
+            timestamp: new Date() // Current timestamp
+          };
 
-        // Record on-chain (idempotent - safe to call multiple times)
-        const blockchainResult = await blockchainService.recordDonation(donationData);
+          // Record on-chain (idempotent - safe to call multiple times)
+          const blockchainResult = await blockchainService.recordDonation(donationData);
 
-        if (blockchainResult.success) {
-          // Store transaction hash in donation record
-          await prisma.donation.update({
-            where: { id: donation.id },
-            data: { solanaTxHash: blockchainResult.txHash }
-          });
+          if (blockchainResult.success) {
+            // Store transaction hash in donation record
+            await prisma.donation.update({
+              where: { id: donation.id },
+              data: { solanaTxHash: blockchainResult.txHash }
+            });
 
-          // Log success to audit trail
-          await writeAuditLog({
-            actorType: AuditActorType.SYSTEM,
-            entityType: 'donation',
-            entityId: donation.id,
-            action: 'BLOCKCHAIN_RECORD_SUCCESS',
-            metadata: {
+            // Log success to audit trail
+            await writeAuditLog({
+              actorType: AuditActorType.SYSTEM,
+              entityType: 'donation',
+              entityId: donation.id,
+              action: 'BLOCKCHAIN_RECORD_SUCCESS',
+              metadata: {
+                donationId: donation.id,
+                transactionHash: blockchainResult.txHash
+              },
+              ipAddress: req.ip,
+            });
+
+            console.info(`Blockchain recording successful for donation ${donation.id}: ${blockchainResult.txHash}`);
+          } else {
+            // Handle recording failure
+            console.error(`Blockchain recording failed for donation ${donation.id}: ${blockchainResult.error}`);
+
+            // Add to retry queue for later processing
+            await addToBlockchainRetryQueue({
               donationId: donation.id,
-              transactionHash: blockchainResult.txHash
-            },
-            ipAddress: req.ip,
-          });
+              error: blockchainResult.error ?? 'Unknown error',
+              retryCount: 0
+            });
 
-          console.info(`Blockchain recording successful for donation ${donation.id}: ${blockchainResult.txHash}`);
+            // Log failure to audit trail
+            await writeAuditLog({
+              actorType: AuditActorType.SYSTEM,
+              entityType: 'donation',
+              entityId: donation.id,
+              action: 'BLOCKCHAIN_RECORD_FAILED',
+              metadata: {
+                donationId: donation.id,
+                error: blockchainResult.error
+              },
+              ipAddress: req.ip,
+            });
+          }
         } else {
-          // Handle recording failure
-          console.error(`Blockchain recording failed for donation ${donation.id}: ${blockchainResult.error}`);
-
-          // Add to retry queue for later processing
-          await addToBlockchainRetryQueue({
-            donationId: donation.id,
-            error: blockchainResult.error ?? 'Unknown error',
-            retryCount: 0
-          });
-
-          // Log failure to audit trail
-          await writeAuditLog({
-            actorType: AuditActorType.SYSTEM,
-            entityType: 'donation',
-            entityId: donation.id,
-            action: 'BLOCKCHAIN_RECORD_FAILED',
-            metadata: {
-              donationId: donation.id,
-              error: blockchainResult.error
-            },
-            ipAddress: req.ip,
-          });
+          console.warn('[Blockchain] Service not available — skipping on-chain recording');
         }
       } catch (error) {
         // Handle service initialization or other unexpected errors

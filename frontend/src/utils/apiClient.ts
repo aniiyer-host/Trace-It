@@ -114,6 +114,8 @@ export const apiService = {
         campaignId: d.project?.id,
         ngoName: d.ngo?.organisationName,
         ngoId: d.ngo?.id,
+        razorpayOrderId: d.razorpayOrderId,
+        orderId: d.razorpayOrderId,
       }));
     },
     create: (donationData: any) => post('/donor/donate', donationData),
@@ -136,6 +138,7 @@ export const apiService = {
     },
     create: (campaignData: any) => post('/charity/campaigns', campaignData),
     submit: (campaignId: string) => post(`/charity/campaigns/${campaignId}/submit`),
+    getBeneficiaryId: (campaignId: string) => get<{beneficiaryId: string}>(`/charity/campaigns/${campaignId}/beneficiary-id`),
   },
 
   // Milestones
@@ -180,8 +183,8 @@ export const apiService = {
   // NGOs
   ngos: {
     getPendingAttestations: () => get<any[]>('/charity/attestations/pending'),
-    signAttestation: (donationId: string, type: 'receipt' | 'delivery') =>
-      post(`/charity/attestations`, { donationId, type: type.toUpperCase() }),
+    signAttestation: (donationId: string, type: 'receipt' | 'delivery', beneficiaryId?: string) =>
+      post(`/charity/attestations`, { donationId, type: type.toUpperCase(), ...(beneficiaryId && { beneficiaryId }) }),
   },
 
   // Admin
@@ -199,6 +202,14 @@ export const apiService = {
       post(`/admin/milestones/${milestoneId}/approve`),
     rejectMilestone: (milestoneId: string, reason: string) =>
       post(`/admin/milestones/${milestoneId}/reject`, { reason }),
+    getAuditLogs: (params?: { page?: number; limit?: number; action?: string; userId?: string }) => {
+      const query = new URLSearchParams()
+      if (params?.page) query.append('page', params.page.toString())
+      if (params?.limit) query.append('limit', params.limit.toString())
+      if (params?.action) query.append('action', params.action)
+      if (params?.userId) query.append('userId', params.userId)
+      return get<{ auditLogs: any[]; pagination: any }>(`/admin/audit-logs?${query.toString()}`)
+    },
   },
 
   // Webhooks / Simulation

@@ -70,8 +70,8 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
 
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty("id");
-    expect(res.body).toHaveProperty("orderId");
-    expect(res.body).toHaveProperty("publicDonationId");
+    expect(res.body).toHaveProperty("razorpayOrderId");
+    expect(res.body).toHaveProperty("publicId");
 
     // Verify donation was created as INITIATED in DB
     const donation = await prisma.donation.findUnique({

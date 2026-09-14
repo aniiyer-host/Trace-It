@@ -467,3 +467,761 @@ This document logs all modifications made to the frontend to complete the Phase 
 - **What changed**: Added role-based `navigate()` redirect logic following a successful login (Admin goes to `/admin`, Charity to `/ngo`, otherwise `/donor`).
 - **File path**: `frontend/src/components/NavBar.tsx`
 - **What changed**: Updated the `NAV_LINKS` filter to hide the `/donor` link for logged-in NGO and Admin users.
+
+### FIX: DISABLE RATE LIMIT IN DEV ENVIRONMENT
+- **File path**: `backend/src/index.ts`
+- **What changed**: Wrapped the global `app.use(limiter)` in a check for `process.env.NODE_ENV === "production"`.
+- **File path**: `backend/src/routes/auth.ts`
+- **What changed**: Wrapped `router.use(authLimiter)` in a check for `process.env.NODE_ENV === "production"`.
+- **Why it changed**: To prevent the 100/15min global limit and 10/15min auth limit from aggressively blocking rapid local development and hot reloading.
+
+### FIX: DONATE ENDPOINT RESPONSE SHAPE
+- **File path**: `backend/src/routes/donor.ts`
+- **What changed**: Removed the restrictive `select` block from `prisma.donation.create()` and updated the `res.status(201).json` response to return the full donation object (`id`, `publicId`, `amount`, `status`, `paymentMethod`, `createdAt`, `campaignId`, `ngoId`, `razorpayOrderId`).
+- **Why it changed**: The frontend `DonateDialog.tsx` relies on these fields to display the success receipt. Returning a partial object caused the frontend to crash or render blank values.
+
+## FIX ISSUE 12: ADD SUCCESS POLLING TO DONATE DIALOG
+- **File path**: `frontend/src/components/DonateDialog.tsx`
+- **What changed**: 
+  1. Imported `useEffect` from `react`.
+  2. Added a polling `useEffect` that checks `apiService.donations.getByUser` every 3 seconds while `createdDonation.status !== "SUCCESS"`.
+  3. Stops polling automatically if 30 seconds elapse or if `SUCCESS` is detected, replacing `createdDonation` with the updated fetched version.
+- **Why it changed**: To smoothly transition the modal from "Payment Initiated" to "Success" after the backend automatically updates the donation status in the background.
+
+### FIX 1 - DonationCard.tsx String Concatenation Fix
+Wrapped Decimal string properties in `Number()` to correctly evaluate math and string formatting instead of performing string comparisons or passing strings into `toLocaleString()`.
+
+Changes in `frontend/src/components/DonationCard.tsx`:
+
+```tsx
+@@ -17,8 +17,8 @@
+-    const isFunded = campaign.raisedAmount >= campaign.targetAmount
+-    const progress = Math.min(100, Math.round((campaign.raisedAmount / campaign.targetAmount) * 100))
++    const isFunded = Number(campaign.raisedAmount) >= Number(campaign.targetAmount)
++    const progress = Math.min(100, Math.round((Number(campaign.raisedAmount) / Number(campaign.targetAmount)) * 100))
+
+@@ -63,4 +63,4 @@
+-                        <span className="font-bold text-foreground text-lg tabular-nums tracking-tight">₹{campaign.raisedAmount.toLocaleString()}</span>
+-                        <span className="text-muted-foreground font-medium tracking-tight">of ₹{campaign.targetAmount.toLocaleString()}</span>
++                        <span className="font-bold text-foreground text-lg tabular-nums tracking-tight">₹{Number(campaign.raisedAmount).toLocaleString()}</span>
++                        <span className="text-muted-foreground font-medium tracking-tight">of ₹{Number(campaign.targetAmount).toLocaleString()}</span>
+```
+
+### FIX 2 - AdminPanel.tsx String Concatenation Fix
+Wrapped Decimal string properties in `Number()` to correctly evaluate math instead of performing string concatenation in AdminPanel summary calculation.
+
+Changes in `frontend/src/pages/AdminPanel.tsx`:
+
+```tsx
+@@ -169,2 +169,2 @@
+-    const totalTarget = campaigns.reduce((sum, c) => sum + c.targetAmount, 0);
+-    const totalRaised = campaigns.reduce((sum, c) => sum + c.raisedAmount, 0);
++    const totalTarget = campaigns.reduce((sum, c) => sum + Number(c.targetAmount), 0);
++    const totalRaised = campaigns.reduce((sum, c) => sum + Number(c.raisedAmount), 0);
+```
+
+### FIX 1 - StatusBadge.tsx Minimal Styling Restoration
+Replaced heavy pill badge design (backgrounds, borders, Lucide icons, animations) with the standard minimal `dot + text` pattern matching the Trace-It design system.
+
+Replaced the entire `frontend/src/components/StatusBadge.tsx` file:
+
+```tsx
+import type { DonationStatus, ExtendedStatus } from '@/types'
+import { cn } from '@/lib/utils'
+
+interface Props {
+  status: DonationStatus | ExtendedStatus | string
+  className?: string
+  size?: 'default' | 'sm' | 'lg'
+}
+
+export function StatusBadge({ status, className }: Props) {
+  const normStatus = (status || '').toString().toUpperCase()
+
+  let dotColor = 'bg-gray-400'
+  let label = normStatus.charAt(0) + normStatus.slice(1).toLowerCase()
+
+  if (normStatus === 'SUCCESS' || normStatus === 'DELIVERED') {
+    dotColor = 'bg-green-500'
+  } else if (normStatus === 'PENDING' || normStatus === 'INITIATED') {
+    dotColor = 'bg-yellow-500'
+  } else if (normStatus === 'FAILED' || normStatus === 'REJECTED') {
+    dotColor = 'bg-red-500'
+  }
+
+  if (normStatus === 'INITIATED') label = 'Initiated'
+  if (normStatus === 'PENDING') label = 'Pending'
+  if (normStatus === 'SUCCESS') label = 'Success'
+  if (normStatus === 'FAILED') label = 'Failed'
+  if (normStatus === 'DELIVERED') label = 'Delivered'
+  if (normStatus === 'REJECTED') label = 'Rejected'
+  if (normStatus === 'PROCESSING') label = 'Processing'
+  if (normStatus === 'REFUNDED') label = 'Refunded'
+  if (normStatus === 'CANCELLED') label = 'Cancelled'
+  if (normStatus === 'VERIFIED') label = 'Verified'
+  if (normStatus === 'ALLOCATED') label = 'Allocated'
+  if (normStatus === 'DISBURSED') label = 'Disbursed'
+
+  return (
+    <span className={cn('flex items-center gap-2 text-xs font-medium', className)}>
+      <span className={cn('w-2 h-2 rounded-full inline-block', dotColor)} />
+      {label}
+    </span>
+  )
+}
+```
+
+### FIX 2 - DonationHistoryTable.tsx Layout & Naming Fixes
+Removed the DEV ONLY inline simulation button to declutter the table rows (simulation remains available in DonateDialog). Also fixed the campaign name fallback string to be more informative.
+
+Changes in `frontend/src/components/DonationHistoryTable.tsx`:
+
+```tsx
+@@ -97,3 +97,3 @@
+                   <td className="font-medium text-left max-w-xs truncate py-4">
+-                    {donation.campaignTitle || 'Campaign'}
++                    {donation.campaignTitle || `Campaign ${donation.campaignId?.substring(0, 8)}`}
+                   </td>
+@@ -103,19 +103,3 @@
+                   <td className="text-center py-4">
+-                    <div className="flex flex-col items-center gap-1.5">
+-                      <StatusBadge status={donation.status} size="sm" />
+-                      {/* DEV ONLY SIMULATION BUTTON */}
+-                      {import.meta.env.DEV && isInitiated && (
+-                        <button
+-                          onClick={() => handleSimulatePayment(donation.id)}
+-                          disabled={simulatingId === donation.id}
+-                          className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition-colors cursor-pointer"
+-                        >
+-                          {simulatingId === donation.id ? (
+-                            <Loader2 className="h-2.5 w-2.5 animate-spin" />
+-                          ) : (
+-                            <Zap className="h-2.5 w-2.5" />
+-                          )}
+-                          Simulate Payment
+-                        </button>
+-                      )}
+-                    </div>
++                    <StatusBadge status={donation.status} size="sm" />
+                   </td>
+```
+
+### FIX 3 - DonateDialog.tsx Order ID Mapping Fix
+Updated the `newDonation` object construction to correctly map the `razorpayOrderId` from the backend's updated API response format.
+
+Changes in `frontend/src/components/DonateDialog.tsx`:
+
+```tsx
+@@ -105,3 +105,3 @@
+                 paymentMethod: method,
+-                orderId: res.orderId || `order_${Date.now()}`,
++                orderId: res.razorpayOrderId || `order_${Date.now()}`,
+                 status: 'INITIATED',
+```
+
+## Backend Changes
+
+### FIX - Blockchain Graceful Fallback
+Updated `getBlockchainService()` to return `null` instead of crashing if `SOLANA_WALLET_KEYPAIR_PATH` is missing in the environment variables (e.g. during local dev without blockchain set up).
+
+Changes in `backend/src/services/blockchainInstance.ts`:
+```typescript
+@@ -5,5 +5,10 @@
+ 
+-export async function getBlockchainService(): Promise<BlockchainService> {
++export async function getBlockchainService(): Promise<BlockchainService | null> {
+   if (instance) return instance;
+ 
++  if (!process.env.SOLANA_WALLET_KEYPAIR_PATH) {
++    console.warn('[Blockchain] SOLANA_WALLET_KEYPAIR_PATH not configured — blockchain service disabled. This is expected in local dev.');
++    return null;
++  }
++
+   const service = new BlockchainService({
+```
+
+Changes in `backend/.env.example`:
+```env
+# Path to Solana wallet keypair JSON file
+# Required for blockchain recording
+# Leave empty in local dev to disable
+# blockchain features
+SOLANA_WALLET_KEYPAIR_PATH=
+```
+
+**NOTE**: Currently, callers of `getBlockchainService()` (e.g., `donationService.ts`, `charity.ts`, `admin.ts`) do **NOT** handle a `null` return. They will throw a TypeError when trying to call methods on the service. These callers need to be updated to safely check for null.
+
+### FIX - Blockchain Callers Null Checking
+Added null checks to all core callers of `getBlockchainService()` to safely skip on-chain interactions when the blockchain service is disabled (returns `null`), while preserving all other core business logic (database updates, state changes, etc).
+
+Changes in `backend/src/services/donationService.ts`:
+Wrapped the `recordDonation` call in an `if (blockchainService) { ... } else { console.warn(...) }` block.
+
+Changes in `backend/src/routes/charity.ts`:
+Updated `handleBlockchainOperation` wrapper to accept the initialized `blockchainService` as an argument to its `operationFn` callback, and only execute the callback if the service is available.
+
+Changes in `backend/src/routes/admin.ts`:
+Added early returns in three on-chain update functions:
+```typescript
+const blockchainService = await getBlockchainService();
+if (!blockchainService) {
+  console.warn('[Blockchain] Service not available — skipping on-chain recording');
+  return;
+}
+```
+
+Changes in `backend/src/routes/webhooks/razorpay.ts`:
+Wrapped the `recordDonation` blockchain integration inside the webhook success handler in an `if (blockchainService) { ... }` block to ensure webhooks process fully even if the blockchain layer is disabled locally.
+
+### FIX 1 - Missing Order ID in Success Card
+The polling function in `DonateDialog.tsx` was replacing the local `createdDonation` state with the object returned by `apiService.donations.getByUser`. Although the backend was correctly including `razorpayOrderId` in its selection, the frontend relies on the `orderId` property being present to display in the UI. We updated the frontend API client mapping to explicitly map `razorpayOrderId` to `orderId` (and `razorpayOrderId`).
+
+Changes in `frontend/src/utils/apiClient.ts`:
+```typescript
+@@ -112,6 +112,8 @@
+         campaignId: d.project?.id,
+         ngoName: d.ngo?.organisationName,
+         ngoId: d.ngo?.id,
++        razorpayOrderId: d.razorpayOrderId,
++        orderId: d.razorpayOrderId,
+       }));
+```
+
+### FIX 2 - Attestation Column Logic
+The attestation column was incorrectly reading the main donation status to determine if an attestation was confirmed. We updated the logic to check for the presence of a "SIGNED" or "APPROVED" attestation inside the nested `attestations` array. If no such record is found (or if attestations data is missing entirely), the UI correctly falls back to showing "Pending NGO Confirmation".
+
+Changes in `frontend/src/components/DonationHistoryTable.tsx`:
+```tsx
+@@ -91,7 +91,9 @@
+             {donations.map((donation) => {
+               const normStatus = (donation.status || '').toString().toUpperCase()
+-              const isConfirmed = normStatus === 'SUCCESS' || normStatus === 'DELIVERED' || normStatus === 'DISBURSED' || normStatus === 'ALLOCATED'
++              const isConfirmed = donation.attestations && Array.isArray(donation.attestations) 
++                ? donation.attestations.some((a: any) => a.type === 'RECEIPT' && (a.status === 'SIGNED' || a.status === 'APPROVED'))
++                : false;
+```
+
+### FIX 3 - NGO Inbox Data Mapping
+The NGO dashboard's pending attestation cards were trying to read fields directly off the root object (e.g. `attestation.amount`, `attestation.donorName`, `attestation.requestedAt`) that didn't exist in the raw response from the backend. We updated the rendering logic to extract these fields from the nested `donation` object and use correct DB column names (`createdAt`). 
+
+Changes in `frontend/src/pages/NgoDashboard.tsx`:
+```tsx
+@@ -262,9 +262,9 @@
+                                     <div key={`att-${key}`} className="group flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 rounded-xl bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-foreground/5 border-l-4 border-l-emerald-500 transition-colors">
+                                         <div className="space-y-1">
+                                             <div className="text-sm font-semibold tracking-widest text-emerald-600 dark:text-emerald-500 uppercase">Attestation Request</div>
+-                                            <div className="text-2xl font-bold tracking-tighter tabular-nums">{formatUSD(attestation.amount)}</div>
+-                                            <div className="text-foreground/70">{attestation.donorName} <span className="text-foreground/30 mx-2">•</span> {attestation.campaignTitle}</div>
+-                                            <div className="text-xs text-foreground/40 mt-1">Requested {new Date(attestation.requestedAt).toLocaleDateString()}</div>
++                                            <div className="text-2xl font-bold tracking-tighter tabular-nums">{formatUSD(Number(attestation.donation?.amount))}</div>
++                                            <div className="text-foreground/70">{attestation.donation?.donorId ? `Donor ${attestation.donation.donorId.substring(0,8)}` : 'Donor'} <span className="text-foreground/30 mx-2">•</span> {`Campaign ${attestation.donationId?.substring(0,8)}`}</div>
++                                            <div className="text-xs text-foreground/40 mt-1">Requested {new Date(attestation.createdAt).toLocaleDateString()}</div>
+                                         </div>
+```
+We also updated `frontend/src/store/ngoStore.ts` to type the pending attestations correctly according to the backend shape, and fixed the dialog prop injection in `NgoDashboard.tsx`.
+
+### FIX 1 - Add campaignId to Pending Attestations Response
+In `backend/src/routes/charity.ts`, we added `campaignId: true` to the Prisma select block for nested donation objects inside `GET /api/charity/attestations/pending`.
+
+```typescript
+@@ -758,5 +758,5 @@
+       include: {
+         donation: {
+-          select: { id: true, publicId: true, amount: true, donorId: true },
++          select: { id: true, publicId: true, amount: true, donorId: true, campaignId: true },
+         },
+       },
+```
+
+### FIX 2 - Add attestations to Donor Dashboard Response
+In `backend/src/routes/donor.ts`, we added `attestations` to the Prisma select block for the `GET /api/donor/dashboard` endpoint, exposing the required attestation status data to the frontend donor dashboard.
+
+```typescript
+@@ -68,6 +68,14 @@
+             organisationName: true,
+           },
+         },
++        attestations: {
++          select: {
++            id: true,
++            type: true,
++            status: true,
++            createdAt: true,
++          }
++        },
+       },
+       orderBy: { createdAt: "desc" },
+```
+
+### FIX 3 - Fix Attestation Status Value Mismatch
+In `frontend/src/components/DonationHistoryTable.tsx`, we updated the attestation status evaluation logic to explicitly look for `NGO_SIGNED` alongside the other statuses. We also introduced dual-state checking for `hasReceiptConfirmed` and `hasDeliveryConfirmed` to show the corresponding visual states to the donor.
+
+```tsx
+@@ -75,8 +75,13 @@
+             {donations.map((donation) => {
+               const normStatus = (donation.status || '').toString().toUpperCase()
+-              const isConfirmed = donation.attestations && Array.isArray(donation.attestations) 
+-                ? donation.attestations.some((a: any) => a.type === 'RECEIPT' && (a.status === 'SIGNED' || a.status === 'APPROVED'))
++              
++              const hasReceiptConfirmed = donation.attestations && Array.isArray(donation.attestations) 
++                ? donation.attestations.some((a: any) => a.type === 'RECEIPT' && (a.status === 'NGO_SIGNED' || a.status === 'SIGNED' || a.status === 'APPROVED'))
++                : false;
++                
++              const hasDeliveryConfirmed = donation.attestations && Array.isArray(donation.attestations)
++                ? donation.attestations.some((a: any) => a.type === 'DELIVERY' && (a.status === 'NGO_SIGNED' || a.status === 'SIGNED' || a.status === 'APPROVED'))
+                 : false;
+...
+@@ -95,10 +95,10 @@
+                       <span
+                         className={cn(
+                           'w-2 h-2 rounded-full inline-block',
+-                          isConfirmed ? 'bg-green-500' : 'bg-yellow-500'
++                          hasDeliveryConfirmed ? 'bg-green-500' : (hasReceiptConfirmed ? 'bg-blue-500' : 'bg-yellow-500')
+                         )}
+                       />
+-                      {isConfirmed ? 'Receipt Confirmed' : 'Pending NGO Confirmation'}
++                      {hasDeliveryConfirmed ? 'Delivery Confirmed' : (hasReceiptConfirmed ? 'Receipt Confirmed' : 'Pending NGO Confirmation')}
+                     </button>
+```
+
+### FIX 4 - Campaign Name Lookup in NGO Inbox
+Since the backend now returns `campaignId` inside the nested donation payload (from FIX 1), we updated the `NgoDashboard.tsx` card rendering to look up the campaign title from the `ngoCampaigns` state using `campaignId`.
+
+Changes in `frontend/src/pages/NgoDashboard.tsx`:
+```tsx
+@@ -262,7 +262,12 @@
+                                 {/* Attestation Requests */}
+-                                {Object.entries(pendingAttestations).map(([key, attestation]) => (
++                                {Object.entries(pendingAttestations).map(([key, attestation]) => {
++                                    const campaignTitle = ngoCampaigns.find(
++                                        c => c.id === (attestation.donation as any)?.campaignId
++                                    )?.title || `Campaign ${attestation.donationId?.substring(0, 8)}`;
++                                    
++                                    return (
+                                     <div key={`att-${key}`} className="group flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 rounded-xl bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-foreground/5 border-l-4 border-l-emerald-500 transition-colors">
+...
+-                                            <div className="text-foreground/70">{attestation.donation?.donorId ? `Donor ${attestation.donation.donorId.substring(0,8)}` : 'Donor'} <span className="text-foreground/30 mx-2">•</span> {`Campaign ${attestation.donationId?.substring(0,8)}`}</div>
++                                            <div className="text-foreground/70">{attestation.donation?.donorId ? `Donor ${attestation.donation.donorId.substring(0,8)}` : 'Donor'} <span className="text-foreground/30 mx-2">•</span> {campaignTitle}</div>
+```
+
+### FIX 5 (Part A) - Auto-Create Delivery Attestation Request
+In `backend/src/routes/charity.ts` (inside `signAttestation`), we added logic to automatically upsert a `DELIVERY` attestation request in `PENDING` state whenever the NGO successfully signs the initial `RECEIPT` attestation.
+
+```typescript
+@@ -819,6 +819,24 @@
+       },
+     });
+ 
++    if (attestation.type === 'RECEIPT') {
++      await prisma.attestation.upsert({
++        where: {
++          donationId_type: {
++            donationId: attestation.donationId,
++            type: 'DELIVERY'
++          }
++        },
++        update: {},
++        create: {
++          donationId: attestation.donationId,
++          type: 'DELIVERY',
++          status: 'PENDING',
++          requestedBy: attestation.requestedBy
++        }
++      })
++    }
+```
+
+### FIX 5 (Part B) - Distinguish Delivery vs Receipt in NGO Inbox
+In `frontend/src/pages/NgoDashboard.tsx`, we updated the attestation cards to dynamically render their label, subtitle, and border color based on the attestation type, making the two stages visually distinct.
+
+```tsx
+@@ -271,7 +271,18 @@
+                                         c => c.id === (attestation.donation as any)?.campaignId
+                                     )?.title || `Campaign ${attestation.donationId?.substring(0, 8)}`;
+                                     
+-                                    return (
+-                                    <div key={`att-${key}`} className="group flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 rounded-xl bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-foreground/5 border-l-4 border-l-emerald-500 transition-colors">
++                                    const isDelivery = attestation.type === 'DELIVERY';
++                                    
++                                    return (
++                                    <div key={`att-${key}`} className={cn("group flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 rounded-xl bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-foreground/5 border-l-4 transition-colors",
++                                        isDelivery ? "border-l-blue-500" : "border-l-emerald-500"
++                                    )}>
+                                         <div className="space-y-1">
+-                                            <div className="text-sm font-semibold tracking-widest text-emerald-600 dark:text-emerald-500 uppercase">Attestation Request</div>
+-                                            <div className="text-2xl font-bold tracking-tighter tabular-nums">{formatUSD(Number(attestation.donation?.amount))}</div>
++                                            <div className={cn("text-sm font-semibold tracking-widest uppercase",
++                                                isDelivery ? "text-blue-600 dark:text-blue-500" : "text-emerald-600 dark:text-emerald-500"
++                                            )}>
++                                                {isDelivery ? "Delivery Attestation" : "Receipt Attestation"}
++                                            </div>
++                                            <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide">
++                                                {isDelivery ? "Confirm delivery to beneficiary" : "Confirm you received the funds"}
++                                            </div>
++                                            <div className="text-2xl font-bold tracking-tighter tabular-nums pt-1">{formatUSD(Number(attestation.donation?.amount))}</div>
+```
+
+### FIX 1 - Admin NaN Amounts
+In `frontend/src/pages/AdminPanel.tsx`, the action items map was attempting to read fields that didn't exist in the API response objects (`ms.targetAmount` and `att.amount`). We updated these to correctly read the actual backend fields, wrapped in `Number()` parsing.
+
+```typescript
+@@ -147,7 +147,7 @@
+                 id: key,
+                 entityId: ms.id,
+                 title: ms.title,
+-                amount: ms.targetAmount,
++                amount: Number(ms.amountInr),
+                 ngo: camp?.ngo || 'Unknown NGO',
+                 campaign: camp?.title || 'Unknown Campaign'
+             })
+@@ -157,7 +157,7 @@
+                 id: key,
+                 entityId: att.donationId,
+                 title: att.statement,
+-                amount: att.amount,
++                amount: Number(att.donation?.amount),
+                 ngo: att.ngoName,
+                 campaign: att.campaignTitle
+             })
+```
+
+### FIX 2 - Campaign Status String Comparison
+In `frontend/src/pages/AdminPanel.tsx`, the campaign status column was incorrectly performing a string comparison (`"50.00" >= "1000.00"` evaluates to `true`) because the backend Prisma `Decimal` type is serialized as a string. We updated the logic to wrap the values in `Number()` before comparison.
+
+```typescript
+@@ -88,8 +88,8 @@
+             <td className="py-4 px-4 text-muted-foreground">{campaign.ngo}</td>
+             <td className="py-4 px-4">
+                 <span className="flex items-center gap-2 text-sm">
+-                    <span className={`h-1.5 w-1.5 rounded-full ${campaign.raisedAmount >= campaign.targetAmount ? 'bg-emerald-500' : 'bg-primary'}`} />
+-                    {campaign.raisedAmount >= campaign.targetAmount ? 'Funded' : 'Active'}
++                    <span className={`h-1.5 w-1.5 rounded-full ${Number(campaign.raisedAmount) >= Number(campaign.targetAmount) ? 'bg-emerald-500' : 'bg-primary'}`} />
++                    {Number(campaign.raisedAmount) >= Number(campaign.targetAmount) ? 'Funded' : 'Active'}
+                 </span>
+             </td>
+             <td className="py-4 px-4 text-right tabular-nums">{(campaign.milestones || []).length}</td>
+```
+
+### FIX 3 - Admin Navbar Links
+In `frontend/src/components/NavBar.tsx`, we added the `/admin` link to the `NAV_LINKS` array and updated the `.filter()` logic to properly enforce Role-Based Access Control (RBAC) on navigation items.
+
+```typescript
+@@ -14,6 +14,7 @@
+   { to: '/campaigns', label: 'Explore', end: false },
+   { to: '/donor', label: 'Donor', end: false },
+   { to: '/ngo', label: 'NGO', end: false },
++  { to: '/admin', label: 'Admin', end: false },
+   { to: '/login', label: 'Login', end: true },
+   { to: '/profile', label: 'Profile', end: false }
+ ]
+...
+@@ -46,7 +46,9 @@
+           <nav className="flex items-center gap-1">
+             {NAV_LINKS.filter(link => {
+               if (link.to === '/login') return !user
++              if (link.to === '/admin') return user?.role === 'ADMIN'
+               if (link.to === '/donor') return !user || user.role === 'DONOR' || !user.role
++              if (link.to === '/ngo') return user?.role !== 'ADMIN' // Hides it for ADMIN. Non-charities will have it mapped to /ngos below.
+```
+
+### FIX 4 - Profile Button in Donor Dashboard
+In `frontend/src/pages/DonorDashboard.tsx`, we updated the Profile button `onClick` handler to use `navigate('/profile')` instead of popping a placeholder alert.
+
+```typescript
+@@ -173,7 +173,7 @@
+               * TODO: RBAC-pending profile redirect 
+               * Update this alert to a router navigation when Profile supports roles.
+               */}
+-            <Button variant="ghost" onClick={() => alert('Profile page coming soon')}>Profile</Button>
++            <Button variant="ghost" onClick={() => navigate('/profile')}>Profile</Button>
+             <Button variant="outline" onClick={() => setUser(null)}>Sign Out</Button>
+           </div>
+         </div>
+```
+
+### FIX 5 - Details and Verify Integrity buttons
+In `frontend/src/components/DonationHistoryTable.tsx` and `frontend/src/pages/DonorDashboard.tsx`, we updated the 'Details' and 'Verify Integrity' buttons to trigger real functionality instead of alerts.
+- 'Details' now opens the `AttestationDetailsModal`, dynamically calculating the status (`delivery_confirmed`, `receipt_confirmed`, or `pending`) and passing the relevant donation details to `onViewAttestation`.
+- 'Verify Integrity' now uses the `useToast` hook to display a clean notification: "Blockchain verification will be available once on-chain recording is active."
+- Updated `DonorDashboard` to import `useToast` and properly pass down the extended attestation data to the modal.
+
+
+### FIX 6 - Attestation Detail Card Polish
+In `frontend/src/components/AttestationDetailsModal.tsx`, we enhanced the modal to display dynamic information about the donation instead of hardcoded placeholder text.
+- Added props: `amount`, `campaignTitle`, `confirmedAt`, and `donationDate`.
+- Updated the content strings for each status (PENDING, RECEIPT_CONFIRMED, DELIVERY_CONFIRMED) to fulfill user requirements.
+- Implemented conditional rendering in the modal footer to show the donation amount, NGO/campaign title, and either the donation date (for pending) or the confirmation date (for completed states).
+- In `DonationHistoryTable.tsx` and `DonorDashboard.tsx`, we updated the `attestationData` payload and function signatures to pass `donationDate: donation.createdAt` down to the modal.
+
+
+---
+
+## Backend Changes
+
+### Schema — beneficiaryIdHash field
+FILE: `backend/prisma/schema.prisma`
+
+Added `beneficiaryIdHash String?` to the Campaign model (after `ipfsCid`).
+Nullable so all existing campaigns are unaffected.
+Stores HMAC-SHA512(walletId, campaignId) — the raw wallet ID is never stored.
+
+```
++  beneficiaryIdHash  String?  // HMAC-SHA512(walletId, campaignId) — raw ID never stored
+```
+
+Migration command (run manually):
+  cd backend && npx prisma migrate dev --name add_beneficiary_id_hash
+
+
+### Campaign Creation — beneficiaryId hashing
+FILE: `backend/src/routes/charity.ts`
+
+1. Imported `HashService` from `../services/hashService.js`.
+2. Added `beneficiaryId` to body destructuring in `createCampaign`.
+3. After `prisma.campaign.create()`, if `beneficiaryId` is provided, hashes it with `HashService.hmacSha512(beneficiaryId, campaign.id)` and stores the result in `campaign.beneficiaryIdHash` via a follow-up `prisma.campaign.update()`.
+4. Added `TODO: Phase 4` comment above the hash block referencing `BENEFICIARY_BLOCKCHAIN_HANDOFF.md`.
+5. Destructures `beneficiaryIdHash` out of the campaign object before sending the response — the hash is never returned to the client.
+
+
+### Delivery Attestation — beneficiary hash comparison
+FILE: `backend/src/routes/charity.ts` (`signAttestation` handler)
+
+1. Added `beneficiaryId` extraction from `req.body` alongside `donationId`.
+2. Added a DELIVERY-only verification block after the existing `attestation.status` guard and before `prisma.attestation.update()`:
+   - Looks up the campaign via the `donation.campaignId` already available from the ownership-check query.
+   - If the campaign has a `beneficiaryIdHash` and `beneficiaryId` was not provided → returns 422 `BENEFICIARY_ID_REQUIRED`.
+   - Hashes the submitted ID with `HashService.hmacSha512(beneficiaryId, donation.campaignId)`.
+   - On mismatch → writes audit log via existing `writeAuditLog` helper (`action: "BENEFICIARY_HASH_MISMATCH"`) and returns 422 `BENEFICIARY_MISMATCH`.
+   - On match → falls through to the existing `prisma.attestation.update()` (NGO_SIGNED status update).
+3. Added `TODO: Phase 4 - Store this verification on-chain` comment referencing `BENEFICIARY_BLOCKCHAIN_HANDOFF.md`.
+4. Used `writeAuditLog` (existing helper) — NOT raw `prisma.auditLog.create` — to match codebase pattern.
+
+
+---
+
+## Frontend Changes
+
+### Create Beneficiary Wallet Dialog
+FILE: `frontend/src/components/BeneficiaryWalletDialog.tsx`
+
+Created a new dialog component to generate a mock beneficiary wallet ID before campaign creation. 
+- Implements two internal screens (`form` and `result`) controlled by local state.
+- **Screen 1 (Form):** Collects an internal reference and generates a deterministic mock wallet ID (e.g. `SOL` + hex).
+- **Screen 2 (Result):** Displays the generated wallet ID with a one-click copy button, an amber warning box reminding the NGO to save the ID, and a submit button.
+- Embedded a `TODO: Phase 4` comment for the blockchain team to replace the mock generation with real `@solana/web3.js` `Keypair.generate()` logic.
+- Follows the flat UI design system (no glassmorphism).
+
+
+### Campaign Creation Flow Update
+FILE: `frontend/src/components/CreateCampaignDialog.tsx`
+
+1. **State & Imports:** Added `BeneficiaryWalletDialog` import. Added state variables `step` (`'wallet-check' | 'form'`), `beneficiaryWalletId`, and `showWalletDialog`.
+2. **Step 0 ('wallet-check'):** Implemented a new initial screen in the dialog replacing the form. 
+   - Shows two cards: "I have a Wallet ID" and "Create a Wallet".
+   - "Create a Wallet" opens the new `BeneficiaryWalletDialog`.
+   - On wallet creation, captures the ID and progresses to the form automatically.
+3. **Form Updates ('form'):** Added a required "Beneficiary Wallet ID" field at the bottom of the campaign creation form. Pre-fills automatically if generated in Step 0, but remains editable.
+4. **Submit Payload:** Appends `beneficiaryId: beneficiaryWalletId` to the `apiService.campaigns.create(draftPayload)` call.
+5. **Reset:** Ensured `handleClose` cleanly resets the wizard state (`step`, `beneficiaryWalletId`, `showWalletDialog`) when closed.
+
+
+### UI Polish
+FILE: `frontend/src/components/CreateCampaignDialog.tsx`
+
+Removed the `glass` class and added `bg-background` and standard borders, moving to the flat design system.
+
+
+### Beneficiary Verification on Attestation
+FILE: `frontend/src/utils/apiClient.ts`
+FILE: `frontend/src/components/AttestationSignDialog.tsx`
+
+1. **`apiClient.ts`:** Updated `ngos.signAttestation` to accept an optional `beneficiaryId` and spread it into the request body if present.
+2. **State & Reset:** Added `beneficiaryId` and `beneficiaryError` state. Resets both on dialog open (via `useEffect`) and on switching between 'receipt' and 'delivery' tabs.
+3. **UI Updates:** Added a conditional "Verify Beneficiary" block for `DELIVERY` type attestations, inserted above the action buttons. It features an input for the wallet ID and an amber error box that renders when a mismatch occurs.
+4. **API Integration:** Updated `handleSignAttestation` to pass `beneficiaryId` when the type is `delivery`.
+5. **Error Handling:** Added an explicit catch block for `422 BENEFICIARY_MISMATCH`, injecting the backend's error message directly into the UI (via `setBeneficiaryError`) while skipping the generic toast and keeping the dialog open.
+6. **Validation:** Disabled the "Sign & Broadcast" button if the attestation type is `delivery` and the input is empty.
+
+
+---
+
+## Backend Changes
+
+### Error — TypeScript Build Failures: `BlockchainService | null` not assignable to `BlockchainService`
+
+**Files affected:**
+- `backend/src/services/blockchainRetryProcessor.ts` (lines 95, 97)
+- `backend/tests/ngo-registration-blockchain.test.ts` (lines 75, 78)
+- `backend/tests/cohort-registration-blockchain.test.ts` (lines 122, 125)
+- `backend/tests/disbursement-recording-blockchain.test.ts` (line 121)
+
+**Error:**
+```
+TS2345: Argument of type 'BlockchainService | null' is not assignable to parameter of type 'BlockchainService'.
+  Type 'null' is not assignable to type 'BlockchainService'.
+
+TS18047: 'blockchainService' is possibly 'null'.
+```
+
+**Root cause:**
+`getBlockchainService()` in `blockchainInstance.ts` has a return type of `Promise<BlockchainService | null>` — it intentionally returns `null` when `SOLANA_WALLET_KEYPAIR_PATH` is not configured (expected in local dev). All four call sites called `await getBlockchainService()` and then used the result directly — without a null guard — passing it to functions typed to accept only `BlockchainService` (non-null), or calling methods on it directly. TypeScript's strict null checks correctly flagged this as a type error at build time.
+
+**Fix — null guard added immediately after `await getBlockchainService()` in all four files:**
+
+```diff
+// blockchainRetryProcessor.ts
+  const blockchainService = await getBlockchainService();
++ if (!blockchainService) {
++   console.warn('[BlockchainRetryProcessor] Blockchain service unavailable — skipping retry batch.');
++   return;
++ }
+
+// ngo-registration-blockchain.test.ts
+  const blockchainService = await getBlockchainService();
++ if (!blockchainService) return; // skip if blockchain service not configured
+
+// cohort-registration-blockchain.test.ts
+  const blockchainService = await getBlockchainService();
++ if (!blockchainService) return; // skip if blockchain service not configured
+
+// disbursement-recording-blockchain.test.ts
+  const blockchainService = await getBlockchainService();
++ if (!blockchainService) return; // skip if blockchain service not configured
+```
+
+**Reason the fix is safe:**
+- In `blockchainRetryProcessor.ts`: returning early means the retry batch is skipped when the blockchain service is unconfigured. There is nothing to retry without a working service, so this is correct behaviour.
+- In the three test files: the null-check returns from a code path that is already guarded by `if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID)` — this block never executes during normal test runs. The null guard simply satisfies the TypeScript compiler for a path that is unreachable in the test environment.
+
+**How this was triggered:**
+`npx prisma generate` was run to regenerate the Prisma client after the `beneficiaryIdHash` migration. This caused `tsc` to recheck all types, exposing these pre-existing null-safety violations that had previously gone unnoticed (likely because the build had not been run after prior blockchain service additions).
+
+
+### Error — 402 on Donation > ₹10,000 for Unverified Donor
+FILE: `frontend/src/components/DonateDialog.tsx`
+
+**Error:** `AxiosError: Request failed with status code 402` thrown from `POST /api/donations/donate`, showing generic "Donation failed" toast with no explanation.
+
+**Root cause:** `kycCheckMiddleware.ts` intentionally returns `HTTP 402 { requiresKyc: true }` when a donation amount exceeds ₹10,000 and the donor's `kycStatus` is not `APPROVED` (e.g., the seeded `donor2@traceit.dev` has `kycStatus: NOT_REQUIRED`). The frontend catch block was typed as `catch (_error)` (not `any`) and made no distinction between 402 and other errors — it showed a generic "Donation failed" toast regardless.
+
+**Fix:**
+```diff
+- } catch (_error) {
+-     console.error(_error)
+-     toast({ title: 'Donation failed', variant: 'destructive' })
++ } catch (_error: any) {
++     console.error(_error)
++     if (_error?.response?.status === 402 && _error?.response?.data?.requiresKyc) {
++         toast({
++             title: 'KYC Verification Required',
++             description: 'Donations over ₹10,000 require KYC verification. Please complete your KYC before donating this amount.',
++             variant: 'destructive',
++         })
++     } else {
++         toast({ title: 'Donation failed', variant: 'destructive' })
++     }
+```
+
+**Backend unchanged** — the 402 behaviour is intentional and correct. Only the frontend error handling was improved.
+
+
+### Admin Panel: Missing Fields in Attestation Queue (Problem 1)
+FILE: `backend/src/routes/admin.ts`
+
+**Issue:** In the admin panel, the milestone and attestation queue table showed blank values for NGO name and Campaign title for attestations.
+**Root Cause:** The `getPendingAttestationsAdmin` handler queried `prisma.attestation.findMany` but its `include.donation.select` block failed to include the `project` (Campaign) and `ngo` (Profile) relations. Consequently, the frontend couldn't display them.
+**Fix:** 
+- Expanded the `select` block inside the `donation` include to pull in `campaignId`, `project: { select: { title: true } }`, and `ngo: { select: { organisationName: true } }`.
+- Mapped the resulting attestations before sending the JSON response to attach `ngoName` and `campaignTitle` directly to each item, which `AdminPanel.tsx` expects.
+
+### NGO Dashboard: Missing Campaign Statuses & Reapply (Problem 2)
+FILE: `frontend/src/components/StatusBadge.tsx`
+FILE: `frontend/src/pages/NGODashboard.tsx`
+
+**Issue:** Campaigns correctly stored their status (PENDING_APPROVAL, REJECTED, ACTIVE) in the state, but this was never displayed in the NGO Dashboard UI. Furthermore, if a campaign was rejected, the NGO had no way to resubmit it.
+**Fix:**
+- Updated `StatusBadge.tsx` to explicitly map `ACTIVE`, `PENDING_APPROVAL`, and `REJECTED` to clean label overrides (e.g. "Awaiting Approval") and appropriate dot colors (Green, Yellow, Red).
+- In `NGODashboard.tsx`, added a small `<StatusBadge>` next to the campaign title in the left sidebar list.
+- In `NGODashboard.tsx`, added a prominent header block in the campaign detail view featuring the status badge.
+- When status is `PENDING_APPROVAL`, a subtitle is shown: "Not yet publicly visible."
+- When status is `REJECTED`, a "Reapply for Approval" button appears on the right, mapped to a new `handleReapply` function that calls `apiService.campaigns.submit(campaignId)`.
+- Added a `reapplyingId` state to show a loading spinner on the button while the API request processes.
+
+### Admin Panel: Missing Audit Logs & Search Filters (Problem 4)
+FILE: `frontend/src/utils/apiClient.ts`
+FILE: `frontend/src/pages/AdminPanel.tsx`
+
+**Issue:** The backend had a fully functional `/api/admin/audit-logs` endpoint, but it wasn't connected to the frontend. The Admin Panel also lacked a way to filter or search through campaigns.
+**Fix:**
+- **API Client:** Added `admin.getAuditLogs` to `apiClient.ts` to accept optional pagination and filter parameters (`page`, `limit`, `action`, `userId`).
+- **State & Data Fetching:** Added `auditLogs`, `auditLogsLoading`, and `campaignSearch` state to `AdminPanel.tsx`. Bound `loadAuditLogs` to the main initialization `useEffect`.
+- **Campaign Filtering:** Added a derived `filteredCampaigns` array using `useMemo` that filters the `campaigns` array based on the `campaignSearch` text matching either the campaign title or the NGO name.
+- **UI:** Added a search `<Input>` to the "Platform Campaigns" section header.
+- **UI:** Rendered a new "Zone 4: System Audit Logs" section at the bottom of the page containing a table that displays the timestamp, action, actor, entity, and metadata for every system audit event.
+
+### Admin Workload Reduction (Problem 3)
+FILE: `backend/src/routes/charity.ts`
+FILE: `backend/src/routes/admin.ts`
+FILE: `frontend/src/components/DonationHistoryTable.tsx`
+
+**Issue:** Admin was overwhelmed with approving every campaign and every receipt attestation manually.
+**Fix:**
+- **Campaign Creation Auto-Approve:** Modified `submitCampaign` in `charity.ts`. When an NGO hits submit, it instantly updates the status to `ACTIVE` (bypassing `PENDING_APPROVAL`).
+- **First Attestation (Receipt) Auto-Approve:** Modified `signAttestation` in `charity.ts`. When an NGO signs a `RECEIPT` attestation, it instantly sets status to `APPROVED` and generates two audit logs (`ATTESTATION_NGO_SIGNED` and `ATTESTATION_APPROVED`), meaning it bypasses the admin queue but is still logged.
+- **Admin Queue Filtration:** Modified `getPendingAttestationsAdmin` in `admin.ts`. The query now strictly looks for `status: NGO_SIGNED` AND `type: DELIVERY`. This ensures that even if a receipt attestation somehow got stuck, it will never show up in the Admin's queue.
+- **Donor Visibility Integrity:** Modified `DonationHistoryTable.tsx` so that it only lights up the "Confirmed" state in the timeline if the backend attestation status is strictly `APPROVED`. This ensures the donor sees the instant approval of the Receipt, but realistically waits for the Admin's final approval for the Delivery.
+
+## Beneficiary ID Retrieval Feature (Backend)
+- **`backend/prisma/schema.prisma`**: Added `beneficiaryIdEncrypted String?` field to `Campaign` model to allow persistent secure storage of the beneficiary ID. (Did not modify `beneficiaryIdHash`).
+- **`backend/src/services/hashService.ts`**: Added `encryptBeneficiaryId` and `decryptBeneficiaryId` static methods modeled exactly after `DocumentService.encryptBuffer`. Utilizes `aes-256-cbc` and a new `AES_BENEFICIARY_KEY` 32-byte env variable.
+- **`backend/src/routes/charity.ts`**:
+  - In `createCampaign`: Added logic to encrypt and store the raw `beneficiaryId` in `beneficiaryIdEncrypted` without mutating existing HMCA-SHA512 hashing or payload filtering.
+  - Added `getBeneficiaryId` Express controller applying the exact ownership check pattern: `requireAuth`, `requireRole(UserRole.CHARITY)`, `findFirst({ where: { id: campaignId, ngoId: userId } })`.
+  - Registered `GET /campaigns/:id/beneficiary-id` on the `charityRouter`.
+
+## Pre-requisites Completed Before Frontend UI
+- **Security Verification (Leak Prevention)**: Audited all endpoints returning Campaign objects to ensure `beneficiaryIdEncrypted` is excluded.
+  - Fixed `backend/src/routes/charity.ts`: `getCampaigns` and `submitCampaign` now strip both `beneficiaryIdHash` and `beneficiaryIdEncrypted` from the response payloads.
+  - Fixed `backend/src/routes/admin.ts`: `getPendingCampaigns` and `approveCampaign` now securely strip these fields before returning campaigns to the frontend.
+  - Confirmed `public.ts` and `donor.ts` were already secure as they strictly use Prisma `select` queries limiting returned fields.
+- **Testing**: Added `backend/tests/beneficiary-id.test.ts` mirroring the existing project test setup to guarantee robust security logic. Tests cover:
+  - Encryption/decryption round-trip success in `hashService.ts`.
+  - Proper payload stripping across `GET` and `POST` campaign endpoints.
+  - Correct 200 decryption for the owning NGO.
+  - Strict 404 rejection for non-owning NGOs.
+  - Strict 403 Forbidden checks for `ADMIN` and `DONOR` roles attempting to hit the endpoint.
+
+## Beneficiary ID Retrieval Feature (Frontend)
+- **`frontend/src/utils/apiClient.ts`**: Added `apiClient.campaigns.getBeneficiaryId()` pointing to `GET /charity/campaigns/:id/beneficiary-id`.
+- **`frontend/src/pages/NGODashboard.tsx`**:
+  - Implemented a standalone `BeneficiaryIdReveal` subcomponent.
+  - State matches the requirement: shows an `Eye` icon button that fetches on click (no pre-fetch).
+  - Displays ID in a minimalist, mono-spaced field joined cleanly with a standard copy-to-clipboard button `Copy` / `Check`.
+  - Follows "Living Trust" design cues (e.g. `bg-foreground/[0.03]`, `border-foreground/10`, no glassmorphism, flat borders).
+  - Placed seamlessly adjacent to the `StatusBadge` in the Campaign Detail Header view.
+- **Test Import Fixes**: Resolved build errors in `backend/tests/beneficiary-id.test.ts`.
+  - Fixed Express `app` import from `{ app } from '../src/app'` to the established pattern `import app from '../src/index.js'`.
+  - Fixed `UserRole` import path from `'../../generated/prisma/enums'` to `'../generated/prisma/enums.js'` to correctly align with relative module paths and ESM requirements.
+  - Added `.js` extensions to local imports (`prisma.js`, `hashService.js`) to satisfy the ESNext/bundler setup in `tsconfig.json`.
+
+## Test Suite Fixes (Pre-existing Mismatches)
+- **`backend/tests/charity.test.ts` (Line 118)**:
+  - Updated assertion to `expect(res.body.status).toBe(CampaignStatus.ACTIVE);` (previously `PENDING_APPROVAL`) due to the intentional auto-approval change.
+- **`backend/tests/attestation.test.ts` (Lines 195, 203-229)**:
+  - Updated receipt attestation assertion to expect `AttestationStatus.APPROVED` instead of `NGO_SIGNED`.
+  - Refactored the admin queue tests. Since receipt attestations auto-approve and skip the admin queue, added a step where the NGO signs the `DELIVERY` attestation first, then updated the admin assertions to look for that `deliveryAttestationId` instead.
+- **`backend/tests/simulation.test.ts` (Lines 73-74)**:
+  - Updated assertions to match the new API response shape: changed `orderId` to `razorpayOrderId` and `publicDonationId` to `publicId`.
+- **`backend/tests/e2e.test.ts` (Lines 165-171, 255, 487, 558)**:
+  - Updated multiple assertions and variables assigning `res.body.publicDonationId` to match the correct response field `res.body.publicId`, which also fixed cascading Prisma query failures (`where: { publicId: undefined }`).
+  - Updated `orderId` expectation to `razorpayOrderId`.
+
+## Audit Log Bug Fix
+- **`backend/src/routes/charity.ts` (Line 959)**:
+  - Fixed a silent `P2003` Prisma foreign key error that occurred when the system auto-approved a receipt attestation. The `writeAuditLog` call was incorrectly passing `actorId: 'system'`, which violated the UUID foreign key constraint on the `Profile` table. Updated it to use `actorId: null` (with `actorType: AuditActorType.SYSTEM`) matching the established project pattern for system actions.
+- **`backend/src/services/storageService.ts`**: Bypassed real AWS SDK calls in the `test` environment to prevent un-awaited background processes from logging errors after Jest teardown.
+  - `uploadFile`: Returns early if `NODE_ENV === 'test'`.
+  - `getSignedUrl`: Returns a dummy URL string if `NODE_ENV === 'test'`.
+- **`frontend/src/components/CreateCampaignDialog.tsx`**: Fixed a bug where a failure to submit a campaign (DRAFT to ACTIVE) was silently swallowed. The UI would show a success toast even if the submission failed, leaving the campaign stuck in DRAFT. Now it properly throws the error to be caught and displayed by the UI.
+- **`frontend/src/components/BeneficiaryWalletDialog.tsx`**: Removed the warning alert ("Save this Wallet ID securely... This ID cannot be recovered") from the wallet generation dialog, as NGOs can now securely view the beneficiary ID later from their dashboard.
+- **`frontend/src/pages/AdminPanel.tsx`**: Fixed an issue where the NGO column remained blank in the Pending Approvals and Active Campaigns tables. Updated the cell renderer to properly display the NGO name by falling back gracefully across `ngoName`, nested `ngo.organisationName`, `ngo` string, and `ngoId`.

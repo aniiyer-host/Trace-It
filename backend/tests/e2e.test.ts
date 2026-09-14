@@ -162,13 +162,13 @@ describe("End-to-End Flow Tests", () => {
 
       // expect([200, 201]).toContain(donationRes.status);
       expect(donationRes.status).toBe(201);
-      expect(donationRes.body).toHaveProperty("orderId");
-      expect(donationRes.body).toHaveProperty("publicDonationId");
+      expect(donationRes.body).toHaveProperty("razorpayOrderId");
+      expect(donationRes.body).toHaveProperty("publicId");
       // Store both IDs for different endpoints
-      donationPublicId = donationRes.body.publicDonationId;
+      donationPublicId = donationRes.body.publicId;
       // We need to get the actual donation record to get the UUID id
       const donationRecord = await prisma.donation.findFirst({
-        where: { publicId: donationRes.body.publicDonationId },
+        where: { publicId: donationRes.body.publicId },
         select: { id: true },
       });
 
@@ -252,7 +252,7 @@ describe("End-to-End Flow Tests", () => {
 
       // expect(donationRes.status).toBe(200);
       expect(donationRes.status).toBe(201);
-      const donationId = donationRes.body.publicDonationId;
+      const donationId = donationRes.body.publicId;
       // Get the UUID id
       const donationRecord = await prisma.donation.findFirst({
         where: { publicId: donationId },
@@ -484,7 +484,7 @@ describe("End-to-End Flow Tests", () => {
 
       // expect(donationRes.status).toBe(200);
       expect(donationRes.status).toBe(201);
-      const donationId = donationRes.body.publicDonationId;
+      const donationId = donationRes.body.publicId;
 
       // Update donation status to SUCCESS (simulating webhook)
       await prisma.donation.update({
@@ -555,7 +555,7 @@ describe("End-to-End Flow Tests", () => {
 
       // expect(donationRes.status).toBe(200);
       expect(donationRes.status).toBe(201);
-      const donationId = donationRes.body.publicDonationId;
+      const donationId = donationRes.body.publicId;
 
       // Update donation status to SUCCESS (simulating webhook)
       await prisma.donation.update({

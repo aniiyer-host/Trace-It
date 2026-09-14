@@ -3,8 +3,13 @@ import path from 'path';
 
 let instance: BlockchainService | null = null;
 
-export async function getBlockchainService(): Promise<BlockchainService> {
+export async function getBlockchainService(): Promise<BlockchainService | null> {
   if (instance) return instance;
+
+  if (!process.env.SOLANA_WALLET_KEYPAIR_PATH) {
+    console.warn('[Blockchain] SOLANA_WALLET_KEYPAIR_PATH not configured — blockchain service disabled. This is expected in local dev.');
+    return null;
+  }
 
   const service = new BlockchainService({
     rpcUrl: process.env.SOLANA_RPC_URL,

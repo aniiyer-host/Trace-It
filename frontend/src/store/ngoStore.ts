@@ -13,10 +13,13 @@ interface NGOStore {
     pendingAttestations: Record<string, {
         id: string;
         donationId: string;
-        amount: number;
-        donorName: string;
-        campaignTitle: string;
-        requestedAt: string;
+        type: 'RECEIPT' | 'DELIVERY';
+        createdAt: string;
+        donation?: {
+            amount: number;
+            donorId: string;
+            campaignId?: string;
+        };
     }>
     fetchPendingAttestations: () => Promise<void>
     signAttestation: (donationId: string, type: 'receipt' | 'delivery', ngoName: string) => Promise<void>

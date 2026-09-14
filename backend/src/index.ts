@@ -55,7 +55,9 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-app.use(limiter);
+if (process.env.NODE_ENV === "production") {
+  app.use(limiter);
+}
 
 // Routes
 app.get("/", (req, res) => {

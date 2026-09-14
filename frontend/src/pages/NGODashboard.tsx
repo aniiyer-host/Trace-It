@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 // import { Upload, Bell, CheckCircle, Plus, Clock } from 'lucide-react'
-import { Upload, Bell, CheckCircle, Plus, Clock, Loader2 } from 'lucide-react'
+import { Upload, Bell, CheckCircle, Plus, Clock, Loader2, Eye, Copy, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/authStore'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -37,6 +37,53 @@ function AnimatedStat({ value, label, isCurrency }: { value: number, label: stri
     )
 }
 
+function BeneficiaryIdReveal({ campaignId }: { campaignId: string }) {
+    const [revealedId, setRevealedId] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [copied, setCopied] = useState(false);
+    const { toast } = useToast();
+
+    const handleReveal = async () => {
+        if (revealedId) return;
+        setLoading(true);
+        try {
+            const res = await apiService.campaigns.getBeneficiaryId(campaignId);
+            setRevealedId(res.beneficiaryId);
+        } catch (err: any) {
+            toast({ title: 'Error fetching Beneficiary ID', description: err.response?.data?.error || err.message, variant: 'destructive' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCopy = () => {
+        if (!revealedId) return;
+        navigator.clipboard.writeText(revealedId);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    if (!revealedId) {
+        return (
+            <Button variant="outline" size="sm" onClick={handleReveal} disabled={loading} className="gap-2 rounded-full h-8 px-3 text-xs border-foreground/20 text-muted-foreground hover:text-foreground">
+                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+                Unlock Beneficiary ID
+            </Button>
+        );
+    }
+
+    return (
+        <div className="flex items-center gap-1">
+            <div className="font-mono text-xs bg-foreground/[0.03] border border-foreground/10 px-3 py-1.5 rounded-l-md text-muted-foreground select-all h-8 flex items-center">
+                {revealedId}
+            </div>
+            <Button variant="outline" size="icon" onClick={handleCopy} className="h-8 w-8 rounded-r-md rounded-l-none border-l-0 bg-background hover:bg-foreground/5">
+                {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
+            </Button>
+        </div>
+    );
+}
+
 export default function NGODashboard() {
     const { campaigns: _storeCampaigns, updateMilestoneStatus } = useDonationStore()
     const { pendingAttestations, fetchPendingAttestations, attestationStatus } = useNGOStore()
@@ -47,17 +94,22 @@ export default function NGODashboard() {
     const [ngoCampaigns, setNgoCampaigns] = useState<Campaign[]>([])
     const [loadingData, setLoadingData] = useState(false)
     const [createCampaignOpen, setCreateCampaignOpen] = useState(false)
+    const [reapplyingId, setReapplyingId] = useState<string | null>(null)
 
     const [proofMs, setProofMs] = useState<Milestone | null>(null)
     const [proofCampaign, setProofCampaign] = useState<Campaign | null>(null)
     const [proofOpen, setProofOpen] = useState(false)
     const [attestationDialogOpen, setAttestationDialogOpen] = useState(false)
     const [selectedAttestation, setSelectedAttestation] = useState<{
+        id: string;
         donationId: string;
-        amount: number;
-        donorName: string;
-        campaignTitle: string;
-        requestedAt: string;
+        type: 'RECEIPT' | 'DELIVERY';
+        createdAt: string;
+        donation?: {
+            amount: number;
+            donorId: string;
+            campaignId?: string;
+        };
     } | null>(null)
     const { toast } = useToast()
     const { user } = useAuthStore()
@@ -145,14 +197,32 @@ export default function NGODashboard() {
     }
 
     const handleAttestationSelect = (attestation: {
+        id: string;
         donationId: string;
-        amount: number;
-        donorName: string;
-        campaignTitle: string;
-        requestedAt: string;
+        type: 'RECEIPT' | 'DELIVERY';
+        createdAt: string;
+        donation?: {
+            amount: number;
+            donorId: string;
+            campaignId?: string;
+        };
     }) => {
         setSelectedAttestation(attestation);
         setAttestationDialogOpen(true);
+    }
+
+    const handleReapply = async (campaignId: string) => {
+        setReapplyingId(campaignId);
+        try {
+            await apiService.campaigns.submit(campaignId);
+            toast({ title: 'Campaign resubmitted for approval' });
+            fetchNgoData();
+        } catch (err) {
+            console.error('Failed to resubmit campaign:', err);
+            toast({ title: 'Failed to resubmit', variant: 'destructive' });
+        } finally {
+            setReapplyingId(null);
+        }
     }
 
     // Collect all pending milestone actions across NGO campaigns
@@ -206,7 +276,7 @@ export default function NGODashboard() {
                     </button>
 
                     {ngoCampaigns.map(c => {
-                        const count = pendingMilestoneActions.filter(x => x.campaign.id === c.id && !(x.milestone.status === 'delivered' && attestationStatus[`don-${x.milestone.id}`] === 'confirmed')).length + Object.values(pendingAttestations).filter(att => att.campaignTitle === c.title).length;
+                        const count = pendingMilestoneActions.filter(x => x.campaign.id === c.id && !(x.milestone.status === 'delivered' && attestationStatus[`don-${x.milestone.id}`] === 'confirmed')).length;
                         return (
                             <button
                                 key={c.id}
@@ -218,7 +288,10 @@ export default function NGODashboard() {
                                         : "text-foreground/50 border-b-2 md:border-b-0 md:border-l-2 border-transparent hover:text-foreground"
                                 )}
                             >
-                                <span className="truncate">{c.title.split('–')[0].trim()}</span>
+                                <div className="flex items-center gap-2 overflow-hidden">
+                                    <span className="truncate">{c.title.split('–')[0].trim()}</span>
+                                    <StatusBadge status={c.status} className="shrink-0" />
+                                </div>
                                 {count > 0 && <span className="text-foreground/40 ml-2 shrink-0">{count}</span>}
                             </button>
                         )
@@ -258,13 +331,29 @@ export default function NGODashboard() {
 
                             <div className="space-y-4">
                                 {/* Attestation Requests */}
-                                {Object.entries(pendingAttestations).map(([key, attestation]) => (
-                                    <div key={`att-${key}`} className="group flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 rounded-xl bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-foreground/5 border-l-4 border-l-emerald-500 transition-colors">
+                                {Object.entries(pendingAttestations).map(([key, attestation]) => {
+                                    const campaignTitle = ngoCampaigns.find(
+                                        c => c.id === (attestation.donation as any)?.campaignId
+                                    )?.title || `Campaign ${attestation.donationId?.substring(0, 8)}`;
+                                    
+                                    const isDelivery = attestation.type === 'DELIVERY';
+                                    
+                                    return (
+                                    <div key={`att-${key}`} className={cn("group flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 rounded-xl bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-foreground/5 border-l-4 transition-colors",
+                                        isDelivery ? "border-l-blue-500" : "border-l-emerald-500"
+                                    )}>
                                         <div className="space-y-1">
-                                            <div className="text-sm font-semibold tracking-widest text-emerald-600 dark:text-emerald-500 uppercase">Attestation Request</div>
-                                            <div className="text-2xl font-bold tracking-tighter tabular-nums">{formatUSD(attestation.amount)}</div>
-                                            <div className="text-foreground/70">{attestation.donorName} <span className="text-foreground/30 mx-2">•</span> {attestation.campaignTitle}</div>
-                                            <div className="text-xs text-foreground/40 mt-1">Requested {new Date(attestation.requestedAt).toLocaleDateString()}</div>
+                                            <div className={cn("text-sm font-semibold tracking-widest uppercase",
+                                                isDelivery ? "text-blue-600 dark:text-blue-500" : "text-emerald-600 dark:text-emerald-500"
+                                            )}>
+                                                {isDelivery ? "Delivery Attestation" : "Receipt Attestation"}
+                                            </div>
+                                            <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide">
+                                                {isDelivery ? "Confirm delivery to beneficiary" : "Confirm you received the funds"}
+                                            </div>
+                                            <div className="text-2xl font-bold tracking-tighter tabular-nums pt-1">{formatUSD(Number(attestation.donation?.amount))}</div>
+                                            <div className="text-foreground/70">{attestation.donation?.donorId ? `Donor ${attestation.donation.donorId.substring(0,8)}` : 'Donor'} <span className="text-foreground/30 mx-2">•</span> {campaignTitle}</div>
+                                            <div className="text-xs text-foreground/40 mt-1">Requested {new Date(attestation.createdAt).toLocaleDateString()}</div>
                                         </div>
                                         <Button
                                             onClick={() => handleAttestationSelect(attestation)}
@@ -274,7 +363,8 @@ export default function NGODashboard() {
                                             Sign & Release
                                         </Button>
                                     </div>
-                                ))}
+                                    );
+                                })}
 
                                 {/* Milestone Tasks */}
                                 {pendingMilestoneActions.map(({ campaign, milestone }) => {
@@ -325,11 +415,14 @@ export default function NGODashboard() {
                                                         className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                                                         onClick={() => {
                                                             handleAttestationSelect({
+                                                                id: `mock-${milestone.id}`,
                                                                 donationId: `don-${milestone.id}`,
-                                                                amount: milestone.targetAmount,
-                                                                donorName: 'Anonymous Donor',
-                                                                campaignTitle: campaign.title,
-                                                                requestedAt: new Date().toISOString()
+                                                                type: 'DELIVERY',
+                                                                createdAt: new Date().toISOString(),
+                                                                donation: {
+                                                                    amount: milestone.targetAmount,
+                                                                    donorId: 'anonymous'
+                                                                }
                                                             });
                                                         }}
                                                     >
@@ -365,10 +458,25 @@ export default function NGODashboard() {
                             transition={{ duration: 0.3 }}
                             className="space-y-16"
                         >
-                            <div>
-                                <h1 className="text-4xl lg:text-5xl font-bold tracking-tighter text-balance">
-                                    {selectedCampaignObj.title}
-                                </h1>
+                            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                                <div>
+                                    <h1 className="text-4xl lg:text-5xl font-bold tracking-tighter text-balance mb-4">
+                                        {selectedCampaignObj.title}
+                                    </h1>
+                                    <div className="flex flex-wrap items-center gap-4">
+                                         <StatusBadge status={selectedCampaignObj.status} className="text-sm border px-3 py-1.5 rounded-full" />
+                                         {selectedCampaignObj.status === 'PENDING_APPROVAL' && (
+                                             <span className="text-sm text-muted-foreground font-medium">Not yet publicly visible.</span>
+                                         )}
+                                         <BeneficiaryIdReveal campaignId={selectedCampaignObj.id} />
+                                    </div>
+                                </div>
+                                {selectedCampaignObj.status === 'REJECTED' && (
+                                    <Button onClick={() => handleReapply(selectedCampaignObj.id)} disabled={reapplyingId === selectedCampaignObj.id}>
+                                         {reapplyingId === selectedCampaignObj.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                         Reapply for Approval
+                                    </Button>
+                                )}
                             </div>
 
                             {/* Top Stats Grid (No dividers, spatial tension) */}
@@ -411,14 +519,14 @@ export default function NGODashboard() {
                 <AttestationSignDialog
                     donation={{
                         id: selectedAttestation.donationId,
-                        amount: selectedAttestation.amount,
-                        campaignTitle: selectedAttestation.campaignTitle,
+                        amount: Number(selectedAttestation.donation?.amount),
+                        campaignTitle: `Campaign ${selectedAttestation.donationId?.substring(0,8)}`,
                         paymentMethod: 'upi',
                         orderId: `order_${selectedAttestation.donationId}`,
                         txHash: `tx_${selectedAttestation.donationId}`,
                         walletAddress: 'demo_wallet',
                         status: 'disbursed',
-                        createdAt: selectedAttestation.requestedAt,
+                        createdAt: selectedAttestation.createdAt,
                         explorerUrl: `https://explorer.solana.com/tx/tx_${selectedAttestation.donationId}?cluster=devnet`
                     } as any }
                     ngoName="AidIndia Foundation"

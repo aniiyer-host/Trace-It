@@ -16,6 +16,7 @@ import { writeAuditLog } from "../services/auditLogService.js";
 import { getBlockchainService } from "../services/blockchainInstance.js";
 import { addToBlockchainRetryQueue } from "../services/blockchainRetryQueue.js";
 import { allocateDonation } from "../services/statusService.js";
+import { HashService } from "../services/hashService.js";
 import {
   AttestationType,
   AttestationStatus,
@@ -24,7 +25,7 @@ const charityRouter = Router();
 
 // Helper function to handle blockchain operations (fire and forget)
 const handleBlockchainOperation = async (
-  operationFn: () => Promise<any>,
+  operationFn: (service: any) => Promise<any>,
   operationName: string,
   entityType: string,
   entityId: string,
@@ -37,44 +38,54 @@ const handleBlockchainOperation = async (
 
   try {
     const blockchainService = await getBlockchainService();
-    const result = await operationFn();
+    if (blockchainService) {
+      const result = await operationFn(blockchainService);
 
-    if (result.success) {
-      await writeAuditLog({
-        actorType: AuditActorType.USER,
-        actorId: adminId,
-        entityType,
-        entityId,
-        action: `BLOCKCHAIN_${operationName.toUpperCase()}_SUCCESS`,
-        metadata: {
+      if (result.success) {
+        await writeAuditLog({
+          actorType: AuditActorType.USER,
+          actorId: adminId,
+          entityType,
           entityId,
-          transactionHash: result.txHash,
-        },
-      });
-      console.info(`Blockchain ${operationName} successful: ${result.txHash}`);
+          action: `BLOCKCHAIN_${operationName.toUpperCase()}_SUCCESS`,
+          metadata: {
+            entityId,
+            transactionHash: result.txHash,
+          },
+        });
+        console.info(`Blockchain ${operationName} successful: ${result.txHash}`);
+      } else {
+        console.error(`Failed to ${operationName} on-chain: ${result.error}`);
+
+        await addToBlockchainRetryQueue({
+          donationId: entityId,
+          error: result.error ?? "Unknown blockchain error",
+          retryCount: 0,
+        });
+
+        await writeAuditLog({
+          actorType: AuditActorType.USER,
+          actorId: adminId,
+          entityType,
+          entityId,
+          action: `BLOCKCHAIN_${operationName.toUpperCase()}_FAILED`,
+          metadata: {
+            entityId,
+            error: result.error,
+          },
+        });
+      }
     } else {
-      console.error(`Failed to ${operationName} on-chain: ${result.error}`);
-
-      await addToBlockchainRetryQueue({
-        donationId: entityId,
-        error: result.error ?? "Unknown blockchain error",
-        retryCount: 0,
-      });
-
-      await writeAuditLog({
-        actorType: AuditActorType.USER,
-        actorId: adminId,
-        entityType,
-        entityId,
-        action: `BLOCKCHAIN_${operationName.toUpperCase()}_FAILED`,
-        metadata: {
-          entityId,
-          error: result.error,
-        },
-      });
+      console.warn(`[Blockchain] Service not available — skipping on-chain recording for ${operationName}`);
     }
   } catch (error) {
-    console.error(`Error in blockchain ${operationName} integration:`, error);
+    console.error(`Blockchain invocation error for ${operationName}:`, error);
+
+    await addToBlockchainRetryQueue({
+      donationId: entityId,
+      error: error instanceof Error ? error.message : "Unknown fatal error",
+      retryCount: 0,
+    });
   }
 };
 
@@ -246,6 +257,7 @@ export const createCampaign = async (
       category,
       coverImageUrl,
       sdgTags,
+      beneficiaryId,
     } = req.body;
 
     if (!title || !description || targetAmount === undefined) {
@@ -268,6 +280,21 @@ export const createCampaign = async (
       },
     });
 
+    // TODO: Phase 4 - Store this hash on-chain via blockchainService
+    // See BENEFICIARY_BLOCKCHAIN_HANDOFF.md
+    if (beneficiaryId) {
+      const beneficiaryIdHash = HashService.hmacSha512(
+        beneficiaryId,
+        campaign.id,
+      );
+      const beneficiaryIdEncrypted = HashService.encryptBeneficiaryId(beneficiaryId);
+      
+      await prisma.campaign.update({
+        where: { id: campaign.id },
+        data: { beneficiaryIdHash, beneficiaryIdEncrypted },
+      });
+    }
+
     await writeAuditLog({
       actorType: AuditActorType.USER,
       actorId: userId,
@@ -277,7 +304,9 @@ export const createCampaign = async (
       metadata: { title, targetAmount: Number(targetAmount) },
     });
 
-    res.status(201).json(campaign);
+    // Never expose the beneficiary hash or encrypted ID to the client
+    const { beneficiaryIdHash: _hash, beneficiaryIdEncrypted: _enc, ...safeResponse } = campaign as any;
+    res.status(201).json(safeResponse);
   } catch (err) {
     next(err);
   }
@@ -299,7 +328,10 @@ export const getCampaigns = async (
       orderBy: { createdAt: "desc" },
     });
 
-    res.json(campaigns);
+    res.json(campaigns.map(c => {
+      const { beneficiaryIdHash: _h, beneficiaryIdEncrypted: _e, ...safe } = c as any;
+      return safe;
+    }));
   } catch (err) {
     next(err);
   }
@@ -329,7 +361,7 @@ export const submitCampaign = async (
 
     const updated = await prisma.campaign.update({
       where: { id: campaignId },
-      data: { status: CampaignStatus.PENDING_APPROVAL },
+      data: { status: CampaignStatus.ACTIVE },
     });
 
     await writeAuditLog({
@@ -341,7 +373,44 @@ export const submitCampaign = async (
       metadata: { title: campaign.title },
     });
 
-    res.json(updated);
+    const { beneficiaryIdHash: _h, beneficiaryIdEncrypted: _e, ...safe } = updated as any;
+    res.json(safe);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /campaigns/:id/beneficiary-id - Get encrypted beneficiary ID (NGO only)
+export const getBeneficiaryId = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const campaignId = req.params.id as string;
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: campaignId, ngoId: userId },
+    });
+
+    if (!campaign) {
+      return res
+        .status(404)
+        .json({ error: "Campaign not found or access denied" });
+    }
+
+    if (!campaign.beneficiaryIdEncrypted) {
+      return res
+        .status(404)
+        .json({ error: "Beneficiary ID not found for this campaign" });
+    }
+
+    const rawId = HashService.decryptBeneficiaryId(campaign.beneficiaryIdEncrypted);
+    res.json({ beneficiaryId: rawId });
   } catch (err) {
     next(err);
   }
@@ -457,8 +526,7 @@ export const uploadCohortProof = [
       });
 
       handleBlockchainOperation(
-        async () => {
-          const blockchainService = await getBlockchainService();
+        async (blockchainService) => {
           return await blockchainService.registerCohort({
             cohortId,
             ngoId: userId,
@@ -748,7 +816,7 @@ export const getPendingAttestationsForNgo = async (
       where: { status: AttestationStatus.PENDING, donation: { ngoId } },
       include: {
         donation: {
-          select: { id: true, publicId: true, amount: true, donorId: true },
+          select: { id: true, publicId: true, amount: true, donorId: true, campaignId: true },
         },
       },
       orderBy: { createdAt: "asc" },
@@ -772,6 +840,7 @@ export const signAttestation = async (
       return res.status(401).json({ error: "User not authenticated" });
 
     const { donationId } = req.body;
+    const { beneficiaryId } = req.body;
     const rawType = (req.body?.type ?? "").toString().toUpperCase();
     if (!donationId || !["RECEIPT", "DELIVERY"].includes(rawType)) {
       return res
@@ -801,15 +870,80 @@ export const signAttestation = async (
         .json({ error: `Attestation is already ${attestation.status}` });
     }
 
+    // --- Beneficiary hash verification (DELIVERY only) ---
+    if (rawType === "DELIVERY" && donation.campaignId) {
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: donation.campaignId },
+        select: { beneficiaryIdHash: true },
+      });
+
+      if (campaign?.beneficiaryIdHash) {
+        if (!beneficiaryId) {
+          return res.status(422).json({
+            error: "BENEFICIARY_ID_REQUIRED",
+            message:
+              "This campaign requires beneficiary verification. Please enter the beneficiary wallet ID.",
+          });
+        }
+
+        const submittedHash = HashService.hmacSha512(
+          beneficiaryId,
+          donation.campaignId,
+        );
+
+        if (submittedHash !== campaign.beneficiaryIdHash) {
+          await writeAuditLog({
+            actorType: AuditActorType.USER,
+            actorId: ngoId,
+            entityType: "attestation",
+            entityId: attestation.id,
+            action: "BENEFICIARY_HASH_MISMATCH",
+            metadata: {
+              campaignId: donation.campaignId,
+              donationId: attestation.donationId,
+              ngoId,
+            },
+          });
+
+          return res.status(422).json({
+            error: "BENEFICIARY_MISMATCH",
+            message:
+              "The beneficiary ID you entered does not match the one registered for this campaign. Please verify and try again. This mismatch has been logged.",
+          });
+        }
+        // TODO: Phase 4 - Store this verification on-chain
+        // See BENEFICIARY_BLOCKCHAIN_HANDOFF.md
+      }
+    }
+    // --- End beneficiary verification ---
+
     const updated = await prisma.attestation.update({
       where: { id: attestation.id },
       data: {
-        status: AttestationStatus.NGO_SIGNED,
+        status: rawType === 'RECEIPT' ? AttestationStatus.APPROVED : AttestationStatus.NGO_SIGNED,
         ngoSignedBy: ngoId,
         ngoSignedAt: new Date(),
+        ...(rawType === 'RECEIPT' && { approvedAt: new Date() }),
       },
     });
 
+    if (attestation.type === 'RECEIPT') {
+      await prisma.attestation.upsert({
+        where: {
+          donationId_type: {
+            donationId: attestation.donationId,
+            type: 'DELIVERY'
+          }
+        },
+        update: {},
+        create: {
+          donationId: attestation.donationId,
+          type: 'DELIVERY',
+          status: 'PENDING',
+          requestedBy: attestation.requestedBy
+        }
+      })
+    }
     await writeAuditLog({
       actorType: AuditActorType.USER,
       actorId: ngoId,
@@ -818,6 +952,17 @@ export const signAttestation = async (
       action: "ATTESTATION_NGO_SIGNED",
       metadata: { donationId, type: rawType },
     });
+
+    if (rawType === 'RECEIPT') {
+      await writeAuditLog({
+        actorType: AuditActorType.SYSTEM,
+        actorId: null,
+        entityType: "attestation",
+        entityId: updated.id,
+        action: "ATTESTATION_APPROVED",
+        metadata: { donationId, type: rawType, autoApproved: true },
+      });
+    }
 
     res.json(updated);
   } catch (err) {
@@ -924,6 +1069,12 @@ charityRouter.get(
   requireAuth,
   requireRole(UserRole.CHARITY),
   getCampaigns,
+);
+charityRouter.get(
+  "/campaigns/:id/beneficiary-id",
+  requireAuth,
+  requireRole(UserRole.CHARITY),
+  getBeneficiaryId,
 );
 charityRouter.post(
   "/campaigns/:id/submit",

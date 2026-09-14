@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/authStore'
 import { apiService } from '@/utils/apiClient'
 import type { Campaign, Donation } from '@/types'
 import { useCountUp } from '@/hooks/useCountUp'
+import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
 function StatBlock({ value, label, prefix = '', suffix = '' }: { value: number, label: string, prefix?: string, suffix?: string }) {
@@ -44,6 +45,7 @@ function SmallStatBlock({ value, label, prefix = '', suffix = '' }: { value: num
 export default function DonorDashboard() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
+  const { toast } = useToast()
   
   // -- CONSTRAINTS PRESERVED --
   const { campaigns, loadCampaigns, setDonations } = useDonationStore()
@@ -129,18 +131,19 @@ export default function DonorDashboard() {
     }
   }, [donations, campaigns])
 
-  const handleViewAttestation = (donationId: string) => {
-    const donation = donations.find(d => d.id === donationId)
-    if (!donation) return
-    let attestationStatus: 'pending' | 'receipt_confirmed' | 'delivery_confirmed' = 'pending'
-    if (donation.status === 'delivered' || donation.status === 'disbursed') {
-      attestationStatus = 'receipt_confirmed'
-    }
-    setAttestationModalData({ donationId, attestationStatus })
+  const handleViewAttestation = (data: {
+    donationId: string;
+    attestationStatus: 'pending' | 'receipt_confirmed' | 'delivery_confirmed';
+    amount?: number;
+    campaignTitle?: string;
+    confirmedAt?: string;
+    donationDate?: string;
+  }) => {
+    setAttestationModalData(data)
   }
 
   const handleVerifyIntegrity = (donationId: string) => {
-    alert(`Verifying integrity for donation ${donationId}\n\nIn a real implementation, this would:\n1. Compute hash from donation data\n2. Compare with on-chain hash\n3. Show match/mismatch result`)
+    toast({ title: 'Blockchain verification will be available once on-chain recording is active.' })
   }
 
   const handleCloseAttestationModal = () => {
@@ -173,7 +176,7 @@ export default function DonorDashboard() {
               * TODO: RBAC-pending profile redirect 
               * Update this alert to a router navigation when Profile supports roles.
               */}
-            <Button variant="ghost" onClick={() => alert('Profile page coming soon')}>Profile</Button>
+            <Button variant="ghost" onClick={() => navigate('/profile')}>Profile</Button>
             <Button variant="outline" onClick={() => setUser(null)}>Sign Out</Button>
           </div>
         </div>
@@ -328,6 +331,10 @@ export default function DonorDashboard() {
         <AttestationDetailsModal
           donationId={attestationModalData.donationId}
           attestationStatus={attestationModalData.attestationStatus}
+          amount={attestationModalData.amount}
+          campaignTitle={attestationModalData.campaignTitle}
+          confirmedAt={attestationModalData.confirmedAt}
+          donationDate={attestationModalData.donationDate}
           onClose={handleCloseAttestationModal}
         />
       )}

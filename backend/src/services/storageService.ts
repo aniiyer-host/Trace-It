@@ -36,6 +36,8 @@ export class StorageService {
    * @returns Promise<void>
    */
   async uploadFile(buffer: Buffer, path: string, mimeType: string): Promise<void> {
+    if (process.env.NODE_ENV === 'test') return;
+
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
       Key: path,
@@ -59,6 +61,8 @@ export class StorageService {
    * @returns Promise<string> - The signed URL.
    */
   async getSignedUrl(path: string, ttlSeconds: number): Promise<string> {
+    if (process.env.NODE_ENV === 'test') return `https://mock.s3.test/${path}`;
+
     const command = new GetObjectCommand({
       Bucket: this.bucketName,
       Key: path,

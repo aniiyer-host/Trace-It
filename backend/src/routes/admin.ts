@@ -62,6 +62,10 @@ export const approveDisbursement = async (
       const recordDisbursementOnChain = async () => {
         try {
           const blockchainService = await getBlockchainService();
+          if (!blockchainService) {
+            console.warn('[Blockchain] Service not available — skipping on-chain recording');
+            return;
+          }
 
           // We need the transaction hash of the actual funds transfer.
           // For now, we assume that the disbursement record already has the solanaTxHash
@@ -149,6 +153,10 @@ export const approveDisbursement = async (
       const updateDonationStatusOnChain = async () => {
         try {
           const blockchainService = await getBlockchainService();
+          if (!blockchainService) {
+            console.warn('[Blockchain] Service not available — skipping on-chain recording');
+            return;
+          }
 
           // Find associated donations for this disbursement
           const donations = await prisma.donation.findMany({
@@ -400,6 +408,10 @@ export const approveNgo = async (
       const registerNgoOnChain = async () => {
         try {
           const blockchainService = await getBlockchainService();
+          if (!blockchainService) {
+            console.warn('[Blockchain] Service not available — skipping on-chain recording');
+            return;
+          }
 
           // Find the latest NGO verification document (NGO_CERT) owned by this NGO
           const verificationDoc = await prisma.document.findFirst({
@@ -538,7 +550,10 @@ export const getPendingCampaigns = async (
       },
       orderBy: { createdAt: "desc" },
     });
-    res.json(campaigns);
+    res.json(campaigns.map(c => {
+      const { beneficiaryIdHash: _h, beneficiaryIdEncrypted: _e, ...safe } = c as any;
+      return safe;
+    }));
   } catch (err) {
     next(err);
   }
@@ -578,7 +593,8 @@ export const approveCampaign = async (
       action: "CAMPAIGN_APPROVED",
       metadata: {},
     });
-    res.json(updated);
+    const { beneficiaryIdHash: _h, beneficiaryIdEncrypted: _e, ...safe } = updated as any;
+    res.json(safe);
   } catch (err) {
     next(err);
   }
@@ -1097,7 +1113,10 @@ export const getPendingAttestationsAdmin = async (
 ) => {
   try {
     const attestations = await prisma.attestation.findMany({
-      where: { status: AttestationStatus.NGO_SIGNED },
+      where: { 
+        status: AttestationStatus.NGO_SIGNED,
+        type: 'DELIVERY' 
+      },
       include: {
         donation: {
           select: {
@@ -1106,12 +1125,22 @@ export const getPendingAttestationsAdmin = async (
             amount: true,
             ngoId: true,
             donorId: true,
+            campaignId: true,
+            project: { select: { title: true } },
+            ngo: { select: { organisationName: true } },
           },
         },
       },
       orderBy: { createdAt: "asc" },
     });
-    res.json(attestations);
+
+    const mapped = attestations.map(att => ({
+      ...att,
+      ngoName: (att.donation as any)?.ngo?.organisationName || att.donation?.ngoId,
+      campaignTitle: (att.donation as any)?.project?.title || `Campaign ${(att.donation as any)?.campaignId?.substring(0, 8)}`,
+    }));
+
+    res.json(mapped);
   } catch (err) {
     next(err);
   }

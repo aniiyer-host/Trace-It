@@ -8,6 +8,7 @@ import { useAdminStore } from '@/store/adminStore'
 import { useAuthStore } from '@/store/authStore'
 import { useToast } from '@/hooks/use-toast'
 import { formatUSD } from '@/lib/utils'
+import { apiService } from '@/utils/apiClient'
 import type { Campaign } from '@/types'
 
 /*
@@ -85,11 +86,11 @@ function CampaignRow({ campaign }: { campaign: Campaign }) {
     return (
         <tr className="border-b border-border/10 hover:bg-muted/10 transition-colors">
             <td className="py-4 px-4 font-medium">{campaign.title}</td>
-            <td className="py-4 px-4 text-muted-foreground">{campaign.ngo}</td>
+            <td className="py-4 px-4 text-muted-foreground">{campaign.ngoName || (campaign.ngo as any)?.organisationName || campaign.ngo || campaign.ngoId || 'Unknown NGO'}</td>
             <td className="py-4 px-4">
                 <span className="flex items-center gap-2 text-sm">
-                    <span className={`h-1.5 w-1.5 rounded-full ${campaign.raisedAmount >= campaign.targetAmount ? 'bg-emerald-500' : 'bg-primary'}`} />
-                    {campaign.raisedAmount >= campaign.targetAmount ? 'Funded' : 'Active'}
+                    <span className={`h-1.5 w-1.5 rounded-full ${Number(campaign.raisedAmount) >= Number(campaign.targetAmount) ? 'bg-emerald-500' : 'bg-primary'}`} />
+                    {Number(campaign.raisedAmount) >= Number(campaign.targetAmount) ? 'Funded' : 'Active'}
                 </span>
             </td>
             <td className="py-4 px-4 text-right tabular-nums">{(campaign.milestones || []).length}</td>
@@ -114,12 +115,29 @@ export default function AdminPanel() {
     const [loadingId, setLoadingId] = useState<string | null>(null)
     const [approvingCampId, setApprovingCampId] = useState<string | null>(null)
 
+    const [auditLogs, setAuditLogs] = useState<any[]>([])
+    const [auditLogsLoading, setAuditLogsLoading] = useState(false)
+    const [campaignSearch, setCampaignSearch] = useState('')
+
+    const loadAuditLogs = async () => {
+        try {
+            setAuditLogsLoading(true)
+            const res = await apiService.admin.getAuditLogs({ limit: 50 })
+            setAuditLogs(res.auditLogs || [])
+        } catch (err) {
+            console.error('Failed to load audit logs:', err)
+        } finally {
+            setAuditLogsLoading(false)
+        }
+    }
+
     useEffect(() => {
         if (user && user.role === 'ADMIN') {
             loadCampaigns();
             fetchPendingAttestations();
             fetchPendingMilestoneApprovals();
             fetchPendingCampaigns();
+            loadAuditLogs();
         }
     }, [user, loadCampaigns, fetchPendingAttestations, fetchPendingMilestoneApprovals, fetchPendingCampaigns]);
 
@@ -147,7 +165,7 @@ export default function AdminPanel() {
                 id: key,
                 entityId: ms.id,
                 title: ms.title,
-                amount: ms.targetAmount,
+                amount: Number(ms.amountInr),
                 ngo: camp?.ngo || 'Unknown NGO',
                 campaign: camp?.title || 'Unknown Campaign'
             })
@@ -158,7 +176,7 @@ export default function AdminPanel() {
                 id: key,
                 entityId: att.donationId,
                 title: att.statement,
-                amount: att.amount,
+                amount: Number(att.donation?.amount),
                 ngo: att.ngoName,
                 campaign: att.campaignTitle
             })
@@ -166,9 +184,18 @@ export default function AdminPanel() {
         return items;
     }, [pendingMilestoneApprovals, pendingAttestations, campaigns]);
 
-    const totalTarget = campaigns.reduce((sum, c) => sum + c.targetAmount, 0);
-    const totalRaised = campaigns.reduce((sum, c) => sum + c.raisedAmount, 0);
+    const totalTarget = campaigns.reduce((sum, c) => sum + Number(c.targetAmount), 0);
+    const totalRaised = campaigns.reduce((sum, c) => sum + Number(c.raisedAmount), 0);
     const pendingCount = actionItems.length + pendingCampaigns.length;
+
+    const filteredCampaigns = useMemo(() => {
+        if (!campaignSearch.trim()) return campaigns;
+        const lower = campaignSearch.toLowerCase();
+        return campaigns.filter(c => 
+            c.title.toLowerCase().includes(lower) || 
+            (c.ngo && c.ngo.toLowerCase().includes(lower))
+        );
+    }, [campaigns, campaignSearch]);
 
     const handleApprove = async (id: string, type: 'milestone' | 'attestation') => {
         setLoadingId(id)
@@ -282,7 +309,7 @@ export default function AdminPanel() {
                                             <div className="text-xs text-muted-foreground line-clamp-1 max-w-md">{camp.description}</div>
                                         </td>
                                         <td className="py-4 px-4 text-muted-foreground">
-                                            {camp.ngo?.organisationName || camp.ngoId}
+                                            {camp.ngoName || camp.ngo?.organisationName || camp.ngo || camp.ngoId || 'Unknown NGO'}
                                         </td>
                                         <td className="py-4 px-4 text-right tabular-nums font-semibold">
                                             {formatUSD(Number(camp.targetAmount))}
@@ -352,7 +379,15 @@ export default function AdminPanel() {
 
             {/* ZONE 2: Campaign Overview */}
             <div className="space-y-6">
-                <h2 className="text-2xl font-bold tracking-tight">Platform Campaigns</h2>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <h2 className="text-2xl font-bold tracking-tight">Platform Campaigns</h2>
+                    <Input
+                        placeholder="Search by NGO or Campaign..."
+                        value={campaignSearch}
+                        onChange={(e) => setCampaignSearch(e.target.value)}
+                        className="max-w-xs"
+                    />
+                </div>
                 <div className="w-full overflow-x-auto">
                     <table className="w-full text-sm text-left whitespace-nowrap">
                         <thead>
@@ -366,9 +401,79 @@ export default function AdminPanel() {
                             </tr>
                         </thead>
                         <tbody>
-                            {campaigns.map(c => (
-                                <CampaignRow key={c.id} campaign={c} />
-                            ))}
+                            {filteredCampaigns.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                                        No campaigns found matching your search.
+                                    </td>
+                                </tr>
+                            ) : (
+                                filteredCampaigns.map(c => (
+                                    <CampaignRow key={c.id} campaign={c} />
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* ZONE 4: System Audit Logs */}
+            <div className="space-y-6 pt-8 border-t border-border/20">
+                <div className="flex items-baseline justify-between">
+                    <h2 className="text-2xl font-bold tracking-tight">System Audit Logs</h2>
+                    <span className="text-sm text-muted-foreground">Recent Activity</span>
+                </div>
+                <div className="w-full overflow-x-auto">
+                    <table className="w-full text-sm text-left whitespace-nowrap">
+                        <thead>
+                            <tr className="border-b border-border/20 text-muted-foreground">
+                                <th className="py-3 px-4 font-medium">Timestamp</th>
+                                <th className="py-3 px-4 font-medium">Action</th>
+                                <th className="py-3 px-4 font-medium">Actor</th>
+                                <th className="py-3 px-4 font-medium">Entity</th>
+                                <th className="py-3 px-4 font-medium">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {auditLogsLoading ? (
+                                <tr>
+                                    <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                                        <Loader2 className="h-6 w-6 animate-spin mx-auto opacity-50" />
+                                    </td>
+                                </tr>
+                            ) : auditLogs.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                                        No audit logs available.
+                                    </td>
+                                </tr>
+                            ) : (
+                                auditLogs.map((log: any) => (
+                                    <tr key={log.id} className="border-b border-border/10 hover:bg-muted/5 transition-colors">
+                                        <td className="py-3 px-4 text-muted-foreground tabular-nums">
+                                            {new Date(log.createdAt).toLocaleString()}
+                                        </td>
+                                        <td className="py-3 px-4 font-medium">
+                                            <span className="bg-muted px-2 py-1 rounded text-xs">{log.action}</span>
+                                        </td>
+                                        <td className="py-3 px-4">
+                                            <div className="flex flex-col">
+                                                <span>{log.actor?.fullName || 'System'}</span>
+                                                <span className="text-xs text-muted-foreground">{log.actorType}</span>
+                                            </div>
+                                        </td>
+                                        <td className="py-3 px-4">
+                                            <div className="flex flex-col">
+                                                <span className="capitalize">{log.entityType}</span>
+                                                <span className="text-xs text-muted-foreground font-mono">{log.entityId}</span>
+                                            </div>
+                                        </td>
+                                        <td className="py-3 px-4 text-xs text-muted-foreground max-w-xs truncate" title={JSON.stringify(log.metadata)}>
+                                            {JSON.stringify(log.metadata)}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>

@@ -62,15 +62,9 @@ describe("NGO Registration on Blockchain", () => {
     if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
       try {
         const blockchainService = await getBlockchainService();
-        // Initialize with test IDL (would normally be done in service constructor)
+        if (!blockchainService) return; // skip if blockchain service not configured
         const idlPath = require("path").resolve(
-          __dirname,
-          "..",
-          "..",
-          "blockchain",
-          "target",
-          "idl",
-          "traceit.json"
+          __dirname, "..", "..", "blockchain", "target", "idl", "traceit.json"
         );
         await blockchainService.init(idlPath);
 

@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { to: '/campaigns', label: 'Explore', end: false },
   { to: '/donor', label: 'Donor', end: false },
   { to: '/ngo', label: 'NGO', end: false },
+  { to: '/admin', label: 'Admin', end: false },
   { to: '/login', label: 'Login', end: true },
   { to: '/profile', label: 'Profile', end: false }
 ]
@@ -45,7 +46,9 @@ export function NavBar() {
           <nav className="flex items-center gap-1">
             {NAV_LINKS.filter(link => {
               if (link.to === '/login') return !user
+              if (link.to === '/admin') return user?.role === 'ADMIN'
               if (link.to === '/donor') return !user || user.role === 'DONOR' || !user.role
+              if (link.to === '/ngo') return user?.role !== 'ADMIN' // Hides it for ADMIN. Non-charities will have it mapped to /ngos below.
 
               return true
             }).map(({ to, label, end }) => {

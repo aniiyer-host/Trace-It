@@ -2,13 +2,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 interface AttestationDetailsModalProps {
   donationId: string;
-  attestationStatus: 'pending' | 'receipt_confirmed' | 'delivery_confirmed';
+  attestationStatus: string;
+  amount?: number;
+  campaignTitle?: string;
+  confirmedAt?: string;
+  donationDate?: string;
   onClose: () => void;
 }
 
 export default function AttestationDetailsModal({
   donationId,
   attestationStatus,
+  amount,
+  campaignTitle,
+  confirmedAt,
+  donationDate,
   onClose,
 }: AttestationDetailsModalProps) {
   const getAttestationDetails = () => {
@@ -27,7 +35,7 @@ export default function AttestationDetailsModal({
       case 'receipt_confirmed':
         return {
           title: 'NGO Confirmed Receipt',
-          description: 'The NGO has confirmed receipt of your donation. This confirmation is stored permanently on the blockchain and cannot be tampered with.',
+          description: 'NGO has confirmed receipt of funds.',
           steps: [
             'Donation recorded on blockchain',
             'Funds transferred to NGO wallet',
@@ -38,7 +46,7 @@ export default function AttestationDetailsModal({
       case 'delivery_confirmed':
         return {
           title: 'Delivery Confirmed',
-          description: 'The NGO has confirmed both receipt and delivery of the funds to the intended beneficiaries.',
+          description: 'NGO has confirmed delivery to beneficiary.',
           steps: [
             'Donation recorded on blockchain',
             'Funds transferred to NGO wallet',
@@ -47,6 +55,8 @@ export default function AttestationDetailsModal({
             'Delivery attestation stored on-chain'
           ]
         }
+      default:
+        return { title: 'Unknown Status', description: '', steps: [] }
     }
   }
 
@@ -80,16 +90,34 @@ export default function AttestationDetailsModal({
               ))}
             </ol>
 
-            <div className="mt-4 pt-4 border-t">
+            <div className="mt-4 pt-4 border-t space-y-1">
               <p className="text-xs text-muted-foreground">
                 <strong>Donation ID:</strong> {donationId.substring(0, 8)}...
               </p>
-              <p className="text-xs text-muted-foreground">
-                <strong>Timestamp:</strong> {new Date().toLocaleString()}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Once the NGO confirms receipt, this will be permanently recorded on-chain.
-              </p>
+              {amount !== undefined && (
+                <p className="text-xs text-muted-foreground">
+                  <strong>Amount:</strong> ₹{amount.toLocaleString()}
+                </p>
+              )}
+              {campaignTitle && (
+                <p className="text-xs text-muted-foreground">
+                  <strong>Campaign / NGO:</strong> {campaignTitle}
+                </p>
+              )}
+              {attestationStatus === 'pending' ? (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    <strong>Donation Date:</strong> {donationDate ? new Date(donationDate).toLocaleDateString() : new Date().toLocaleDateString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Once the NGO confirms receipt, this will be permanently recorded on-chain.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  <strong>Confirmed Date:</strong> {confirmedAt ? new Date(confirmedAt).toLocaleDateString() : 'Unknown'}
+                </p>
+              )}
             </div>
           </div>
         </CardContent>

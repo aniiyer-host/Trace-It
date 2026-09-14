@@ -95,6 +95,7 @@ export interface Donation {
   createdAt: string // ISO timestamp
   walletAddress?: string // donor wallet (mock pubkey)
   explorerUrl?: string // Solana devnet explorer URL
+  attestations?: any[]
   ngoId?: string
   ngoName?: string
 }

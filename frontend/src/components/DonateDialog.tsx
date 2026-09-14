@@ -1,5 +1,5 @@
 // DonateDialog – Modal for making a UPI or SOL donation to a campaign
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Loader2, CreditCard, ExternalLink } from 'lucide-react'
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -102,7 +102,7 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                 campaignTitle: campaign.title,
                 amount: finalAmount,
                 paymentMethod: method,
-                orderId: res.orderId || `order_${Date.now()}`,
+                orderId: res.razorpayOrderId || `order_${Date.now()}`,
                 status: 'INITIATED',
                 createdAt: new Date().toISOString(),
                 walletAddress: 'donor_wallet',
@@ -112,13 +112,46 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
             donationStore.addDonation(newDonation)
             setCreatedDonation(newDonation)
             toast({ title: `Donation initiated for ${formatUSD(finalAmount)}!` })
-        } catch (_error) {
+        } catch (_error: any) {
             console.error(_error)
-            toast({ title: 'Donation failed', variant: 'destructive' })
+            if (_error?.response?.status === 402 && _error?.response?.data?.requiresKyc) {
+                toast({
+                    title: 'KYC Verification Required',
+                    description: 'Donations over ₹10,000 require KYC verification. Please complete your KYC before donating this amount.',
+                    variant: 'destructive',
+                })
+            } else {
+                toast({ title: 'Donation failed', variant: 'destructive' })
+            }
         } finally {
             setLoading(false)
         }
     }
+
+    useEffect(() => {
+        if (!createdDonation || createdDonation.status === 'SUCCESS' || !user?.id) return;
+
+        let elapsed = 0;
+        const intervalId = setInterval(async () => {
+            elapsed += 3000;
+            if (elapsed > 30000) {
+                clearInterval(intervalId);
+                return;
+            }
+            try {
+                const userDonations = await apiService.donations.getByUser(user.id);
+                const currentStatus = userDonations.find((d: any) => d.id === createdDonation.id);
+                if (currentStatus && currentStatus.status === 'SUCCESS') {
+                    setCreatedDonation(currentStatus);
+                    clearInterval(intervalId);
+                }
+            } catch (err) {
+                console.error('Polling error:', err);
+            }
+        }, 3000);
+
+        return () => clearInterval(intervalId);
+    }, [createdDonation, user?.id]);
 
     const handleSimulatePayment = async () => {
         if (!createdDonation) return

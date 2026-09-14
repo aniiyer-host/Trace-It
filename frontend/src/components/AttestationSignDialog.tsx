@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 // import { Loader2, CheckCircle2, Shield } from 'lucide-react'
 import { Loader2, Shield } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
@@ -27,13 +28,27 @@ export default function AttestationSignDialog({
 }: AttestationSignDialogProps) {
   const [loading, setLoading] = useState(false)
   const [attestationType, setAttestationType] = useState<'receipt' | 'delivery'>('receipt')
+  const [beneficiaryId, setBeneficiaryId] = useState('')
+  const [beneficiaryError, setBeneficiaryError] = useState('')
   const { toast } = useToast()
+
+  useEffect(() => {
+    if (open) {
+      setBeneficiaryId('')
+      setBeneficiaryError('')
+      setAttestationType('receipt')
+    }
+  }, [open])
 
   const handleSignAttestation = async () => {
     setLoading(true)
     try {
       // Create attestation (simulating NGO signing with their private key)
-      const result = await apiService.ngos.signAttestation(donation.id, attestationType)
+      const result = await apiService.ngos.signAttestation(
+        donation.id,
+        attestationType,
+        attestationType === 'delivery' ? beneficiaryId : undefined
+      )
 
       toast({
         title: `${attestationType === 'receipt' ? 'Receipt' : 'Delivery'} attestation signed!`,
@@ -42,8 +57,20 @@ export default function AttestationSignDialog({
       })
 
       onAttestationSigned()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to sign attestation:', error)
+
+      if (
+        error.response?.status === 422 &&
+        error.response?.data?.error === 'BENEFICIARY_MISMATCH'
+      ) {
+        setBeneficiaryError(error.response.data.message)
+        setBeneficiaryId('')
+        // Do NOT close dialog
+        // Do NOT show generic error toast
+        return
+      }
+
       toast({
         title: 'Failed to sign attestation',
         variant: 'destructive',
@@ -69,7 +96,11 @@ export default function AttestationSignDialog({
             {/* Type Selection Tabs */}
             <div className="grid grid-cols-2 gap-4">
                 <button
-                    onClick={() => setAttestationType('receipt')}
+                    onClick={() => {
+                      setAttestationType('receipt')
+                      setBeneficiaryId('')
+                      setBeneficiaryError('')
+                    }}
                     className={cn(
                         "flex flex-col items-start p-4 rounded-xl border text-left transition-all",
                         attestationType === 'receipt' 
@@ -82,7 +113,11 @@ export default function AttestationSignDialog({
                 </button>
                 
                 <button
-                    onClick={() => setAttestationType('delivery')}
+                    onClick={() => {
+                      setAttestationType('delivery')
+                      setBeneficiaryId('')
+                      setBeneficiaryError('')
+                    }}
                     className={cn(
                         "flex flex-col items-start p-4 rounded-xl border text-left transition-all",
                         attestationType === 'delivery' 
@@ -115,6 +150,38 @@ export default function AttestationSignDialog({
                 </p>
             </div>
 
+            {attestationType === 'delivery' && (
+              <div className="space-y-4 pt-4 border-t border-foreground/5">
+                <div>
+                  <h4 className="text-sm font-semibold tracking-wide text-foreground">Verify Beneficiary</h4>
+                  <p className="text-xs text-foreground/60 mt-1">
+                    Enter the wallet ID of the beneficiary you delivered funds to. This must match the ID registered when the campaign was created.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-foreground/80">
+                    Beneficiary Wallet ID
+                  </label>
+                  <Input
+                    placeholder="SOL... enter wallet ID"
+                    value={beneficiaryId}
+                    onChange={(e) => {
+                      setBeneficiaryId(e.target.value)
+                      if (beneficiaryError) setBeneficiaryError('')
+                    }}
+                    disabled={loading}
+                    className="bg-transparent"
+                  />
+                </div>
+                {beneficiaryError && (
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-amber-600 dark:text-amber-400 text-sm">
+                    <div className="font-semibold mb-1">⚠️ Beneficiary ID Mismatch</div>
+                    <div className="leading-relaxed">{beneficiaryError}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-4">
                 <Button
                     variant="outline"
@@ -125,7 +192,7 @@ export default function AttestationSignDialog({
                 </Button>
                 <Button
                     onClick={handleSignAttestation}
-                    disabled={loading}
+                    disabled={loading || (attestationType === 'delivery' && beneficiaryId.trim() === '')}
                     size="lg"
                     className="sm:w-auto w-full bg-foreground text-background hover:bg-foreground/90 font-semibold"
                 >

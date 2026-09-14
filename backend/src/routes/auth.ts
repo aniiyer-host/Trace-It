@@ -9,7 +9,9 @@ import { prisma } from '../db/prisma.js';
 const router = Router();
 
 // Apply strict rate limiting to all auth routes
-router.use(authLimiter);
+if (process.env.NODE_ENV === "production") {
+  router.use(authLimiter);
+}
 
 /**
  * @route POST /api/auth/signup
