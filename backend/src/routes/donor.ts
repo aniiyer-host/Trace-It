@@ -10,7 +10,10 @@ import {
   AttestationType,
 } from "../../generated/prisma/enums.js";
 import Joi from "joi";
-import { createRazorpayOrder, completeDonationSuccess } from "../services/donationService.js";
+import {
+  createRazorpayOrder,
+  completeDonationSuccess,
+} from "../services/donationService.js";
 import { writeAuditLog } from "../services/auditLogService.js";
 import {
   generateAndStoreReceipt,
@@ -74,7 +77,7 @@ export const getDonorDashboard = async (
             type: true,
             status: true,
             createdAt: true,
-          }
+          },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -187,7 +190,10 @@ export const createDonation = async (
 
     // Dev-only auto-transition: simulate Razorpay webhook after ~15s without needing live gateway
     // if (process.env.NODE_ENV !== "production") {
-    if (process.env.NODE_ENV !== "production" && process.env.NODE_ENV !== "test") {
+    if (
+      process.env.NODE_ENV !== "production" &&
+      process.env.NODE_ENV !== "test"
+    ) {
       setTimeout(() => {
         void completeDonationSuccess(donation.id, {
           razorpayOrderId: razorpayOrder.id,
@@ -209,7 +215,7 @@ export const createDonation = async (
       createdAt: donation.createdAt,
       campaignId: donation.campaignId,
       ngoId: donation.ngoId,
-      razorpayOrderId: razorpayOrder.id
+      razorpayOrderId: razorpayOrder.id,
     });
   } catch (err) {
     next(err);
@@ -220,26 +226,41 @@ export const createDonation = async (
 // POST /api/donor/kyc
 // ---------------------------------------------------------------------------
 
+// const kycSchema = Joi.object({
+//   pan: Joi.string()
+//     .length(10)
+//     .uppercase()
+//     .pattern(/^[A-Z]{5}[0-9]{4}[A-Z]$/)
+//     .required()
+//     .messages({
+//       "string.pattern.base": "PAN must be in the format AAAAA9999A",
+//     }),
+// }).unknown(false);
+
 const kycSchema = Joi.object({
   pan: Joi.string()
-    .length(10)
+    .trim()
     .uppercase()
+    .length(10)
     .pattern(/^[A-Z]{5}[0-9]{4}[A-Z]$/)
     .required()
     .messages({
-      "string.pattern.base": "PAN must be in the format AAAAA9999A",
+      "any.required": "PAN is required",
+      "string.empty": "PAN is required",
+      "string.length": "PAN must be exactly 10 characters",
+      "string.pattern.base": "Invalid PAN format. Expected format: ABCDE1234F",
     }),
-}).unknown(false);
+});
 
 /**
- * KYC stub:
+ * KYC submission:
  *  1. Validate PAN format (AAAAA9999A)
  *  2. Simulate Signzy/HyperVerge verification (always passes for valid format)
  *  3. HMAC-SHA512(pan, hmacKey) → store pan_hash
  *  4. Set kyc_status = APPROVED
  *  5. Audit log: KYC_APPROVED
  */
-export const kycStub = async (
+export const submitKyc = async (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -293,7 +314,11 @@ export const kycStub = async (
       ipAddress: req.ip,
     });
 
-    res.json({ message: "KYC approved successfully" });
+    // res.json({ message: "KYC approved successfully" });
+    return res.status(200).json({
+      message: "KYC approved successfully",
+      kycStatus: "APPROVED",
+    });
   } catch (err) {
     next(err);
   }
@@ -534,7 +559,7 @@ donorRouter.post(
   kycCheckMiddleware,
   createDonation,
 );
-donorRouter.post("/kyc", requireRole(UserRole.DONOR), kycStub);
+donorRouter.post("/kyc", requireRole(UserRole.DONOR), submitKyc);
 donorRouter.get(
   "/receipt/:donationId",
   requireRole(UserRole.DONOR),

@@ -63,7 +63,9 @@ export const approveDisbursement = async (
         try {
           const blockchainService = await getBlockchainService();
           if (!blockchainService) {
-            console.warn('[Blockchain] Service not available — skipping on-chain recording');
+            console.warn(
+              "[Blockchain] Service not available — skipping on-chain recording",
+            );
             return;
           }
 
@@ -154,7 +156,9 @@ export const approveDisbursement = async (
         try {
           const blockchainService = await getBlockchainService();
           if (!blockchainService) {
-            console.warn('[Blockchain] Service not available — skipping on-chain recording');
+            console.warn(
+              "[Blockchain] Service not available — skipping on-chain recording",
+            );
             return;
           }
 
@@ -409,7 +413,9 @@ export const approveNgo = async (
         try {
           const blockchainService = await getBlockchainService();
           if (!blockchainService) {
-            console.warn('[Blockchain] Service not available — skipping on-chain recording');
+            console.warn(
+              "[Blockchain] Service not available — skipping on-chain recording",
+            );
             return;
           }
 
@@ -550,10 +556,16 @@ export const getPendingCampaigns = async (
       },
       orderBy: { createdAt: "desc" },
     });
-    res.json(campaigns.map(c => {
-      const { beneficiaryIdHash: _h, beneficiaryIdEncrypted: _e, ...safe } = c as any;
-      return safe;
-    }));
+    res.json(
+      campaigns.map((c) => {
+        const {
+          beneficiaryIdHash: _h,
+          beneficiaryIdEncrypted: _e,
+          ...safe
+        } = c as any;
+        return safe;
+      }),
+    );
   } catch (err) {
     next(err);
   }
@@ -593,7 +605,11 @@ export const approveCampaign = async (
       action: "CAMPAIGN_APPROVED",
       metadata: {},
     });
-    const { beneficiaryIdHash: _h, beneficiaryIdEncrypted: _e, ...safe } = updated as any;
+    const {
+      beneficiaryIdHash: _h,
+      beneficiaryIdEncrypted: _e,
+      ...safe
+    } = updated as any;
     res.json(safe);
   } catch (err) {
     next(err);
@@ -998,111 +1014,6 @@ export const exportGovernmentRequestDocuments = async (
   }
 };
 
-// ---------------------------------------------------------------------------
-// Router
-// ---------------------------------------------------------------------------
-adminRouter.post(
-  "/disburse/:id/approve",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  approveDisbursement,
-);
-adminRouter.get(
-  "/disbursements",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  getAllDisbursements,
-);
-adminRouter.get(
-  "/disbursements/:id",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  getDisbursementById,
-);
-
-// Admin Panel Routes
-adminRouter.get("/ngos", requireAuth, requireRole(UserRole.ADMIN), getNgos);
-adminRouter.post(
-  "/ngos/:id/approve",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  approveNgo,
-);
-adminRouter.post(
-  "/disburse/:id/approve",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  approveDisbursement,
-);
-adminRouter.post(
-  "/ngos/:id/reject",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  rejectNgo,
-);
-adminRouter.get(
-  "/campaigns/pending",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  getPendingCampaigns,
-);
-adminRouter.post(
-  "/campaigns/:id/approve",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  approveCampaign,
-);
-adminRouter.get("/users", requireAuth, requireRole(UserRole.ADMIN), getUsers);
-adminRouter.get(
-  "/aml-flags",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  getAmlFlags,
-);
-adminRouter.get(
-  "/audit-logs",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  getAuditLogs,
-);
-
-// Helper function for retry queue
-async function addToBlockchainRetryQueue(data: {
-  donationId: string;
-  error: string;
-  retryCount: number;
-  type?: string;
-  targetStatus?: number;
-}): Promise<void> {
-  try {
-    // Create or update retry queue entry
-    await prisma.blockchainRetryQueue.upsert({
-      where: { donationId: data.donationId },
-      update: {
-        error: data.error,
-        retryCount: data.retryCount + 1,
-        lastAttempt: new Date(),
-        updatedAt: new Date(),
-      },
-      create: {
-        donationId: data.donationId,
-        error: data.error,
-        retryCount: data.retryCount + 1,
-        lastAttempt: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    });
-
-    console.log(
-      `Added donation ${data.donationId} to blockchain retry queue (attempt ${data.retryCount + 1})`,
-    );
-  } catch (queueError) {
-    console.error(`Failed to add to retry queue:`, queueError);
-    // Don't fail the operation if queue fails
-  }
-}
-
 // Attesatation
 
 // GET /attestations/pending - NGO-signed attestations awaiting admin review
@@ -1113,9 +1024,9 @@ export const getPendingAttestationsAdmin = async (
 ) => {
   try {
     const attestations = await prisma.attestation.findMany({
-      where: { 
+      where: {
         status: AttestationStatus.NGO_SIGNED,
-        type: 'DELIVERY' 
+        type: "DELIVERY",
       },
       include: {
         donation: {
@@ -1134,10 +1045,13 @@ export const getPendingAttestationsAdmin = async (
       orderBy: { createdAt: "asc" },
     });
 
-    const mapped = attestations.map(att => ({
+    const mapped = attestations.map((att) => ({
       ...att,
-      ngoName: (att.donation as any)?.ngo?.organisationName || att.donation?.ngoId,
-      campaignTitle: (att.donation as any)?.project?.title || `Campaign ${(att.donation as any)?.campaignId?.substring(0, 8)}`,
+      ngoName:
+        (att.donation as any)?.ngo?.organisationName || att.donation?.ngoId,
+      campaignTitle:
+        (att.donation as any)?.project?.title ||
+        `Campaign ${(att.donation as any)?.campaignId?.substring(0, 8)}`,
     }));
 
     res.json(mapped);
@@ -1164,11 +1078,9 @@ export const approveAttestation = async (
     if (!attestation)
       return res.status(404).json({ error: "Attestation not found" });
     if (attestation.status !== AttestationStatus.NGO_SIGNED) {
-      return res
-        .status(409)
-        .json({
-          error: `Cannot approve attestation in status ${attestation.status}`,
-        });
+      return res.status(409).json({
+        error: `Cannot approve attestation in status ${attestation.status}`,
+      });
     }
 
     const updated = await prisma.attestation.update({
@@ -1240,8 +1152,8 @@ export const rejectAttestation = async (
   }
 };
 
-// GET /milestones/pending - disbursements with proof submitted, awaiting approval
-export const getPendingMilestones = async (
+// GET /disbursements/pending - disbursements with proof submitted, awaiting approval
+export const getPendingDisbursements = async (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -1303,6 +1215,95 @@ export const rejectDisbursement = async (
   }
 };
 
+// ---------------------------------------------------------------------------
+// Helper function for retry queue
+// ---------------------------------------------------------------------------
+async function addToBlockchainRetryQueue(data: {
+  donationId: string;
+  error: string;
+  retryCount: number;
+  type?: string;
+  targetStatus?: number;
+}): Promise<void> {
+  try {
+    // Create or update retry queue entry
+    await prisma.blockchainRetryQueue.upsert({
+      where: { donationId: data.donationId },
+      update: {
+        error: data.error,
+        retryCount: data.retryCount + 1,
+        lastAttempt: new Date(),
+        updatedAt: new Date(),
+      },
+      create: {
+        donationId: data.donationId,
+        error: data.error,
+        retryCount: data.retryCount + 1,
+        lastAttempt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    console.log(
+      `Added donation ${data.donationId} to blockchain retry queue (attempt ${data.retryCount + 1})`,
+    );
+  } catch (queueError) {
+    console.error(`Failed to add to retry queue:`, queueError);
+    // Don't fail the operation if queue fails
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Router — all route registrations grouped together, by resource
+// ---------------------------------------------------------------------------
+
+// NGOs
+adminRouter.get("/ngos", requireAuth, requireRole(UserRole.ADMIN), getNgos);
+adminRouter.post(
+  "/ngos/:id/approve",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  approveNgo,
+);
+adminRouter.post(
+  "/ngos/:id/reject",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  rejectNgo,
+);
+
+// Campaigns
+adminRouter.get(
+  "/campaigns/pending",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getPendingCampaigns,
+);
+adminRouter.post(
+  "/campaigns/:id/approve",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  approveCampaign,
+);
+
+// Users
+adminRouter.get("/users", requireAuth, requireRole(UserRole.ADMIN), getUsers);
+
+// AML / Audit
+adminRouter.get(
+  "/aml-flags",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getAmlFlags,
+);
+adminRouter.get(
+  "/audit-logs",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getAuditLogs,
+);
+
 // Government Request Endpoints
 adminRouter.post(
   "/government-requests",
@@ -1322,6 +1323,8 @@ adminRouter.post(
   requireRole(UserRole.ADMIN),
   exportGovernmentRequestDocuments,
 );
+
+// Attestations
 adminRouter.get(
   "/attestations/pending",
   requireAuth,
@@ -1340,22 +1343,46 @@ adminRouter.post(
   requireRole(UserRole.ADMIN),
   rejectAttestation,
 );
+
+// Disbursements
 adminRouter.get(
-  "/milestones/pending",
+  "/disbursements",
   requireAuth,
   requireRole(UserRole.ADMIN),
-  getPendingMilestones,
+  getAllDisbursements,
+);
+
+adminRouter.get(
+  "/disbursements/pending",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getPendingDisbursements,
+);
+
+adminRouter.get(
+  "/disbursements/:id",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getDisbursementById,
+);
+
+adminRouter.post(
+  "/disburse/:id/approve",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  approveDisbursement,
 );
 adminRouter.post(
-  "/milestones/:id/approve",
+  "/disbursements/:id/approve",
   requireAuth,
   requireRole(UserRole.ADMIN),
   approveDisbursement,
 ); // reused, per handoff notes' "could be merged" suggestion
 adminRouter.post(
-  "/milestones/:id/reject",
+  "/disbursements/:id/reject",
   requireAuth,
   requireRole(UserRole.ADMIN),
   rejectDisbursement,
 );
+
 export default adminRouter;
