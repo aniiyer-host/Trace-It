@@ -1351,3 +1351,44 @@ FILE: `frontend/src/components/DonationHistoryTable.tsx`
 - **`frontend/src/components/BeneficiaryWalletDialog.tsx`**: Removed the warning alert ("Save this Wallet ID securely... This ID cannot be recovered") from the wallet generation dialog, as NGOs can now securely view the beneficiary ID later from their dashboard.
 - **`frontend/src/pages/AdminPanel.tsx`**: Fixed an issue where the NGO column remained blank in the Pending Approvals and Active Campaigns tables. Updated the cell renderer to properly display the NGO name by falling back gracefully across `ngoName`, nested `ngo.organisationName`, `ngo` string, and `ngoId`.
 - **`backend routes removed /milestone and updated with /disbursements`**: Fixed mismatch naming and frontned reflects same in apiClient.ts . In Signup.tsx fixed where token was getting attached to user.token and was preventing auto login upon register
+
+# CI Fixes Frontend Changes
+
+## 1. DonationHistoryTable.tsx
+
+- Removed unused `useState` and `apiService` imports.
+- Removed unused `onRefresh` and `onVerifyIntegrity` props from the component.
+- Kept the existing **Verify Integrity** UI behavior without unused callback dependencies.
+- This resolved TypeScript/ESLint build errors caused by unused declarations.
+
+## 2. DonorDashboard.tsx
+
+- Updated the `attestationModalData` state type to include the optional fields actually used by the dashboard:
+  - `amount`
+  - `campaignTitle`
+  - `confirmedAt`
+  - `donationDate`
+
+- Removed the unused `donationId` variable.
+- Updated the blockchain verification handler to display an informational toast until on-chain verification is active.
+- This resolved the related TypeScript build errors.
+
+## 3. NGODashboard.tsx
+
+- Updated the campaign status passed to `StatusBadge` to safely handle an undefined status.
+- Added the fallback:
+  - `c.status ?? 'UNKNOWN'`
+  - `selectedCampaignObj.status ?? 'UNKNOWN'`
+
+- This avoids passing an optional/undefined status where a string is required.
+- The existing `StatusBadge` component already handles `UNKNOWN` using its default status styling.
+
+## Verification
+
+- Ran `npm run build` successfully.
+- Build completed with **0 TypeScript errors**.
+- Only existing Vite warnings remained:
+  - `__dirname` compatibility warning in `vite.config.ts`
+  - Large bundle/chunk size warning
+
+- No frontend build failures remain.
