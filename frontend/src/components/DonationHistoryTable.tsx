@@ -1,6 +1,6 @@
 import { DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Donation } from "@/types";
+import type { Donation, Attestation } from "@/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/hooks/use-toast";
 
@@ -80,7 +80,7 @@ export default function DonationHistoryTable({
               const hasReceiptConfirmed =
                 donation.attestations && Array.isArray(donation.attestations)
                   ? donation.attestations.some(
-                      (a: any) =>
+                      (a: Attestation) =>
                         a.type === "RECEIPT" && a.status === "APPROVED",
                     )
                   : false;
@@ -88,7 +88,7 @@ export default function DonationHistoryTable({
               const hasDeliveryConfirmed =
                 donation.attestations && Array.isArray(donation.attestations)
                   ? donation.attestations.some(
-                      (a: any) =>
+                      (a: Attestation) =>
                         a.type === "DELIVERY" && a.status === "APPROVED",
                     )
                   : false;
@@ -99,7 +99,7 @@ export default function DonationHistoryTable({
                   ? "receipt_confirmed"
                   : "pending";
               const confirmedAtt = donation.attestations?.find(
-                (a: any) =>
+                (a: Attestation) =>
                   a.type === (hasDeliveryConfirmed ? "DELIVERY" : "RECEIPT") &&
                   a.status === "APPROVED",
               );

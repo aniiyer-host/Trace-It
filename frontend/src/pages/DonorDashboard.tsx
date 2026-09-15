@@ -110,15 +110,43 @@ export default function DonorDashboard() {
     if (id && campaigns.length) {
       campaign = campaigns.find((x) => x.id === id) ?? null;
     }
-    if (campaign) setSelectedCampaign(campaign);
+    //Cause of LINT error
+    // if (campaign) setSelectedCampaign(campaign);
+    if (campaign) {
+      queueMicrotask(() => setSelectedCampaign(campaign));
+    }
   }, [params, campaigns]);
 
   useEffect(() => {
     loadCampaigns();
   }, [loadCampaigns]);
 
+  //Cause of LINT Error
+  // const loadDonations = useCallback(async () => {
+  //   if (!user?.id) return;
+  //   try {
+  //     const data = await apiService.donations.getByUser(user.id);
+  //     setDonationsLocal(data);
+  //     setDonations(data);
+  //   } catch (error) {
+  //     console.error("Failed to load donations:", error);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // }, [user, setDonations]);
+
+  // useEffect(() => {
+  //   if (user?.id) {
+  //     setLoading(true);
+  //     loadDonations();
+  //   }
+  // }, [user?.id, loadDonations]);
+
   const loadDonations = useCallback(async () => {
     if (!user?.id) return;
+
+    setLoading(true);
+
     try {
       const data = await apiService.donations.getByUser(user.id);
       setDonationsLocal(data);
@@ -128,13 +156,15 @@ export default function DonorDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, setDonations]);
-
+  }, [user, setDonations]);
   useEffect(() => {
-    if (user?.id) {
-      setLoading(true);
-      loadDonations();
-    }
+    if (!user?.id) return;
+
+    const load = async () => {
+      await loadDonations();
+    };
+
+    void load();
   }, [user?.id, loadDonations]);
   // -- END CONSTRAINTS PRESERVED --
 
@@ -144,10 +174,15 @@ export default function DonorDashboard() {
     const fundedIds = new Set(donations.map((d) => d.campaignId));
     return campaigns.filter((c) => fundedIds.has(c.id));
   }, [campaigns, donations]);
-
+  //Cause of LINT error
+  // useEffect(() => {
+  //   if (!selectedCampaign && fundedCampaigns.length > 0) {
+  //     setSelectedCampaign(fundedCampaigns[0]);
+  //   }
+  // }, [fundedCampaigns, selectedCampaign]);
   useEffect(() => {
     if (!selectedCampaign && fundedCampaigns.length > 0) {
-      setSelectedCampaign(fundedCampaigns[0]);
+      queueMicrotask(() => setSelectedCampaign(fundedCampaigns[0]));
     }
   }, [fundedCampaigns, selectedCampaign]);
 
@@ -433,7 +468,7 @@ export default function DonorDashboard() {
       )}
 
       {/* NGO ONBOARDING BANNER */}
-      {(!("role" in user) || (user as any).role === "DONOR") && (
+      {(!("role" in user) || user.role === "DONOR") && (
         <div className="bg-foreground/[0.02] border border-foreground/10 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <span className="text-sm font-medium text-foreground/70">
             Are you an NGO? Apply for institution status

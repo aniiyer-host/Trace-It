@@ -67,10 +67,30 @@ function BeneficiaryIdReveal({ campaignId }: { campaignId: string }) {
     try {
       const res = await apiService.campaigns.getBeneficiaryId(campaignId);
       setRevealedId(res.beneficiaryId);
-    } catch (err: any) {
+      // } catch (err: any) {
+      //   toast({
+      //     title: "Error fetching Beneficiary ID",
+      //     description: err.response?.data?.error || err.message,
+      //     variant: "destructive",
+      //   });
+      // }
+    } catch (err: unknown) {
+      //Cause of LINT error
+      const error = err as {
+        response?: {
+          data?: {
+            error?: string;
+          };
+        };
+        message?: string;
+      };
+
       toast({
         title: "Error fetching Beneficiary ID",
-        description: err.response?.data?.error || err.message,
+        description:
+          error.response?.data?.error ||
+          error.message ||
+          "Something went wrong",
         variant: "destructive",
       });
     } finally {
@@ -126,8 +146,10 @@ function BeneficiaryIdReveal({ campaignId }: { campaignId: string }) {
 }
 
 export default function NGODashboard() {
-  const { campaigns: _storeCampaigns, updateMilestoneStatus } =
-    useDonationStore();
+  //Cause of LINT error
+  // const { campaigns: _storeCampaigns, updateMilestoneStatus } =
+  //   useDonationStore();
+  const { updateMilestoneStatus } = useDonationStore();
   const { pendingAttestations, fetchPendingAttestations, attestationStatus } =
     useNGOStore();
 
@@ -166,49 +188,78 @@ export default function NGODashboard() {
         apiService.charity.getDisbursements(),
       ]);
 
-      // Stitch disbursements onto campaigns client-side as milestones
-      const stitched: Campaign[] = (rawCampaigns || []).map((camp: any) => {
-        const relatedDisbursements = (rawDisbursements || []).filter(
-          (d: any) => d.campaignId === camp.id,
-        );
-
-        const milestones: Milestone[] =
-          relatedDisbursements.length > 0
-            ? relatedDisbursements.map((d: any) => ({
-                id: d.id,
-                campaignId: camp.id,
-                title:
-                  d.cohort?.name ||
-                  `Disbursement: ₹${Number(d.amountInr).toLocaleString()}`,
-                description: d.fieldReportUrl
-                  ? `Report attached`
-                  : `Disbursement request for ₹${Number(d.amountInr).toLocaleString()} (${d.status})`,
-                targetAmount: Number(d.amountInr),
-                status: (d.status === "SETTLED"
-                  ? "delivered"
-                  : d.status === "APPROVED"
-                    ? "disbursed"
-                    : "allocated") as any,
-                proofSubmittedAt: d.proofSubmittedAt,
-                rejectionReason: d.rejectionReason,
-                txHash: d.solanaTxHash,
-              }))
-            : camp.milestones || [];
-
-        return {
-          id: camp.id,
-          title: camp.title,
-          ngoId: camp.ngoId,
-          ngo: camp.ngo?.organisationName || camp.ngo || "My NGO",
-          ngoName: camp.ngo?.organisationName || camp.ngo || "My NGO",
-          description: camp.description,
-          targetAmount: Number(camp.targetAmount),
-          raisedAmount: Number(camp.raisedAmount || 0),
-          status: camp.status,
-          milestones,
-          category: camp.category || "education",
+      //FOr LINT Error
+      type CampaignResponse = Omit<Campaign, "ngo"> & {
+        ngo?: {
+          organisationName?: string;
         };
-      });
+      };
+
+      type DisbursementResponse = {
+        id: string;
+        campaignId: string;
+        amountInr: number | string;
+        status: string;
+        cohort?: {
+          name?: string;
+        };
+        fieldReportUrl?: string | null;
+        proofSubmittedAt?: string | null;
+        rejectionReason?: string | null;
+        solanaTxHash?: string | null;
+      };
+
+      // Stitch disbursements onto campaigns client-side as milestones
+      //Cause of LINT Error
+      // const stitched: Campaign[] = (rawCampaigns || []).map((camp) => {
+      //   const relatedDisbursements = (rawDisbursements || []).filter(
+      //     (d: any) => d.campaignId === camp.id,
+      //   );
+      const stitched: Campaign[] = (rawCampaigns || []).map(
+        (camp: CampaignResponse) => {
+          const relatedDisbursements = (rawDisbursements || []).filter(
+            (d: DisbursementResponse) => d.campaignId === camp.id,
+          );
+
+          const milestones: Milestone[] =
+            relatedDisbursements.length > 0
+              ? relatedDisbursements.map((d: DisbursementResponse) => ({
+                  id: d.id,
+                  campaignId: camp.id,
+                  title:
+                    d.cohort?.name ||
+                    `Disbursement: ₹${Number(d.amountInr).toLocaleString()}`,
+                  description: d.fieldReportUrl
+                    ? `Report attached`
+                    : `Disbursement request for ₹${Number(d.amountInr).toLocaleString()} (${d.status})`,
+                  targetAmount: Number(d.amountInr),
+                  status:
+                    d.status === "SETTLED"
+                      ? "delivered"
+                      : d.status === "APPROVED"
+                        ? "disbursed"
+                        : "allocated",
+                  proofSubmittedAt: d.proofSubmittedAt,
+                  rejectionReason: d.rejectionReason,
+                  txHash: d.solanaTxHash,
+                }))
+              : camp.milestones || [];
+
+          return {
+            id: camp.id,
+            title: camp.title,
+            ngoId: camp.ngoId,
+            ngo: camp.ngo?.organisationName || camp.ngo || "My NGO",
+            ngoName: camp.ngo?.organisationName || camp.ngo || "My NGO",
+            description: camp.description,
+            targetAmount: Number(camp.targetAmount),
+            raisedAmount: Number(camp.raisedAmount || 0),
+            status: camp.status,
+            milestones,
+            category: camp.category || "education",
+          };
+        },
+      );
 
       setNgoCampaigns(stitched);
     } catch (err) {
@@ -217,12 +268,22 @@ export default function NGODashboard() {
       setLoadingData(false);
     }
   }, []);
-
+  //Cause of LINT error
+  // useEffect(() => {
+  //   if (user && user.role === "CHARITY") {
+  //     fetchNgoData();
+  //     fetchPendingAttestations();
+  //   }
+  // }, [user, fetchNgoData, fetchPendingAttestations]);
   useEffect(() => {
-    if (user && user.role === "CHARITY") {
-      fetchNgoData();
-      fetchPendingAttestations();
-    }
+    if (!user || user.role !== "CHARITY") return;
+
+    const loadNgoData = async () => {
+      await fetchNgoData();
+      await fetchPendingAttestations();
+    };
+
+    void loadNgoData();
   }, [user, fetchNgoData, fetchPendingAttestations]);
 
   /*
@@ -431,7 +492,13 @@ export default function NGODashboard() {
                     const campaignTitle =
                       ngoCampaigns.find(
                         (c) =>
-                          c.id === (attestation.donation as any)?.campaignId,
+                          //Cause of LINT Error
+                          // c.id === (attestation.donation as any)?.campaignId,
+                          c.id ===
+                          (typeof attestation.donation === "object" &&
+                          attestation.donation !== null
+                            ? attestation.donation.campaignId
+                            : undefined),
                       )?.title ||
                       `Campaign ${attestation.donationId?.substring(0, 8)}`;
 
@@ -723,20 +790,19 @@ export default function NGODashboard() {
 
       {selectedAttestation && (
         <AttestationSignDialog
-          donation={
-            {
-              id: selectedAttestation.donationId,
-              amount: Number(selectedAttestation.donation?.amount),
-              campaignTitle: `Campaign ${selectedAttestation.donationId?.substring(0, 8)}`,
-              paymentMethod: "upi",
-              orderId: `order_${selectedAttestation.donationId}`,
-              txHash: `tx_${selectedAttestation.donationId}`,
-              walletAddress: "demo_wallet",
-              status: "disbursed",
-              createdAt: selectedAttestation.createdAt,
-              explorerUrl: `https://explorer.solana.com/tx/tx_${selectedAttestation.donationId}?cluster=devnet`,
-            } as any
-          }
+          donation={{
+            id: selectedAttestation.donationId,
+            campaignId: selectedAttestation.donation?.campaignId || "",
+            amount: Number(selectedAttestation.donation?.amount),
+            campaignTitle: `Campaign ${selectedAttestation.donationId?.substring(0, 8)}`,
+            paymentMethod: "upi",
+            orderId: `order_${selectedAttestation.donationId}`,
+            txHash: `tx_${selectedAttestation.donationId}`,
+            walletAddress: "demo_wallet",
+            status: "disbursed",
+            createdAt: selectedAttestation.createdAt,
+            explorerUrl: `https://explorer.solana.com/tx/tx_${selectedAttestation.donationId}?cluster=devnet`,
+          }}
           ngoName="AidIndia Foundation"
           open={attestationDialogOpen}
           onOpenChange={(open) => setAttestationDialogOpen(open)}

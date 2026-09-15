@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react'
-import { useToast } from '@/hooks/use-toast'
+import { useEffect, useRef } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 interface AttestationToastProps {
-  type: 'request' | 'receipt' | 'delivery' | 'approved' | 'rejected'
-  message: string
-  donationId?: string
-  attestationId?: string
+  type: "request" | "receipt" | "delivery" | "approved" | "rejected";
+  message: string;
+  donationId?: string;
+  attestationId?: string;
 }
 
 export default function AttestationToast({
@@ -14,66 +14,74 @@ export default function AttestationToast({
   donationId,
   attestationId,
 }: AttestationToastProps) {
-  const { toast } = useToast()
-  const [shown, setShown] = useState(false)
+  const { toast, success } = useToast();
+  const shown = useRef(false);
 
   useEffect(() => {
-    if (!shown) {
-      setShown(true)
+    // if (!shown) {
+    //   setShown(true);
+    if (!shown.current) {
+      shown.current = true;
 
-      let title = 'Attestation Update'
-      let description = message
-      let variant: 'default' | 'destructive' = 'default'
+      // let title = "Attestation Update";
+      let title: string;
+      const description = message;
+      let variant: "default" | "destructive" = "default";
 
       switch (type) {
-        case 'request':
-          title = 'Attestation Requested'
-          variant = 'default'
-          break
-        case 'receipt':
-          title = 'Receipt Confirmed'
-          variant = 'default'
-          break
-        case 'delivery':
-          title = 'Delivery Confirmed'
-          variant = 'default'
-          break
-        case 'approved':
-          title = 'Attestation Approved'
+        case "request":
+          title = "Attestation Requested";
+          variant = "default";
+          break;
+        case "receipt":
+          title = "Receipt Confirmed";
+          variant = "default";
+          break;
+        case "delivery":
+          title = "Delivery Confirmed";
+          variant = "default";
+          break;
+        case "approved":
+          title = "Attestation Approved";
           // Use the success toast variant from the hook
-          break
-        case 'rejected':
-          title = 'Attestation Rejected'
-          variant = 'destructive'
-          break
+          break;
+        case "rejected":
+          title = "Attestation Rejected";
+          variant = "destructive";
+          break;
         default:
-          title = 'Attestation Update'
-          variant = 'default'
-          break
+          title = "Attestation Update";
+          variant = "default";
+          break;
       }
 
       // For approved attestations, use the success toast variant
-      if (type === 'approved') {
-        const { success } = useToast()
+      if (type === "approved") {
+        //Commented out the success toast variant since it was causing lint issues
+        // const { success } = useToast();
         success({
           title,
           description,
           // Add toast action to view details if IDs are provided
-          action: donationId || attestationId ? (
-            <button
-              onClick={() => {
-                // Navigate to attestation verification or donation details
-                if (attestationId) {
-                  window.open(`/attestation/verify/${attestationId}`, '_blank')
-                }
-              }}
-              className="btn-link text-sm hover:text-primary"
-            >
-              View Details
-            </button>
-          ) : undefined,
-        })
-        return
+          action:
+            donationId || attestationId ? (
+              <button
+                onClick={() => {
+                  // Navigate to attestation verification or donation details
+                  if (attestationId) {
+                    window.open(
+                      `/attestation/verify/${attestationId}`,
+                      "_blank",
+                    );
+                  }
+                }}
+                className="btn-link text-sm hover:text-primary"
+              >
+                View Details
+              </button>
+            ) : undefined,
+        });
+        return;
       }
 
       toast({
@@ -81,22 +89,23 @@ export default function AttestationToast({
         description,
         variant: variant,
         // Add toast action to view details if IDs are provided
-        action: donationId || attestationId ? (
-          <button
-            onClick={() => {
-              // Navigate to attestation verification or donation details
-              if (attestationId) {
-                window.open(`/attestation/verify/${attestationId}`, '_blank')
-              }
-            }}
-            className="btn-link text-sm hover:text-primary"
-          >
-            View Details
-          </button>
-        ) : undefined,
-      })
+        action:
+          donationId || attestationId ? (
+            <button
+              onClick={() => {
+                // Navigate to attestation verification or donation details
+                if (attestationId) {
+                  window.open(`/attestation/verify/${attestationId}`, "_blank");
+                }
+              }}
+              className="btn-link text-sm hover:text-primary"
+            >
+              View Details
+            </button>
+          ) : undefined,
+      });
     }
-  }, [type, message, donationId, attestationId, shown, toast])
+  }, [type, message, donationId, attestationId, shown, toast, success]);
 
-  return null // This component doesn't render anything, it just triggers the toast
+  return null; // This component doesn't render anything, it just triggers the toast
 }

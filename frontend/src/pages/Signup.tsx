@@ -80,11 +80,29 @@ export default function Signup() {
         else if (user.role === "CHARITY") navigate("/ngo");
         else navigate("/donor");
       }, 1200);
-    } catch (error: any) {
+      // Cause of LINT Error
+      // } catch (error: any) {
+      //   const message =
+      //     error?.response?.data?.error ||
+      //     error?.response?.data?.message ||
+      //     "Signup failed";
+    } catch (error: unknown) {
       const message =
-        error?.response?.data?.error ||
-        error?.response?.data?.message ||
-        "Signup failed";
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        typeof error.response === "object" &&
+        error.response !== null &&
+        "data" in error.response &&
+        typeof error.response.data === "object" &&
+        error.response.data !== null &&
+        ("error" in error.response.data || "message" in error.response.data)
+          ? String(
+              "error" in error.response.data
+                ? error.response.data.error
+                : error.response.data.message,
+            )
+          : "Signup failed";
 
       toast({
         title: "Signup failed",
