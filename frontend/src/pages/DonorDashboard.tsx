@@ -148,7 +148,8 @@ export default function DonorDashboard() {
     setLoading(true);
 
     try {
-      const data = await apiService.donations.getByUser(user.id);
+      //no need of params as we are fetching donations for the logged in user
+      const data = await apiService.donations.getByUser();
       setDonationsLocal(data);
       setDonations(data);
     } catch (error) {

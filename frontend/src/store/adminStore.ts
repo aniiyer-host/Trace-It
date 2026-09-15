@@ -1,5 +1,9 @@
 import { create } from "zustand";
-import type { Campaign, Milestone, PendingCampaign } from "@/types";
+import type {
+  AdminPendingDisbursement,
+  Campaign,
+  PendingCampaign,
+} from "@/types";
 import { apiService } from "@/utils/apiClient";
 
 interface PendingAttestation {
@@ -47,7 +51,7 @@ interface AdminStore {
   attestationStatus: Record<string, "pending" | "approved" | "rejected" | null>;
 
   // ── Milestone Management ─────────────────────────
-  pendingMilestoneApprovals: Record<string, Milestone>;
+  pendingMilestoneApprovals: Record<string, AdminPendingDisbursement>;
   fetchPendingMilestoneApprovals: () => Promise<void>;
   approveMilestone: (milestoneId: string) => Promise<void>;
   rejectMilestone: (milestoneId: string, reason: string) => Promise<void>;
@@ -108,14 +112,14 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
   // Attestation Management
   fetchPendingAttestations: async () => {
     try {
-      const attestations = await apiService.admin.getPendingAttestations();
-      const pendingMap = attestations.reduce(
-        (acc, curr) => {
-          acc[curr.id] = curr;
-          return acc;
-        },
-        {} as Record<string, PendingAttestation>,
-      );
+      const attestations =
+        (await apiService.admin.getPendingAttestations()) as unknown as PendingAttestation[];
+      const pendingMap: Record<string, PendingAttestation> = {};
+
+      for (const curr of attestations) {
+        pendingMap[curr.id] = curr;
+      }
+
       set({ pendingAttestations: pendingMap });
     } catch (error) {
       console.error("Failed to fetch pending attestations:", error);
@@ -189,7 +193,7 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
           acc[curr.id] = curr;
           return acc;
         },
-        {} as Record<string, Milestone>,
+        {} as Record<string, AdminPendingDisbursement>,
       );
       set({ pendingMilestoneApprovals: pendingMap });
     } catch (error) {

@@ -190,9 +190,11 @@ export default function NGODashboard() {
 
       //FOr LINT Error
       type CampaignResponse = Omit<Campaign, "ngo"> & {
-        ngo?: {
-          organisationName?: string;
-        };
+        ngo?:
+          | string
+          | {
+              organisationName?: string;
+            };
       };
 
       type DisbursementResponse = {
@@ -239,18 +241,23 @@ export default function NGODashboard() {
                       : d.status === "APPROVED"
                         ? "disbursed"
                         : "allocated",
-                  proofSubmittedAt: d.proofSubmittedAt,
-                  rejectionReason: d.rejectionReason,
-                  txHash: d.solanaTxHash,
+                  proofSubmittedAt: d.proofSubmittedAt ?? undefined,
+                  rejectionReason: d.rejectionReason ?? undefined,
+                  txHash: d.solanaTxHash ?? undefined,
                 }))
               : camp.milestones || [];
+
+          const ngoName =
+            typeof camp.ngo === "string"
+              ? camp.ngo
+              : camp.ngo?.organisationName || "My NGO";
 
           return {
             id: camp.id,
             title: camp.title,
             ngoId: camp.ngoId,
-            ngo: camp.ngo?.organisationName || camp.ngo || "My NGO",
-            ngoName: camp.ngo?.organisationName || camp.ngo || "My NGO",
+            ngo: ngoName,
+            ngoName,
             description: camp.description,
             targetAmount: Number(camp.targetAmount),
             raisedAmount: Number(camp.raisedAmount || 0),

@@ -190,7 +190,14 @@ export default function AdminPanel() {
     try {
       setAuditLogsLoading(true);
       const res = await apiService.admin.getAuditLogs({ limit: 50 });
-      setAuditLogs(res.auditLogs || []);
+      setAuditLogs(
+        (res.auditLogs || []).map((log) => ({
+          ...log,
+          actor: log.actor
+            ? { ...log.actor, fullName: log.actor.fullName ?? undefined }
+            : undefined,
+        })),
+      );
     } catch (err) {
       console.error("Failed to load audit logs:", err);
     } finally {
@@ -242,9 +249,10 @@ export default function AdminPanel() {
         type: "milestone",
         id: key,
         entityId: ms.id,
-        title: ms.title,
-        //   amount: Number(ms.amountInr),
-        amount: Number(ms.targetAmount),
+        title:
+          camp?.milestones?.find((m) => m.id === ms.id)?.title ||
+          "Milestone Proof",
+        amount: Number(ms.amountInr),
         ngo: camp?.ngo || "Unknown NGO",
         campaign: camp?.title || "Unknown Campaign",
       });

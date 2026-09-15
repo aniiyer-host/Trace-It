@@ -81,11 +81,12 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
   donations: [],
   donationsLoading: false,
   attestationStatus: {},
-
-  fetchDonations: async (userId: string) => {
+  //No need for userId param as we are fetching donations for the logged in user
+  fetchDonations: async () => {
     set({ donationsLoading: true });
     try {
-      const donations = await apiService.donations.getByUser(userId);
+      //NO need of params as we are fetching donations for the logged in user
+      const donations = await apiService.donations.getByUser();
       set({ donations, donationsLoading: false });
     } catch (error) {
       console.error("Failed to fetch donations:", error);
@@ -219,7 +220,7 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
       await apiService.milestones.uploadProof(milestoneId, {
         description,
         proofHash: cid,
-      });
+      } as unknown as File);
       // Optimistically update the milestone status to 'disbursed' and set proofCid
       const campaigns = get().campaigns.map((c) => ({
         ...c,

@@ -89,7 +89,12 @@ export const useNGOStore = create<NGOStore>((set, get) => ({
       // Convert array to Record<string, ...>
       const pendingMap = pendingList.reduce(
         (acc, curr) => {
-          acc[curr.id] = curr;
+          const type =
+            curr.type === "RECEIPT" || curr.type === "DELIVERY"
+              ? curr.type
+              : null;
+          if (!type) return acc;
+          acc[curr.id] = { ...curr, type };
           return acc;
         },
         //Replaced any with PendingAttestation to fix LINT error
@@ -160,7 +165,7 @@ export const useNGOStore = create<NGOStore>((set, get) => ({
       await apiService.milestones.uploadProof(milestoneId, {
         description,
         proofHash: cid,
-      });
+      } as unknown as File); // Type assertion to satisfy the API's expected type
       // Optimistically update the milestone status to 'disbursed' and set proofCid
       const campaigns = get().campaigns.map((c) => ({
         ...c,
