@@ -44,6 +44,7 @@ describe("End-to-End Flow Tests", () => {
     await prisma.disbursement.deleteMany({});
     await prisma.beneficiaryCohort.deleteMany({});
     await prisma.attestation.deleteMany({});
+    await prisma.impactToken.deleteMany({});
     await prisma.donation.deleteMany({});
     await prisma.campaign.deleteMany({});
     await prisma.profile.deleteMany({});
@@ -106,12 +107,23 @@ describe("End-to-End Flow Tests", () => {
 
   afterAll(async () => {
     // Cleanup
+    // await prisma.governmentRequest.deleteMany({});
+    // await prisma.auditLog.deleteMany({});
+    // await prisma.document.deleteMany({});
+    // await prisma.disbursement.deleteMany({});
+    // await prisma.beneficiaryCohort.deleteMany({});
+    // await prisma.attestation.deleteMany({});
+    // await prisma.donation.deleteMany({});
+    // await prisma.campaign.deleteMany({});
+    // await prisma.profile.deleteMany({});
+
     await prisma.governmentRequest.deleteMany({});
     await prisma.auditLog.deleteMany({});
     await prisma.document.deleteMany({});
     await prisma.disbursement.deleteMany({});
     await prisma.beneficiaryCohort.deleteMany({});
     await prisma.attestation.deleteMany({});
+    await prisma.impactToken.deleteMany({});
     await prisma.donation.deleteMany({});
     await prisma.campaign.deleteMany({});
     await prisma.profile.deleteMany({});
@@ -710,9 +722,10 @@ describe("End-to-End Flow Tests", () => {
 
   describe("System Health & Performance", () => {
     it("should respond to health checks", async () => {
-      const healthRes = await request(app).get("/api/health");
+      const healthRes = await request(app).get("/health");
       // Note: Health endpoint might not exist, so we check for common health patterns
-      expect([200, 404]).toContain(healthRes.status);
+      // expect(200).toContain(healthRes.status);
+      expect(healthRes.status).toBe(200);
     });
 
     it("should handle concurrent requests", async () => {
@@ -741,19 +754,18 @@ describe("End-to-End Flow Tests", () => {
     });
   });
 
-  describe('Public Routes - NGO Directory', () => {
-    it('GET /api/public/ngos returns array of active NGOs with stats', async () => {
-      const res = await request(app)
-        .get('/api/public/ngos')
-      expect(res.status).toBe(200)
-      expect(Array.isArray(res.body)).toBe(true)
+  describe("Public Routes - NGO Directory", () => {
+    it("GET /api/public/ngos returns array of active NGOs with stats", async () => {
+      const res = await request(app).get("/api/public/ngos");
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
       if (res.body.length > 0) {
-        expect(res.body[0]).toHaveProperty('id')
-        expect(res.body[0]).toHaveProperty('name')
-        expect(res.body[0]).toHaveProperty('totalCampaigns')
-        expect(res.body[0]).toHaveProperty('activeCampaigns')
-        expect(res.body[0]).toHaveProperty('totalRaised')
+        expect(res.body[0]).toHaveProperty("id");
+        expect(res.body[0]).toHaveProperty("name");
+        expect(res.body[0]).toHaveProperty("totalCampaigns");
+        expect(res.body[0]).toHaveProperty("activeCampaigns");
+        expect(res.body[0]).toHaveProperty("totalRaised");
       }
-    })
-  })
+    });
+  });
 });

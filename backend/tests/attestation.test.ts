@@ -222,7 +222,9 @@ describe("Attestation & Milestone API Integration Tests", () => {
       .set("Authorization", `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.some((a: any) => a.id === deliveryAttestationId)).toBe(true);
+    expect(res.body.some((a: any) => a.id === deliveryAttestationId)).toBe(
+      true,
+    );
   });
 
   test("POST /api/admin/attestations/:id/approve - a DONOR cannot approve (RBAC)", async () => {
@@ -274,27 +276,27 @@ describe("Attestation & Milestone API Integration Tests", () => {
     expect(res.body).toHaveProperty("documentId");
   });
 
-  test("GET /api/admin/milestones/pending - admin sees the milestone with submitted proof", async () => {
+  test("GET /api/admin/disbursements/pending - admin sees the milestone with submitted proof", async () => {
     const res = await request(app)
-      .get("/api/admin/milestones/pending")
+      .get("/api/admin/disbursements/pending")
       .set("Authorization", `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
     expect(res.body.some((d: any) => d.id === disbursementId)).toBe(true);
   });
 
-  test("POST /api/admin/milestones/:id/reject - a CHARITY cannot reject (RBAC)", async () => {
+  test("POST /api/admin/disbursements/:id/reject - a CHARITY cannot reject (RBAC)", async () => {
     const res = await request(app)
-      .post(`/api/admin/milestones/${disbursementId}/reject`)
+      .post(`/api/admin/disbursements/${disbursementId}/reject`)
       .set("Authorization", `Bearer ${ngoToken}`)
       .send({ reason: "not good enough" });
 
     expect(res.status).toBe(403);
   });
 
-  test("POST /api/admin/milestones/:id/reject - admin rejects with a reason", async () => {
+  test("POST /api/admin/disbursements/:id/reject - admin rejects with a reason", async () => {
     const res = await request(app)
-      .post(`/api/admin/milestones/${disbursementId}/reject`)
+      .post(`/api/admin/disbursements/${disbursementId}/reject`)
       .set("Authorization", `Bearer ${adminToken}`)
       .send({ reason: "field report insufficient" });
 
@@ -302,9 +304,9 @@ describe("Attestation & Milestone API Integration Tests", () => {
     expect(res.body.status).toBe(DisbursementStatus.REJECTED);
   });
 
-  test("POST /api/admin/milestones/:id/approve - cannot approve a rejected milestone", async () => {
+  test("POST /api/admin/disbursements/:id/approve - cannot approve a rejected milestone", async () => {
     const res = await request(app)
-      .post(`/api/admin/milestones/${disbursementId}/approve`)
+      .post(`/api/admin/disbursements/${disbursementId}/approve`)
       .set("Authorization", `Bearer ${adminToken}`);
 
     expect(res.status).toBe(400);

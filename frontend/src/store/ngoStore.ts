@@ -105,20 +105,49 @@ export const useNGOStore = create<NGOStore>((set, get) => ({
       console.error("Failed to fetch pending attestations:", error);
     }
   },
+  // OLD ONE to test
+  // signAttestation: async (
+  //   donationId: string,
+  //   type: "receipt" | "delivery",
+  //   //Cause of LINT error
+  //   //_ngoName: string,
+  //   ngoName: string,
+  // ) => {
+  //   void ngoName; // Currently unused, but kept for future use or logging
+  //   try {
+  //     // Call real backend API for NGO attestation
+  //     await apiService.ngos.signAttestation(donationId, type);
 
+  //     // Update attestation status
+  //     set((state) => ({
+  //       attestationStatus: {
+  //         ...state.attestationStatus,
+  //         [donationId]: "confirmed",
+  //       },
+  //     }));
+
+  //     // Remove from pending attestations
+  //     //Cause of LINT error
+  //     //const { [donationId]: removed, ...rest } = get().pendingAttestations;
+  //     //const { [donationId]: removed, ...rest } = get().pendingAttestations
+  //     const rest = { ...get().pendingAttestations };
+  //     delete rest[donationId];
+  //     set({ pendingAttestations: rest });
+  //   } catch (error) {
+  //     console.error("Failed to sign attestation:", error);
+  //     throw error;
+  //   }
+  // },
   signAttestation: async (
     donationId: string,
     type: "receipt" | "delivery",
-    //Cause of LINT error
-    //_ngoName: string,
     ngoName: string,
   ) => {
-    void ngoName; // Currently unused, but kept for future use or logging
+    void ngoName;
+
     try {
-      // Call real backend API for NGO attestation
       await apiService.ngos.signAttestation(donationId, type);
 
-      // Update attestation status
       set((state) => ({
         attestationStatus: {
           ...state.attestationStatus,
@@ -126,19 +155,13 @@ export const useNGOStore = create<NGOStore>((set, get) => ({
         },
       }));
 
-      // Remove from pending attestations
-      //Cause of LINT error
-      //const { [donationId]: removed, ...rest } = get().pendingAttestations;
-      //const { [donationId]: removed, ...rest } = get().pendingAttestations
-      const rest = { ...get().pendingAttestations };
-      delete rest[donationId];
-      set({ pendingAttestations: rest });
+      // Refresh from backend so only PENDING attestations remain
+      await get().fetchPendingAttestations();
     } catch (error) {
       console.error("Failed to sign attestation:", error);
       throw error;
     }
   },
-
   // Milestone Management
   updateMilestoneStatus: (milestoneId, status) => {
     const campaigns = get().campaigns.map((c) => ({

@@ -21,19 +21,26 @@ interface AttestationSignDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAttestationSigned: () => void;
+  initialAttestationType: "receipt" | "delivery";
 }
 
 export default function AttestationSignDialog({
+  // donation,
+  // ngoName,
+  // open,
+  // onOpenChange,
+  // onAttestationSigned,
   donation,
   ngoName,
   open,
   onOpenChange,
   onAttestationSigned,
+  initialAttestationType,
 }: AttestationSignDialogProps) {
   const [loading, setLoading] = useState(false);
   const [attestationType, setAttestationType] = useState<
     "receipt" | "delivery"
-  >("receipt");
+  >(initialAttestationType);
   const [beneficiaryId, setBeneficiaryId] = useState("");
   const [beneficiaryError, setBeneficiaryError] = useState("");
   const { toast } = useToast();

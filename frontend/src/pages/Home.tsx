@@ -158,7 +158,7 @@ export default function Home() {
 
       // --- PANEL 2 SCRUBBING (CHAIN OF TRUST) ---
       CHAIN_STEPS.forEach((_, i) => {
-        const item = journeyItemsRef.current[i];
+        const item = journeyItemsRef.current.at(i);
         if (!item) return;
 
         tl.fromTo(
@@ -347,7 +347,10 @@ export default function Home() {
                 <div
                   key={i}
                   ref={(el) => {
-                    journeyItemsRef.current[i] = el;
+                    // journeyItemsRef.current[i] = el;
+                    if (el) {
+                      journeyItemsRef.current.splice(i, 1, el);
+                    }
                   }}
                   className="absolute inset-0 flex flex-col items-center justify-center text-center opacity-0"
                 >

@@ -115,7 +115,7 @@ describe("Charity API Integration Tests", () => {
       .set("Authorization", `Bearer ${charityToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe(CampaignStatus.ACTIVE);
+    expect(res.body.status).toBe(CampaignStatus.PENDING_APPROVAL);
   });
 
   test("POST /api/charity/cohorts - create cohort", async () => {

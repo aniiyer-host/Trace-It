@@ -162,8 +162,15 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
 
   getAttestationStatus: async (donationId: string) => {
     // Check if we have cached status
-    const cachedStatus = get().attestationStatus[donationId];
-    if (cachedStatus) {
+    // const cachedStatus = get().attestationStatus[donationId];
+    // if (cachedStatus) {
+    //   return cachedStatus === "loading" ? null : cachedStatus;
+    // }
+    const statusEntries = Object.entries(get().attestationStatus);
+    const cachedEntry = statusEntries.find(([key]) => key === donationId);
+
+    if (cachedEntry) {
+      const cachedStatus = cachedEntry[1];
       return cachedStatus === "loading" ? null : cachedStatus;
     }
 

@@ -795,8 +795,37 @@ export default function NGODashboard() {
         onSuccess={handleProofSuccess}
       />
 
+      {/* {selectedAttestation && (
+        <AttestationSignDialog
+          donation={{
+            id: selectedAttestation.donationId,
+            campaignId: selectedAttestation.donation?.campaignId || "",
+            amount: Number(selectedAttestation.donation?.amount),
+            campaignTitle: `Campaign ${selectedAttestation.donationId?.substring(0, 8)}`,
+            paymentMethod: "upi",
+            orderId: `order_${selectedAttestation.donationId}`,
+            txHash: `tx_${selectedAttestation.donationId}`,
+            walletAddress: "demo_wallet",
+            status: "disbursed",
+            createdAt: selectedAttestation.createdAt,
+            explorerUrl: `https://explorer.solana.com/tx/tx_${selectedAttestation.donationId}?cluster=devnet`,
+          }}
+          ngoName="AidIndia Foundation"
+          open={attestationDialogOpen}
+          onOpenChange={(open) => setAttestationDialogOpen(open)}
+          onAttestationSigned={() => {
+            setAttestationDialogOpen(false);
+            setSelectedAttestation(null);
+            fetchPendingAttestations();
+          }}
+        />
+      )} */}
       {selectedAttestation && (
         <AttestationSignDialog
+          key={selectedAttestation.id}
+          initialAttestationType={
+            selectedAttestation.type === "RECEIPT" ? "receipt" : "delivery"
+          }
           donation={{
             id: selectedAttestation.donationId,
             campaignId: selectedAttestation.donation?.campaignId || "",
