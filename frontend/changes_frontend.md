@@ -1383,12 +1383,170 @@ FILE: `frontend/src/components/DonationHistoryTable.tsx`
 - This avoids passing an optional/undefined status where a string is required.
 - The existing `StatusBadge` component already handles `UNKNOWN` using its default status styling.
 
-## Verification
+  # Latest Backend & Frontend Changes
 
-- Ran `npm run build` successfully.
-- Build completed with **0 TypeScript errors**.
-- Only existing Vite warnings remained:
-  - `__dirname` compatibility warning in `vite.config.ts`
-  - Large bundle/chunk size warning
+  ## Backend Changes
 
-- No frontend build failures remain.
+  ### 1. Campaign Submission Workflow Changed to Auto-Activate
+
+  **FILE:** `backend/src/routes/charity.ts`
+  - Updated the campaign submission workflow so that when an NGO submits a campaign, its status changes directly from `DRAFT` to `ACTIVE`.
+  - Removed the requirement for Admin to manually approve a newly submitted campaign.
+  - This matches the intended platform workflow where campaigns become available for donations after NGO submission.
+  - Admin approval is reserved for later operational workflows such as disbursement/milestone approval rather than campaign activation.
+
+  ### 2. Charity Test Updated for Auto-Activation
+
+  **FILE:** `backend/tests/charity.test.ts`
+  - Updated the campaign submission test to expect:
+    - `CampaignStatus.ACTIVE`
+
+  - The previous expectation of:
+    - `CampaignStatus.PENDING_APPROVAL`
+      was outdated after the campaign auto-activation workflow was introduced.
+
+  - Campaign creation itself still correctly starts with `CampaignStatus.DRAFT`.
+
+  ### 3. Attestation Test Flow Updated
+
+  **FILE:** `backend/tests/attestation.test.ts`
+  - Updated receipt attestation tests to expect `AttestationStatus.APPROVED`.
+  - Receipt attestations are now automatically approved when signed by the NGO.
+  - Updated Admin queue tests so that the Admin queue is tested against `DELIVERY` attestations instead of `RECEIPT` attestations.
+  - This matches the new workload-reduction workflow:
+    - Receipt → NGO signs → automatically approved.
+    - Delivery → NGO signs → sent to Admin for approval.
+
+  ### 4. Simulation Test Response Fields Corrected
+
+  **FILE:** `backend/tests/simulation.test.ts`
+  - Updated outdated response field references:
+    - `orderId` → `razorpayOrderId`
+    - `publicDonationId` → `publicId`
+
+  - Tests now match the current API response structure.
+
+  ### 5. E2E Test Response Fields Corrected
+
+  **FILE:** `backend/tests/e2e.test.ts`
+  - Updated outdated references from `publicDonationId` to `publicId`.
+  - Updated `orderId` expectations to `razorpayOrderId`.
+  - Corrected Prisma lookups that were receiving `undefined` because of the outdated response property names.
+  - Updated related donation-flow assertions to match the current backend API contract.
+
+  ### 6. Milestone Route Renamed to Disbursement Route
+
+  **FILES:** Backend charity/admin routes and related tests
+  - Replaced the old `/milestone` route naming with `/disbursements` where applicable.
+  - Updated frontend API calls to use the corresponding disbursement endpoints.
+  - Updated related test requests and route references to maintain consistency between backend and frontend.
+  - This removes the previous terminology mismatch between the API implementation and the frontend.
+
+  ### 7. Signup Token Assignment Fixed
+
+  **FILE:** `frontend/src/pages/Signup.tsx`
+  - Fixed the registration/login state issue where the returned authentication token was being attached to `user.token`.
+  - Corrected the token handling so the newly registered user can be automatically authenticated/logged in after signup.
+  - This prevents the user from being registered successfully but remaining unauthenticated in the frontend.
+
+  ### 8. Backend Test/Teardown Cleanup
+  - Updated test cleanup ordering where required so dependent database records are removed before their parent records.
+  - Ensured `ImpactToken` records are deleted before `Donation` records to avoid foreign-key constraint failures.
+  - This addresses the Prisma `impact_tokens_donationId_fkey` constraint encountered during Jest cleanup.
+
+  ***
+
+  ## Frontend Changes
+
+  ### 9. Frontend ESLint Cleanup
+  - Removed unused imports, variables, props, and declarations that were causing ESLint/TypeScript build issues.
+  - Cleaned up unused state and API dependencies in:
+    - `DonationHistoryTable.tsx`
+    - `DonorDashboard.tsx`
+    - `NGODashboard.tsx`
+
+  - Preserved existing functionality while removing declarations that were no longer required.
+
+  ### 10. Donation History Type Fixes
+
+  **FILE:** `frontend/src/components/DonationHistoryTable.tsx`
+  - Removed unused `useState` and `apiService` imports.
+  - Removed unused `onRefresh` and `onVerifyIntegrity` props.
+  - Kept the existing Verify Integrity UI behavior without unused callback dependencies.
+  - This resolved frontend lint/build errors caused by unused declarations.
+
+  ### 11. Donor Dashboard Type Fixes
+
+  **FILE:** `frontend/src/pages/DonorDashboard.tsx`
+  - Updated `attestationModalData` typing to include fields actually used by the UI:
+    - `amount`
+    - `campaignTitle`
+    - `confirmedAt`
+    - `donationDate`
+
+  - Removed the unused `donationId` variable.
+  - Updated blockchain verification handling to show an informational message while on-chain verification is not yet active.
+  - Resolved related TypeScript/ESLint issues.
+
+  ### 12. NGO Dashboard Status Type Safety
+
+  **FILE:** `frontend/src/pages/NGODashboard.tsx`
+  - Updated campaign status values passed to `StatusBadge`.
+  - Added safe fallback handling:
+    - `c.status ?? 'UNKNOWN'`
+    - `selectedCampaignObj.status ?? 'UNKNOWN'`
+
+  - Prevents undefined status values from violating the expected component type.
+  - Existing `StatusBadge` handling continues to provide a default visual state for `UNKNOWN`.
+
+  ### 13. Campaign Submission Error Handling
+
+  **FILE:** `frontend/src/components/CreateCampaignDialog.tsx`
+  - Fixed an error-handling issue where campaign submission could fail in the backend while the frontend still displayed a success message.
+  - The submission error is now propagated correctly so the UI can display the failure.
+  - Prevents campaigns from appearing successfully activated while remaining stuck in `DRAFT`.
+
+  ### 14. Beneficiary Wallet UI Updated
+
+  **FILE:** `frontend/src/components/BeneficiaryWalletDialog.tsx`
+  - Removed the warning stating that the generated beneficiary wallet ID could not be recovered.
+  - This warning became outdated after implementing secure beneficiary-ID retrieval from the NGO dashboard.
+  - NGOs can now retrieve the beneficiary ID later through the authorized dashboard flow.
+
+  ### 15. Admin NGO Name Display Fixed
+
+  **FILE:** `frontend/src/pages/AdminPanel.tsx`
+  - Fixed blank NGO names in Pending Approvals and Active Campaigns tables.
+  - Added fallback handling for different API response structures:
+    - `ngoName`
+    - `ngo.organisationName`
+    - `ngo`
+    - `ngoId`
+
+  - Ensures the NGO column displays available information instead of remaining blank.
+
+  ***
+
+  ## Verification
+
+  ### Frontend Build
+  - Ran:
+
+  `npm run lint`
+  - Lint completed successfully with no reported ESLint errors.
+
+  - Ran:
+
+  `npm run build`
+  - Build completed successfully.
+  - TypeScript compilation completed with **0 TypeScript errors**.
+  - Only existing Vite warnings remain:
+    - `__dirname` compatibility warning in `vite.config.ts`
+    - Large bundle/chunk-size warning
+
+  ### Backend Tests
+  - Updated tests to match the current API contracts and workflow changes.
+  - Corrected outdated response property names and campaign/attestation status expectations.
+  - Corrected test cleanup ordering for database foreign-key dependencies.
+  - Disbursement and Admin approval flows remain covered by tests.
+  - Existing test output also confirms successful Admin and Disbursement test suites.
