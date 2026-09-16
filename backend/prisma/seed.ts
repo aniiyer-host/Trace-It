@@ -152,68 +152,68 @@ async function main() {
   // ---------------------------------------------------------------------------
   // Campaign 2 - DRAFT
   // ---------------------------------------------------------------------------
-  const campaign2 = await prisma.campaign.upsert({
-    where: { slug: "education-for-all" },
-    update: {
-      ngoId: ngo.id,
-      title: "Education for All",
-      description: "Providing school supplies to underprivileged children.",
-      category: "Education",
-      targetAmount: 300000.0,
-      raisedAmount: 0.0,
-      currencyCode: "INR",
-      status: "DRAFT",
-      sdgTags: ["SDG4"],
-    },
-    create: {
-      id: "66666666-6666-6666-6666-666666666666",
-      ngoId: ngo.id,
-      title: "Education for All",
-      slug: "education-for-all",
-      description: "Providing school supplies to underprivileged children.",
-      category: "Education",
-      targetAmount: 300000.0,
-      raisedAmount: 0.0,
-      currencyCode: "INR",
-      status: "DRAFT",
-      sdgTags: ["SDG4"],
-    },
-  });
+  // const campaign2 = await prisma.campaign.upsert({
+  //   where: { slug: "education-for-all" },
+  //   update: {
+  //     ngoId: ngo.id,
+  //     title: "Education for All",
+  //     description: "Providing school supplies to underprivileged children.",
+  //     category: "Education",
+  //     targetAmount: 300000.0,
+  //     raisedAmount: 0.0,
+  //     currencyCode: "INR",
+  //     status: "DRAFT",
+  //     sdgTags: ["SDG4"],
+  //   },
+  //   create: {
+  //     id: "66666666-6666-6666-6666-666666666666",
+  //     ngoId: ngo.id,
+  //     title: "Education for All",
+  //     slug: "education-for-all",
+  //     description: "Providing school supplies to underprivileged children.",
+  //     category: "Education",
+  //     targetAmount: 300000.0,
+  //     raisedAmount: 0.0,
+  //     currencyCode: "INR",
+  //     status: "DRAFT",
+  //     sdgTags: ["SDG4"],
+  //   },
+  // });
 
-  console.log(`Created campaign: ${campaign2.title}`);
+  // console.log(`Created campaign: ${campaign2.title}`);
 
   // ---------------------------------------------------------------------------
   // Campaign 3 - PENDING APPROVAL
   // ---------------------------------------------------------------------------
-  const campaign3 = await prisma.campaign.upsert({
-    where: { slug: "clean-water-initiative" },
-    update: {
-      ngoId: ngo.id,
-      title: "Clean Water Initiative",
-      description: "Building wells in rural communities.",
-      category: "Health",
-      targetAmount: 200000.0,
-      raisedAmount: 0.0,
-      currencyCode: "INR",
-      status: "ACTIVE",
-      sdgTags: ["SDG6"],
-    },
-    create: {
-      id: "77777777-7777-7777-7777-777777777777",
-      ngoId: ngo.id,
-      title: "Clean Water Initiative",
-      slug: "clean-water-initiative",
-      description: "Building wells in rural communities.",
-      category: "Health",
-      targetAmount: 200000.0,
-      raisedAmount: 0.0,
-      currencyCode: "INR",
-      status: "ACTIVE",
-      sdgTags: ["SDG6"],
-    },
-  });
+  // const campaign3 = await prisma.campaign.upsert({
+  //   where: { slug: "clean-water-initiative" },
+  //   update: {
+  //     ngoId: ngo.id,
+  //     title: "Clean Water Initiative",
+  //     description: "Building wells in rural communities.",
+  //     category: "Health",
+  //     targetAmount: 200000.0,
+  //     raisedAmount: 0.0,
+  //     currencyCode: "INR",
+  //     status: "ACTIVE",
+  //     sdgTags: ["SDG6"],
+  //   },
+  //   create: {
+  //     id: "77777777-7777-7777-7777-777777777777",
+  //     ngoId: ngo.id,
+  //     title: "Clean Water Initiative",
+  //     slug: "clean-water-initiative",
+  //     description: "Building wells in rural communities.",
+  //     category: "Health",
+  //     targetAmount: 200000.0,
+  //     raisedAmount: 0.0,
+  //     currencyCode: "INR",
+  //     status: "ACTIVE",
+  //     sdgTags: ["SDG6"],
+  //   },
+  // });
 
-  console.log(`Created campaign: ${campaign3.title}`);
+  // console.log(`Created campaign: ${campaign3.title}`);
 
   // ---------------------------------------------------------------------------
   // Donation
@@ -277,31 +277,31 @@ async function main() {
   // ---------------------------------------------------------------------------
   // Disbursement
   // ---------------------------------------------------------------------------
-  const disbursement = await prisma.disbursement.upsert({
-    where: {
-      id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-    },
-    update: {
-      campaignId: campaign1.id,
-      ngoId: ngo.id,
-      cohortId: cohort.id,
-      amountInr: 10000.0,
-      amountSol: null,
-      status: "PENDING",
-      proofSubmittedAt: null,
-      rejectionReason: null,
-    },
-    create: {
-      id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-      campaignId: campaign1.id,
-      ngoId: ngo.id,
-      cohortId: cohort.id,
-      amountInr: 10000.0,
-      status: "PENDING",
-    },
-  });
+  // const disbursement = await prisma.disbursement.upsert({
+  //   where: {
+  //     id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  //   },
+  //   update: {
+  //     campaignId: campaign1.id,
+  //     ngoId: ngo.id,
+  //     cohortId: cohort.id,
+  //     amountInr: 10000.0,
+  //     amountSol: null,
+  //     status: "PENDING",
+  //     proofSubmittedAt: null,
+  //     rejectionReason: null,
+  //   },
+  //   create: {
+  //     id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  //     campaignId: campaign1.id,
+  //     ngoId: ngo.id,
+  //     cohortId: cohort.id,
+  //     amountInr: 10000.0,
+  //     status: "PENDING",
+  //   },
+  // });
 
-  console.log(`Created disbursement: ${disbursement.id}`);
+  // console.log(`Created disbursement: ${disbursement.id}`);
 
   // ---------------------------------------------------------------------------
   // Donation Attestations
@@ -452,11 +452,11 @@ async function main() {
   console.log("  ✓ Donor with APPROVED KYC");
   console.log("  ✓ Donor without completed KYC");
   console.log("  ✓ Active campaign");
-  console.log("  ✓ Draft campaign");
-  console.log("  ✓ Pending-approval campaign");
+  // console.log("  ✓ Draft campaign");
+  // console.log("  ✓ Pending-approval campaign");
   console.log("  ✓ Successful donation");
   console.log("  ✓ Beneficiary cohort");
-  console.log("  ✓ Pending disbursement");
+  // console.log("  ✓ Pending disbursement");
   console.log("  ✓ Receipt attestation");
   console.log("  ✓ Delivery attestation");
   console.log("  ✓ Impact token record");
