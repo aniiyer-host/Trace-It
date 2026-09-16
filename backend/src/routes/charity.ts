@@ -394,7 +394,7 @@ export const submitCampaign = async (
     const updated = await prisma.campaign.update({
       where: { id: campaignId },
       // data: { status: CampaignStatus.ACTIVE },
-      data: { status: CampaignStatus.PENDING_APPROVAL },
+      data: { status: CampaignStatus.ACTIVE },
     });
 
     await writeAuditLog({
