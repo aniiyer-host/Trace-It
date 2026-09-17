@@ -66,6 +66,10 @@ export class BlockchainRetryProcessor {
     console.log(`Processing ${retryItems.length} blockchain retry items`);
 
     const blockchainService = await getBlockchainService();
+    if (!blockchainService) {
+      console.warn('[BlockchainRetryProcessor] Blockchain service unavailable — skipping retry batch.');
+      return;
+    }
 
     for (const item of retryItems) {
       try {

@@ -43,6 +43,8 @@ describe("End-to-End Flow Tests", () => {
     await prisma.document.deleteMany({});
     await prisma.disbursement.deleteMany({});
     await prisma.beneficiaryCohort.deleteMany({});
+    await prisma.attestation.deleteMany({});
+    await prisma.impactToken.deleteMany({});
     await prisma.donation.deleteMany({});
     await prisma.campaign.deleteMany({});
     await prisma.profile.deleteMany({});
@@ -105,11 +107,23 @@ describe("End-to-End Flow Tests", () => {
 
   afterAll(async () => {
     // Cleanup
+    // await prisma.governmentRequest.deleteMany({});
+    // await prisma.auditLog.deleteMany({});
+    // await prisma.document.deleteMany({});
+    // await prisma.disbursement.deleteMany({});
+    // await prisma.beneficiaryCohort.deleteMany({});
+    // await prisma.attestation.deleteMany({});
+    // await prisma.donation.deleteMany({});
+    // await prisma.campaign.deleteMany({});
+    // await prisma.profile.deleteMany({});
+
     await prisma.governmentRequest.deleteMany({});
     await prisma.auditLog.deleteMany({});
     await prisma.document.deleteMany({});
     await prisma.disbursement.deleteMany({});
     await prisma.beneficiaryCohort.deleteMany({});
+    await prisma.attestation.deleteMany({});
+    await prisma.impactToken.deleteMany({});
     await prisma.donation.deleteMany({});
     await prisma.campaign.deleteMany({});
     await prisma.profile.deleteMany({});
@@ -160,13 +174,13 @@ describe("End-to-End Flow Tests", () => {
 
       // expect([200, 201]).toContain(donationRes.status);
       expect(donationRes.status).toBe(201);
-      expect(donationRes.body).toHaveProperty("orderId");
-      expect(donationRes.body).toHaveProperty("publicDonationId");
+      expect(donationRes.body).toHaveProperty("razorpayOrderId");
+      expect(donationRes.body).toHaveProperty("publicId");
       // Store both IDs for different endpoints
-      donationPublicId = donationRes.body.publicDonationId;
+      donationPublicId = donationRes.body.publicId;
       // We need to get the actual donation record to get the UUID id
       const donationRecord = await prisma.donation.findFirst({
-        where: { publicId: donationRes.body.publicDonationId },
+        where: { publicId: donationRes.body.publicId },
         select: { id: true },
       });
 
@@ -250,7 +264,7 @@ describe("End-to-End Flow Tests", () => {
 
       // expect(donationRes.status).toBe(200);
       expect(donationRes.status).toBe(201);
-      const donationId = donationRes.body.publicDonationId;
+      const donationId = donationRes.body.publicId;
       // Get the UUID id
       const donationRecord = await prisma.donation.findFirst({
         where: { publicId: donationId },
@@ -414,7 +428,7 @@ describe("End-to-End Flow Tests", () => {
       });
 
       const allocatedDonations = donations.filter(
-        (d) => d.status === 'ALLOCATED',
+        (d) => d.status === "ALLOCATED",
       );
 
       // Should have at least one allocated donation
@@ -482,7 +496,7 @@ describe("End-to-End Flow Tests", () => {
 
       // expect(donationRes.status).toBe(200);
       expect(donationRes.status).toBe(201);
-      const donationId = donationRes.body.publicDonationId;
+      const donationId = donationRes.body.publicId;
 
       // Update donation status to SUCCESS (simulating webhook)
       await prisma.donation.update({
@@ -553,7 +567,7 @@ describe("End-to-End Flow Tests", () => {
 
       // expect(donationRes.status).toBe(200);
       expect(donationRes.status).toBe(201);
-      const donationId = donationRes.body.publicDonationId;
+      const donationId = donationRes.body.publicId;
 
       // Update donation status to SUCCESS (simulating webhook)
       await prisma.donation.update({
@@ -572,9 +586,7 @@ describe("End-to-End Flow Tests", () => {
       expect(eightyGRes.body).toHaveProperty("donationsDetails");
       expect(Array.isArray(eightyGRes.body.donationsDetails)).toBe(true);
       expect(eightyGRes.body.donationsDetails.length).toBeGreaterThanOrEqual(1);
-      expect(eightyGRes.body.donationsDetails[0]).toHaveProperty(
-        "amount",
-      );
+      expect(eightyGRes.body.donationsDetails[0]).toHaveProperty("amount");
     });
   });
 
@@ -677,9 +689,9 @@ describe("End-to-End Flow Tests", () => {
         .get("/api/charity/campaigns")
         .set("Authorization", `Bearer ${donorToken}`); // Donor accessing charity endpoint
 
-      expect(res.status).toBe(200); // Authenticated but not NGO
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBe(0); // Should be empty for non-NGO users
+      expect(res.status).toBe(403); // Authenticated but not NGO
+      //expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBe(undefined); //Changed 0 to undefined since the response is an error object, not an array
     });
 
     it("should prevent donor without KYC from making large donations", async () => {
@@ -710,9 +722,10 @@ describe("End-to-End Flow Tests", () => {
 
   describe("System Health & Performance", () => {
     it("should respond to health checks", async () => {
-      const healthRes = await request(app).get("/api/health");
+      const healthRes = await request(app).get("/health");
       // Note: Health endpoint might not exist, so we check for common health patterns
-      expect([200, 404]).toContain(healthRes.status);
+      // expect(200).toContain(healthRes.status);
+      expect(healthRes.status).toBe(200);
     });
 
     it("should handle concurrent requests", async () => {
@@ -738,6 +751,21 @@ describe("End-to-End Flow Tests", () => {
       results.forEach((res) => {
         expect([201, 200, 400, 402]).toContain(res.status);
       });
+    });
+  });
+
+  describe("Public Routes - NGO Directory", () => {
+    it("GET /api/public/ngos returns array of active NGOs with stats", async () => {
+      const res = await request(app).get("/api/public/ngos");
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      if (res.body.length > 0) {
+        expect(res.body[0]).toHaveProperty("id");
+        expect(res.body[0]).toHaveProperty("name");
+        expect(res.body[0]).toHaveProperty("totalCampaigns");
+        expect(res.body[0]).toHaveProperty("activeCampaigns");
+        expect(res.body[0]).toHaveProperty("totalRaised");
+      }
     });
   });
 });

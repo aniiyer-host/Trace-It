@@ -109,6 +109,7 @@ describe("Disbursement Recording on Blockchain", () => {
     if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
       try {
         const blockchainService = await getBlockchainService();
+        if (!blockchainService) return; // skip if blockchain service not configured
         const idlPath = require("path").resolve(
           __dirname,
           "..",

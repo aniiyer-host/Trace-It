@@ -1,5 +1,10 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export class StorageService {
   private bucketName: string;
@@ -12,18 +17,21 @@ export class StorageService {
     const endpoint = process.env.B2_ENDPOINT;
     const accessKeyId = process.env.B2_KEY_ID;
     const secretAccessKey = process.env.B2_APPLICATION_KEY;
-    const region = process.env.B2_REGION || 'us-west-002';
+    const region = process.env.B2_REGION || "us-west-002";
 
     if (!endpoint || !accessKeyId || !secretAccessKey) {
-      console.warn('Storage credentials missing. Ensure B2_ENDPOINT, B2_KEY_ID, and B2_APPLICATION_KEY are set.');
+      console.warn(
+        "Storage credentials missing. Ensure B2_ENDPOINT, B2_KEY_ID, and B2_APPLICATION_KEY are set.",
+      );
     }
 
     this.s3Client = new S3Client({
       endpoint: endpoint,
       region: region,
+      forcePathStyle: true, // Required for Backblaze B2
       credentials: {
-        accessKeyId: accessKeyId || '',
-        secretAccessKey: secretAccessKey || '',
+        accessKeyId: accessKeyId || "",
+        secretAccessKey: secretAccessKey || "",
       },
     });
   }
@@ -35,7 +43,13 @@ export class StorageService {
    * @param mimeType - The MIME type of the file.
    * @returns Promise<void>
    */
-  async uploadFile(buffer: Buffer, path: string, mimeType: string): Promise<void> {
+  async uploadFile(
+    buffer: Buffer,
+    path: string,
+    mimeType: string,
+  ): Promise<void> {
+    if (process.env.NODE_ENV === "test") return;
+
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
       Key: path,
@@ -47,7 +61,10 @@ export class StorageService {
       await this.s3Client.send(command);
       console.log(`Successfully uploaded file to ${this.bucketName}/${path}`);
     } catch (error) {
-      console.error(`Error uploading file to ${this.bucketName}/${path}:`, error);
+      console.error(
+        `Error uploading file to ${this.bucketName}/${path}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -59,16 +76,23 @@ export class StorageService {
    * @returns Promise<string> - The signed URL.
    */
   async getSignedUrl(path: string, ttlSeconds: number): Promise<string> {
+    if (process.env.NODE_ENV === "test") return `https://mock.s3.test/${path}`;
+
     const command = new GetObjectCommand({
       Bucket: this.bucketName,
       Key: path,
     });
 
     try {
-      const url = await getSignedUrl(this.s3Client, command, { expiresIn: ttlSeconds });
+      const url = await getSignedUrl(this.s3Client, command, {
+        expiresIn: ttlSeconds,
+      });
       return url;
     } catch (error) {
-      console.error(`Error generating signed URL for ${this.bucketName}/${path}:`, error);
+      console.error(
+        `Error generating signed URL for ${this.bucketName}/${path}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -92,4 +116,4 @@ export class StorageService {
       throw error;
     }
   }
-}
+}

@@ -4,6 +4,7 @@ export const signupSchema = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().min(6).required(),
   fullName: Joi.string().optional(),
+  name: Joi.string().optional(), // alias accepted from /register route (mapped to fullName)
   phone: Joi.string().optional(),
 }).unknown(false);
 

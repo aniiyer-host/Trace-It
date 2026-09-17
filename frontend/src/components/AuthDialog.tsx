@@ -1,10 +1,11 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
-import { useUIStore } from '@/store/uiStore'
-import { loginWithEmail } from '@/services/mockAuth'
+import { useAuthStore } from '@/store/authStore'
+import { apiService } from '@/utils/apiClient'
 
 interface Props {
     open: boolean
@@ -15,17 +16,22 @@ export function AuthDialog({ open, onClose }: Props) {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
-    const { setUser } = useUIStore()
+    const { login } = useAuthStore()
     const { toast } = useToast()
+    const navigate = useNavigate()
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault()
         setLoading(true)
         try {
-            const user = await loginWithEmail(email, password)
-            setUser(user)
+            const { user, token } = await apiService.auth.login(email, password)
+            login(user, token)
             toast({ title: 'Welcome to TraceIt!', description: `Logged in as ${user.email}` })
             onClose()
+            
+            if (user.role === 'ADMIN') navigate('/admin')
+            else if (user.role === 'CHARITY') navigate('/ngo')
+            else navigate('/donor')
         } catch {
             toast({ title: 'Authentication failed', variant: 'destructive' })
         } finally {

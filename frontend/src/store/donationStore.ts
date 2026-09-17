@@ -1,217 +1,280 @@
 // Enhanced Zustand store for campaigns and donations with improved mock data simulation
 // TODO: Replace fetchCampaigns with real RPC calls when integrating @solana/web3.js
 
-import { create } from 'zustand'
-import type { Campaign, Donation, DonationStatus } from '@/types'
-import { fetchCampaigns, createDonation, approveMilestone, uploadMilestoneProof, cycleMilestoneStatus, fetchDonationsByUser, getAttestationByDonationId, requestAttestation } from '@/services/mockApi'
+import { create } from "zustand";
+import type { Campaign, Donation, DonationStatus } from "@/types";
+// import { cycleMilestoneStatus } from '@/services/mockApi'
+import { apiService } from "@/utils/apiClient";
 
+//FOR LINT Error
+interface AttestationRequestResponse {
+  status: string;
+}
 interface DonationStore {
-    // ── Campaigns ─────────────────────────────────────
-    campaigns: Campaign[]
-    campaignsLoading: boolean
-    loadCampaigns: () => Promise<void>
+  // ── Campaigns ─────────────────────────────────────
+  campaigns: Campaign[];
+  campaignsLoading: boolean;
+  loadCampaigns: () => Promise<void>;
 
-    // ── Donations made by the connected donor ─────────
-    donations: Donation[]
-    donationsLoading: boolean
-    fetchDonations: (userId: string) => Promise<void>
-    addDonation: (d: Donation) => void
-    setDonations: (d: Donation[]) => void
-    createDonation: (campaign: Campaign, amount: number, paymentMethod: 'upi' | 'sol', orderId: string, txHash: string, walletAddress: string) => Promise<Donation>
+  // ── Donations made by the connected donor ─────────
+  donations: Donation[];
+  donationsLoading: boolean;
+  fetchDonations: (userId: string) => Promise<void>;
+  addDonation: (d: Donation) => void;
+  setDonations: (d: Donation[]) => void;
+  createDonation: (
+    campaign: Campaign,
+    amount: number,
+    paymentMethod: "upi" | "sol",
+    ngoId: string,
+  ) => Promise<Donation>;
 
-    // ── Attestation Management ───────────────────────
-    attestationStatus: Record<string, 'pending' | 'receipt_confirmed' | 'delivery_confirmed' | 'loading'>
-    requestAttestation: (donationId: string, type: 'receipt' | 'delivery') => Promise<void>
-    getAttestationStatus: (donationId: string) => Promise<'pending' | 'receipt_confirmed' | 'delivery_confirmed' | null>
+  // ── Attestation Management ───────────────────────
+  attestationStatus: Record<
+    string,
+    "pending" | "receipt_confirmed" | "delivery_confirmed" | "loading"
+  >;
+  requestAttestation: (
+    donationId: string,
+    type: "receipt" | "delivery",
+  ) => Promise<void>;
+  getAttestationStatus: (
+    donationId: string,
+  ) => Promise<"pending" | "receipt_confirmed" | "delivery_confirmed" | null>;
 
-    // ── Optimistic milestone status updates ───────────
-    updateMilestoneStatus: (milestoneId: string, status: NonNullable<Campaign['milestones'][0]['status']>) => void
-    approveMilestone: (milestoneId: string) => Promise<void>
-    uploadMilestoneProof: (milestoneId: string, description: string, cid: string) => Promise<void>
-    cycleMilestoneStatus: (milestoneId: string) => Promise<void>
+  // ── Optimistic milestone status updates ───────────
+  updateMilestoneStatus: (
+    milestoneId: string,
+    status: NonNullable<Campaign["milestones"][0]["status"]>,
+  ) => void;
+  approveMilestone: (milestoneId: string) => Promise<void>;
+  uploadMilestoneProof: (
+    milestoneId: string,
+    description: string,
+    cid: string,
+  ) => Promise<void>;
+  cycleMilestoneStatus: (milestoneId: string) => Promise<void>;
 
-    // ── Demo helpers ──────────────────────────────────
-    resetStore: () => void
-    simulateDonationFlow: (campaignId: string, amount: number, paymentMethod: 'upi' | 'sol') => Promise<void>
+  // ── Demo helpers ──────────────────────────────────
+  resetStore: () => void;
+  simulateDonationFlow: (
+    campaignId: string,
+    amount: number,
+    paymentMethod: "upi" | "sol",
+  ) => Promise<void>;
 }
 
 export const useDonationStore = create<DonationStore>((set, get) => ({
-    campaigns: [],
-    campaignsLoading: false,
-    loadCampaigns: async () => {
-        set({ campaignsLoading: true })
-        try {
-            const campaigns = await fetchCampaigns()
-            set({ campaigns, campaignsLoading: false })
-        } catch (error) {
-            console.error('Failed to load campaigns:', error)
-            set({ campaignsLoading: false })
-        }
-    },
+  campaigns: [],
+  campaignsLoading: false,
+  loadCampaigns: async () => {
+    set({ campaignsLoading: true });
+    try {
+      const campaigns = await apiService.campaigns.getAll();
+      set({ campaigns, campaignsLoading: false });
+    } catch (error) {
+      console.error("Failed to load campaigns:", error);
+      set({ campaignsLoading: false });
+    }
+  },
 
-    donations: [],
-    donationsLoading: false,
-    attestationStatus: {},
+  donations: [],
+  donationsLoading: false,
+  attestationStatus: {},
+  //No need for userId param as we are fetching donations for the logged in user
+  fetchDonations: async () => {
+    set({ donationsLoading: true });
+    try {
+      //NO need of params as we are fetching donations for the logged in user
+      const donations = await apiService.donations.getByUser();
+      set({ donations, donationsLoading: false });
+    } catch (error) {
+      console.error("Failed to fetch donations:", error);
+      set({ donationsLoading: false });
+    }
+  },
+  addDonation: (d) => set((s) => ({ donations: [d, ...s.donations] })),
+  setDonations: (d) => set({ donations: d }),
+  createDonation: async (campaign, amount, paymentMethod, ngoId) => {
+    try {
+      const donation = (await apiService.donations.create({
+        campaignId: campaign.id,
+        ngoId: ngoId,
+        amount: amount,
+        paymentMethod: paymentMethod.toUpperCase(),
+      })) as Donation;
+      get().addDonation(donation);
+      return donation;
+    } catch (error) {
+      console.error("Failed to create donation:", error);
+      throw error;
+    }
+  },
 
-    fetchDonations: async (userId: string) => {
-        set({ donationsLoading: true })
-        try {
-            const donations = await fetchDonationsByUser(userId)
-            set({ donations, donationsLoading: false })
-        } catch (error) {
-            console.error('Failed to fetch donations:', error)
-            set({ donationsLoading: false })
-        }
-    },
-    addDonation: (d) => set((s) => ({ donations: [d, ...s.donations] })),
-    setDonations: (d) => set({ donations: d }),
-    createDonation: async (campaign, amount, paymentMethod, orderId, txHash, walletAddress) => {
-        try {
-            const donation = await createDonation(campaign, amount, paymentMethod, orderId, txHash, walletAddress)
-            get().addDonation(donation)
-            return donation
-        } catch (error) {
-            console.error('Failed to create donation:', error)
-            throw error
-        }
-    },
+  // Attestation management
+  requestAttestation: async (
+    donationId: string,
+    type: "receipt" | "delivery",
+  ) => {
+    // Update state to show loading
+    set((state) => ({
+      attestationStatus: {
+        ...state.attestationStatus,
+        [donationId]: "loading",
+      },
+    }));
 
-    // Attestation management
-    requestAttestation: async (donationId: string, type: 'receipt' | 'delivery') => {
-        // Update state to show loading
-        set(state => ({
-            attestationStatus: {
-                ...state.attestationStatus,
-                [donationId]: 'loading'
-            }
-        }))
+    try {
+      // Request attestation from real API
+      // Added : AttestationRequestResponse for LINT error
+      //   const result: AttestationRequestResponse =
+      //     await apiService.donations.requestAttestation(donationId, type);
 
-        try {
-            // Request attestation from API
-            const result = await requestAttestation(donationId, type)
+      const response = await apiService.donations.requestAttestation(
+        donationId,
+        type,
+      );
+      const result = response as AttestationRequestResponse;
 
-            // Update state with result
-            set(state => ({
-                attestationStatus: {
-                    ...state.attestationStatus,
-                    [donationId]: result.status === 'confirmed'
-                        ? (type === 'receipt' ? 'receipt_confirmed' : 'delivery_confirmed')
-                        : 'pending'
-                }
-            }))
-        } catch (error) {
-            console.error('Failed to request attestation:', error)
-            // Reset to pending on error
-            set(state => ({
-                attestationStatus: {
-                    ...state.attestationStatus,
-                    [donationId]: 'pending'
-                }
-            }))
-        }
-    },
+      // Update state with result
+      set((state) => ({
+        attestationStatus: {
+          ...state.attestationStatus,
+          [donationId]:
+            result.status === "confirmed"
+              ? type === "receipt"
+                ? "receipt_confirmed"
+                : "delivery_confirmed"
+              : "pending",
+        },
+      }));
+    } catch (error) {
+      console.error("Failed to request attestation:", error);
+      // Reset to pending on error
+      set((state) => ({
+        attestationStatus: {
+          ...state.attestationStatus,
+          [donationId]: "pending",
+        },
+      }));
+    }
+  },
 
-    getAttestationStatus: async (donationId: string) => {
-        // Check if we have cached status
-        const cachedStatus = get().attestationStatus[donationId]
-        if (cachedStatus) {
-            return cachedStatus === 'loading' ? null : cachedStatus
-        }
+  getAttestationStatus: async (donationId: string) => {
+    // Check if we have cached status
+    // const cachedStatus = get().attestationStatus[donationId];
+    // if (cachedStatus) {
+    //   return cachedStatus === "loading" ? null : cachedStatus;
+    // }
+    const statusEntries = Object.entries(get().attestationStatus);
+    const cachedEntry = statusEntries.find(([key]) => key === donationId);
 
-        // Try to fetch from API
-        try {
-            const attestation = await getAttestationByDonationId(donationId)
-            if (!attestation) {
-                return null
-            }
+    if (cachedEntry) {
+      const cachedStatus = cachedEntry[1];
+      return cachedStatus === "loading" ? null : cachedStatus;
+    }
 
-            // Map API status to our status
-            const status = attestation.type === 'receipt' ? 'receipt_confirmed' : 'delivery_confirmed'
+    // Try to fetch from API
+    try {
+      //Removed as any at end for LINT error
+      const attestation = await apiService.donations.getAttestation(donationId);
+      if (!attestation) {
+        return null;
+      }
 
-            // Update cache
-            set(state => ({
-                attestationStatus: {
-                    ...state.attestationStatus,
-                    [donationId]: status
-                }
-            }))
+      // Map API status to our status
+      const status =
+        attestation.type === "receipt"
+          ? "receipt_confirmed"
+          : "delivery_confirmed";
 
-            return status
-        } catch (error) {
-            console.error('Failed to get attestation status:', error)
-            return null
-        }
-    },
+      // Update cache
+      set((state) => ({
+        attestationStatus: {
+          ...state.attestationStatus,
+          [donationId]: status,
+        },
+      }));
 
-    updateMilestoneStatus: (milestoneId, status: DonationStatus) => {
-        const campaigns = get().campaigns.map((c) => ({
-            ...c,
-            milestones: c.milestones.map((m) =>
-                m.id === milestoneId ? { ...m, status } : m,
-            ),
-        }))
-        set({ campaigns })
-    },
-    approveMilestone: async (milestoneId) => {
-        try {
-            await approveMilestone(milestoneId)
-            // Optimistically update the milestone status to 'delivered'
-            get().updateMilestoneStatus(milestoneId, 'delivered')
-        } catch (error) {
-            console.error('Failed to approve milestone:', error)
-            throw error
-        }
-    },
-    uploadMilestoneProof: async (milestoneId, description, cid) => {
-        try {
-            await uploadMilestoneProof({ milestoneId, description, cid })
-            // Optimistically update the milestone status to 'disbursed' and set proofCid
-            const campaigns = get().campaigns.map((c) => ({
-                ...c,
-                milestones: c.milestones.map((m) =>
-                    m.id === milestoneId
-                        ? {...m, status: 'disbursed' as DonationStatus, proofCid: cid}
-                        : m,
-                ),
-            }))
-            set({ campaigns })
-        } catch (error) {
-            console.error('Failed to upload milestone proof:', error)
-            throw error
-        }
-    },
-    cycleMilestoneStatus: async (milestoneId) => {
-        try {
-            const newStatus = await cycleMilestoneStatus(milestoneId)
-            get().updateMilestoneStatus(milestoneId, newStatus)
-        } catch (error) {
-            console.error('Failed to cycle milestone status:', error)
-            throw error
-        }
-    },
+      return status;
+    } catch (error) {
+      console.error("Failed to get attestation status:", error);
+      return null;
+    }
+  },
 
-    resetStore: () => {
-        set({
-            campaigns: [],
-            campaignsLoading: false,
-            donations: [],
-            donationsLoading: false,
-            attestationStatus: {}
-        })
-    },
-    simulateDonationFlow: async (campaignId, amount, paymentMethod) => {
-        const { campaigns } = get()
-        const campaign = campaigns.find((c) => c.id === campaignId)
-        if (!campaign) throw new Error('Campaign not found')
+  updateMilestoneStatus: (milestoneId, status: DonationStatus) => {
+    const campaigns = get().campaigns.map((c) => ({
+      ...c,
+      milestones: c.milestones.map((m) =>
+        m.id === milestoneId ? { ...m, status } : m,
+      ),
+    }));
+    set({ campaigns });
+  },
+  approveMilestone: async (milestoneId) => {
+    try {
+      await apiService.milestones.approve(milestoneId);
+      // Optimistically update the milestone status to 'delivered'
+      get().updateMilestoneStatus(milestoneId, "delivered");
+    } catch (error) {
+      console.error("Failed to approve milestone:", error);
+      throw error;
+    }
+  },
+  uploadMilestoneProof: async (milestoneId, description, cid) => {
+    try {
+      await apiService.milestones.uploadProof(milestoneId, {
+        description,
+        proofHash: cid,
+      } as unknown as File);
+      // Optimistically update the milestone status to 'disbursed' and set proofCid
+      const campaigns = get().campaigns.map((c) => ({
+        ...c,
+        milestones: c.milestones.map((m) =>
+          m.id === milestoneId
+            ? { ...m, status: "disbursed" as DonationStatus, proofCid: cid }
+            : m,
+        ),
+      }));
+      set({ campaigns });
+    } catch (error) {
+      console.error("Failed to upload milestone proof:", error);
+      throw error;
+    }
+  },
+  // cycleMilestoneStatus: async (milestoneId) => {
+  cycleMilestoneStatus: async () => {
+    throw new Error("Not implemented");
+  },
 
-        // Generate a mock orderId and txHash
-        const orderId = `demo_order_${Date.now()}`
-        const txHash = `demo_tx_${Date.now()}`
+  resetStore: () => {
+    set({
+      campaigns: [],
+      campaignsLoading: false,
+      donations: [],
+      donationsLoading: false,
+      attestationStatus: {},
+    });
+  },
+  simulateDonationFlow: async (campaignId, amount, paymentMethod) => {
+    const { campaigns } = get();
+    const campaign = campaigns.find((c) => c.id === campaignId);
+    if (!campaign) throw new Error("Campaign not found");
 
-        // Create the donation
-        await get().createDonation(campaign, amount, paymentMethod, orderId, txHash, 'demo_wallet_address')
+    // Create the donation
+    await get().createDonation(
+      campaign,
+      amount,
+      paymentMethod,
+      // Cause of LINT Error : NGO ID is not being passed correctly. It should be fetched from the campaign object.
+      //   (campaign as any).ngoId ||
+      //     (campaign as any).ngo?.id ||
+      //     (campaign as any).ngo,
+      campaign.ngoId,
+    );
 
-        // Optionally, we could also update a milestone status here for demo purposes
-        // For simplicity, we'll just create the donation.
-    },
-}))
+    // Optionally, we could also update a milestone status here for demo purposes
+    // For simplicity, we'll just create the donation.
+  },
+}));

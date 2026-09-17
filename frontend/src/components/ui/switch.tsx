@@ -1,71 +1,27 @@
 import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
-import { Check } from "lucide-react"
-import { cva, type VariantProps } from "class-variance-authority"
-
 import { cn } from "@/lib/utils"
 
-const switchVariants = cva(
-  "inline-flex h-6 w-11 items-center shrink-0 cursor-pointer select-none rounded-full border-2 border-transparent bg-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input",
-  {
-    variants: {
-      variant: {
-        default: "",
-        destructive:
-          "data-[state=checked]:bg-destructive data-[state=unchecked]:border-destructive/50",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-)
-
-interface SwitchProps
-  extends React.ComponentPropsWithoutRef<"input">,
-    VariantProps<typeof switchVariants> {
-  /**
-   * Used with asChild to switch between different radial slots
-   * @defaultValue "thumb"
-   */
-  childSlot?: "thumb" | "unchecked" | "checked"
-  asChild?: boolean
-}
-
-const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
-  ({ className, variant, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "input"
-    // Conditionally build the props to pass childSlot only when asChild is true
-    const CompProps = asChild
-      ? { ...props, childSlot: props.childSlot }
-      : { ...props };
-
+const Switch = React.forwardRef<HTMLInputElement, React.ComponentPropsWithoutRef<"input">>(
+  ({ className, ...props }, ref) => {
     return (
-      <Comp
+      <input
         type="checkbox"
         role="switch"
-        aria-checked={props.checked}
-        className={cn(switchVariants({ variant, className }))}
+        className={cn(
+          "peer inline-flex h-6 w-11 shrink-0 cursor-pointer appearance-none items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+          "bg-input checked:bg-primary",
+          "after:pointer-events-none after:block after:h-5 after:w-5 after:rounded-full after:bg-background after:shadow-sm after:transition-transform after:duration-200 after:ease-in-out",
+          "checked:after:translate-x-5",
+          className
+        )}
         ref={ref}
-        {...CompProps}
+        {...props}
       />
     )
   }
 )
 Switch.displayName = "Switch"
 
-const SwitchThumb = React.forwardRef(
-  ({ className, ...props }: React.PropsWithRef<typeof Check> & { className?: string }) => (
-    <Check
-      className={cn(
-        "h-4 w-4 shrink-0 stroke-current transition-transform",
-        "data-[state=checked]:translate-x-4",
-        className
-      )}
-      {...props}
-    />
-  )
-)
-SwitchThumb.displayName = "Switch.Thumb"
-
-export { Switch, SwitchThumb }
+export { Switch }

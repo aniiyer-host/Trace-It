@@ -1,9 +1,8 @@
-// Mock payment service – simulates Razorpay (UPI) and Phantom (SOL) payments
+// Mock payment service – simulates Razorpay (UPI) payments
 // TODO: Replace UPI block with real Razorpay checkout SDK
-// TODO: Replace SOL block with @solana/web3.js Transaction + sendAndConfirmTransaction
 
-import { delay, mockTxHash, explorerUrl } from '@/lib/utils'
-import type { UpiPaymentResult, SolPaymentResult } from '@/types'
+import { delay, mockTxHash } from '@/lib/utils'
+import type { UpiPaymentResult } from '@/types'
 
 /** Prefix for fake Razorpay order IDs */
 const ORDER_PREFIX = 'order_TrIt'
@@ -30,26 +29,4 @@ export async function initiateUpiPayment(
     console.debug('[mockPayments] UPI payment', { amountINR, orderId })
 
     return { orderId, razorpayPaymentId, status: 'success' }
-}
-
-/**
- * Simulate sending SOL via Phantom.
- * @param amountINR – actual amount in INR (converted to lamports in real SOL payment impl based on market price)
- * @param recipientAddress – NGO vault address (mock)
- * TODO: Replace with:
- *   const tx = new Transaction().add(SystemProgram.transfer({...}))
- *   const sig = await sendAndConfirmTransaction(connection, tx, [wallet])
- */
-export async function initiateSolPayment(
-    amountINR: number,
-    recipientAddress = 'NGOVau1tXdEmoDev3mo9VBDkTraceItRealSoonPls',
-): Promise<SolPaymentResult> {
-    await delay(1000)
-
-    const txHash = mockTxHash(`sol${amountINR}${recipientAddress}`)
-    const url = explorerUrl(txHash)
-
-    console.debug('[mockPayments] SOL payment', { amountINR, txHash })
-
-    return { txHash, explorerUrl: url, status: 'success' }
 }

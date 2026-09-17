@@ -2,13 +2,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 interface AttestationDetailsModalProps {
   donationId: string;
-  attestationStatus: 'pending' | 'receipt_confirmed' | 'delivery_confirmed';
+  attestationStatus: string;
+  amount?: number;
+  campaignTitle?: string;
+  confirmedAt?: string;
+  donationDate?: string;
   onClose: () => void;
 }
 
 export default function AttestationDetailsModal({
   donationId,
   attestationStatus,
+  amount,
+  campaignTitle,
+  confirmedAt,
+  donationDate,
   onClose,
 }: AttestationDetailsModalProps) {
   const getAttestationDetails = () => {
@@ -16,37 +24,39 @@ export default function AttestationDetailsModal({
       case 'pending':
         return {
           title: 'Awaiting NGO Confirmation',
-          description: 'Your donation has been recorded on the blockchain and is awaiting confirmation from the NGO that they have received the funds.',
+          description: 'Your donation has been received and is pending confirmation from the NGO. Once confirmed, the receipt will be recorded on-chain.',
           steps: [
-            '1. Donation recorded on blockchain',
-            '2. Funds transferred to NGO wallet',
-            '3. Awaiting NGO confirmation of receipt',
-            '4. Once confirmed, attestation stored on-chain'
+            'Donation recorded on blockchain',
+            'Funds transferred to NGO wallet',
+            'Awaiting NGO confirmation of receipt',
+            'Once confirmed, attestation stored on-chain'
           ]
         }
       case 'receipt_confirmed':
         return {
           title: 'NGO Confirmed Receipt',
-          description: 'The NGO has confirmed receipt of your donation. This confirmation is stored permanently on the blockchain and cannot be tampered with.',
+          description: 'NGO has confirmed receipt of funds.',
           steps: [
-            '1. Donation recorded on blockchain',
-            '2. Funds transferred to NGO wallet',
-            '3. NGO confirmed receipt of funds',
-            '4. Attestation stored on-chain (immutable)'
+            'Donation recorded on blockchain',
+            'Funds transferred to NGO wallet',
+            'NGO confirmed receipt of funds',
+            'Attestation stored on-chain (immutable)'
           ]
         }
       case 'delivery_confirmed':
         return {
           title: 'Delivery Confirmed',
-          description: 'The NGO has confirmed both receipt and delivery of the funds to the intended beneficiaries.',
+          description: 'NGO has confirmed delivery to beneficiary.',
           steps: [
-            '1. Donation recorded on blockchain',
-            '2. Funds transferred to NGO wallet',
-            '3. NGO confirmed receipt of funds',
-            '4. NGO confirmed delivery to beneficiaries',
-            '5. Delivery attestation stored on-chain'
+            'Donation recorded on blockchain',
+            'Funds transferred to NGO wallet',
+            'NGO confirmed receipt of funds',
+            'NGO confirmed delivery to beneficiaries',
+            'Delivery attestation stored on-chain'
           ]
         }
+      default:
+        return { title: 'Unknown Status', description: '', steps: [] }
     }
   }
 
@@ -55,15 +65,15 @@ export default function AttestationDetailsModal({
   // Simple modal implementation using Card components
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <Card className="w-96 max-w-xs mx-4">
-        <CardHeader className="flex items-start justify-between p-6">
+      <Card className="w-96 max-w-xs mx-4 relative">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-500"
+        >
+          ✕
+        </button>
+        <CardHeader className="p-6">
           <CardTitle className="text-xl font-semibold">{title}</CardTitle>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-500"
-          >
-            ✕
-          </button>
         </CardHeader>
         <CardContent className="p-6 space-y-4">
           <div className="space-y-2">
@@ -80,16 +90,34 @@ export default function AttestationDetailsModal({
               ))}
             </ol>
 
-            <div className="mt-4 pt-4 border-t">
+            <div className="mt-4 pt-4 border-t space-y-1">
               <p className="text-xs text-muted-foreground">
-                <strong>Attestation ID:</strong> att-{donationId.substring(0, 8)}...
+                <strong>Donation ID:</strong> {donationId.substring(0, 8)}...
               </p>
-              <p className="text-xs text-muted-foreground">
-                <strong>Timestamp:</strong> {new Date().toLocaleString()}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                This attestation is stored on the Solana blockchain and can be verified by anyone.
-              </p>
+              {amount !== undefined && (
+                <p className="text-xs text-muted-foreground">
+                  <strong>Amount:</strong> ₹{amount.toLocaleString()}
+                </p>
+              )}
+              {campaignTitle && (
+                <p className="text-xs text-muted-foreground">
+                  <strong>Campaign / NGO:</strong> {campaignTitle}
+                </p>
+              )}
+              {attestationStatus === 'pending' ? (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    <strong>Donation Date:</strong> {donationDate ? new Date(donationDate).toLocaleDateString() : new Date().toLocaleDateString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Once the NGO confirms receipt, this will be permanently recorded on-chain.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  <strong>Confirmed Date:</strong> {confirmedAt ? new Date(confirmedAt).toLocaleDateString() : 'Unknown'}
+                </p>
+              )}
             </div>
           </div>
         </CardContent>

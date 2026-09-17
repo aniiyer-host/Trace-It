@@ -5,7 +5,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { approveMilestone } from '@/services/mockApi'
+import { apiService } from '@/utils/apiClient'
 import type { Milestone } from '@/types'
 
 interface MilestoneApprovalDialogProps {
@@ -27,7 +27,8 @@ export default function MilestoneApprovalDialog({
   const handleApproveMilestone = async () => {
     setLoading(true)
     try {
-      await approveMilestone(milestone.id)
+      // await approveMilestone(milestone.id)
+      await apiService.admin.approveMilestone(milestone.id)
       toast({
         title: 'Milestone approved successfully!',
         description: `Funds for "${milestone.title}" have been approved for disbursement.`,

@@ -46,6 +46,16 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Living Trust tokens (New)
+        trust: {
+          bg: "hsl(var(--trust-bg))",
+          navy: "hsl(var(--trust-navy))",
+          green: "hsl(var(--trust-green))",
+          text: "hsl(var(--trust-text))",
+          accent: "hsl(var(--trust-accent))",
+          surface: "hsl(var(--trust-surface))",
+          border: "hsl(var(--trust-border))",
+        },
         // TraceIt brand colours
         brand: {
           blue: "hsl(210 60% 45%)",
