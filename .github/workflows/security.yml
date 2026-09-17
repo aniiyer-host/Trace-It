@@ -44,26 +44,28 @@ jobs:
           name: traceit-backend-sbom
           path: sbom-backend.json
       
+            - name: Prepare security reports
+        run: mkdir -p reports
+
       - name: Install Semgrep
         run: pip install semgrep
 
       - name: Run Semgrep
         run: |
           semgrep --version
-          semgrep scan --config p/default --json --output semgrep-results.json .
+          semgrep scan \
+            --config p/default \
+            --json \
+            --output reports/semgrep-report.json \
+            .
 
-          echo "Semgrep output:"
-          ls -lah
-          
-          if [ -f semgrep-results.json ]; then
-            echo "Semgrep results generated successfully"
-          else
-            echo "ERROR: semgrep-results.json was not generated"
-            exit 1
-          fi
+      - name: Normalize Semgrep findings
+        run: python ../scripts/semgrep_parser.py
 
-      - name: Upload Semgrep results
+      - name: Upload Semgrep reports
         uses: actions/upload-artifact@v4
         with:
           name: traceit-semgrep-results
-          path: backend/semgrep-results.json
+          path: |
+            backend/reports/semgrep-report.json
+            backend/normalized-sast-findings.json
