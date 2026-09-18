@@ -1550,3 +1550,4 @@ FILE: `frontend/src/components/DonationHistoryTable.tsx`
   - Corrected test cleanup ordering for database foreign-key dependencies.
   - Disbursement and Admin approval flows remain covered by tests.
   - Existing test output also confirms successful Admin and Disbursement test suites.
+- **`frontend/src/utils/apiClient.ts`**: Fixed a bug where `apiClient.donations.getByUser()` was stripping the `attestations` array from the API response payload. This caused the `DonationHistoryTable` to always fallback to "Pending NGO Confirmation" because the `attestations` array was `undefined`, even when the backend correctly returned an `APPROVED` receipt attestation. Added `attestations: d.attestations` to the mapped donor dashboard response.
