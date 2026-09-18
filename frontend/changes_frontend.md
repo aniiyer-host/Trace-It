@@ -1551,3 +1551,5 @@ FILE: `frontend/src/components/DonationHistoryTable.tsx`
   - Disbursement and Admin approval flows remain covered by tests.
   - Existing test output also confirms successful Admin and Disbursement test suites.
 - **`frontend/src/utils/apiClient.ts`**: Fixed a bug where `apiClient.donations.getByUser()` was stripping the `attestations` array from the API response payload. This caused the `DonationHistoryTable` to always fallback to "Pending NGO Confirmation" because the `attestations` array was `undefined`, even when the backend correctly returned an `APPROVED` receipt attestation. Added `attestations: d.attestations` to the mapped donor dashboard response.
+- **`backend/src/routes/admin.ts`**: Fixed a bug where `amount` was showing as `NaN` in the Admin Dashboard's Milestone & Attestation Queue. The backend was not hoisting `amount` from `donation` in `getPendingAttestationsAdmin`, so it was undefined. Added `amount: (att.donation as any)?.amount` to the mapper.
+- **`frontend/src/utils/apiClient.ts`**: Cast `attestations` to `unknown as Attestation[]` to satisfy TypeScript.

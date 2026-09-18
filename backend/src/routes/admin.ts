@@ -1047,6 +1047,7 @@ export const getPendingAttestationsAdmin = async (
 
     const mapped = attestations.map((att) => ({
       ...att,
+      amount: (att.donation as any)?.amount,
       ngoName:
         (att.donation as any)?.ngo?.organisationName || att.donation?.ngoId,
       campaignTitle:
