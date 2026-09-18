@@ -1550,6 +1550,85 @@ FILE: `frontend/src/components/DonationHistoryTable.tsx`
   - Corrected test cleanup ordering for database foreign-key dependencies.
   - Disbursement and Admin approval flows remain covered by tests.
   - Existing test output also confirms successful Admin and Disbursement test suites.
-- **`frontend/src/utils/apiClient.ts`**: Fixed a bug where `apiClient.donations.getByUser()` was stripping the `attestations` array from the API response payload. This caused the `DonationHistoryTable` to always fallback to "Pending NGO Confirmation" because the `attestations` array was `undefined`, even when the backend correctly returned an `APPROVED` receipt attestation. Added `attestations: d.attestations` to the mapped donor dashboard response.
-- **`backend/src/routes/admin.ts`**: Fixed a bug where `amount` was showing as `NaN` in the Admin Dashboard's Milestone & Attestation Queue. The backend was not hoisting `amount` from `donation` in `getPendingAttestationsAdmin`, so it was undefined. Added `amount: (att.donation as any)?.amount` to the mapper.
-- **`frontend/src/utils/apiClient.ts`**: Cast `attestations` to `unknown as Attestation[]` to satisfy TypeScript.
+
+## 2026-09-18: Disbursement Module — Frontend End-to-End Integration
+
+### NGO Disbursement Request Flow
+
+- **`src/components/DisbursementRequestDialog.tsx`**
+  - Replaced the previous UI-only simulation with a real `POST /api/charity/disburse` request through `apiService.charity.createDisbursement()`.
+  - Added validated INR amount input and campaign context.
+  - The dialog now reflects the real workflow: create request → upload proof → Admin review.
+  - Backend/API errors are surfaced through the existing toast system instead of showing a false success state.
+  - Proof upload now requires an actual PDF/PNG/JPEG file, matching the backend multer contract; the previous dummy text-file/CID simulation was removed.
+
+- **`src/pages/NGODashboard.tsx`**
+  - Added a real **Request Disbursement** action to campaign detail views.
+  - Refreshes NGO campaign/disbursement data after a request is created.
+  - Disbursements preserve the backend lifecycle:
+    - `PENDING` → proof required
+    - `APPROVED`/`SENT` → awaiting fund transfer
+    - `SETTLED` → completed
+    - `REJECTED` → proof can be resubmitted
+    - `FAILED` → failed
+  - Added **Resubmit Proof** handling for rejected disbursements.
+  - Removed the old milestone-store status update from the disbursement proof success flow so the new disbursement workflow does not depend on the legacy milestone state.
+  - NGO campaign/disbursement data is stitched from the real disbursement API response so disbursement status and proof information are reflected in the campaign timeline.
+
+### Admin Disbursement Queue
+
+- **`src/pages/AdminPanel.tsx`**
+  - Admin action items now use the pending disbursement response directly instead of trying to discover the disbursement by matching it against campaign milestone data.
+  - Pending requests display their actual cohort/campaign/NGO information from the disbursement API.
+  - Updated user-facing terminology from milestone approval to disbursement approval.
+  - Added proof-file information to admin action items so a submitted field report can be accessed from the queue.
+  - Added **View Proof** functionality for disbursement proofs.
+  - The Admin UI now requests a short-lived signed proof URL from the backend instead of opening the raw storage path directly.
+  - This supports private local S3-compatible storage while keeping the proof object itself non-public.
+
+### Admin Proof Viewing / Storage Integration
+
+- **`src/utils/apiClient.ts`**
+  - Added an admin API method to request a signed URL for a disbursement proof through `GET /api/admin/disbursements/:id/proof-url`.
+  - The frontend no longer treats the stored `fieldReportUrl` value as a directly accessible browser URL.
+
+- **`src/types/index.ts`**
+  - Added optional `fieldReportUrl` support to `ActionItem` so proof information can be passed into the Admin queue.
+  - Kept the disbursement response model aligned with the backend storage/proof fields.
+
+### Action Inbox Navigation
+
+- **`src/pages/NGODashboard.tsx`**
+  - Added campaign-grouped quick navigation beneath campaigns in the left pane when viewing the **Action Inbox**.
+  - Pending attestations and disbursement proof tasks are shown underneath their corresponding campaign.
+  - Navigation labels identify the task type and donation/disbursement amount for easier recognition.
+  - Clicking a task in the left pane now smoothly scrolls to the corresponding task card in the Action Inbox.
+  - Each right-side attestation/disbursement card is assigned a unique element ID so the left-side navigation can target the exact item.
+
+### API & Types
+
+- **`src/utils/apiClient.ts`**
+  - Added `apiService.charity.createDisbursement()`.
+  - Added the admin signed-proof-URL request used to preview private proof files.
+  - Corrected the pending-attestation API typing to use `AdminPendingAttestation`.
+
+- **`src/types/index.ts`**
+  - Added explicit `DisbursementStatus` values matching the backend enum.
+  - Expanded disbursement responses with campaign, NGO, cohort, approval, and lifecycle fields.
+  - Added `fieldReportUrl` support to admin action items.
+  - Added lowercase `rejected` to the legacy UI status union for the NGO timeline mapping.
+
+### Backend Contract Alignment
+
+- **`backend/src/routes/admin.ts`**
+  - Pending disbursements now include campaign, NGO, and cohort information required by the Admin UI.
+  - Added an admin-only proof URL endpoint that generates a short-lived signed URL for a stored disbursement proof.
+
+- **`backend/src/routes/charity.ts`**
+  - A rejected disbursement can have its proof resubmitted. Resubmission resets the request to `PENDING`, clears the previous rejection reason, and writes a dedicated audit event.
+  - Disbursement proof uploads now store the uploaded file in the configured S3-compatible object storage and persist its storage key in the database.
+
+### Local S3-Compatible Storage
+
+- Configured the frontend/backend proof-viewing flow to work with a local S3-compatible storage setup using MinIO during development.
+- Proof files remain private in the storage bucket and are accessed by admins through short-lived signed URLs rather than public file URLs.

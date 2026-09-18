@@ -4,6 +4,7 @@ import { requireAuth } from "../middleware/requireAuth.js";
 import { uploadSingle } from "../middleware/multerMiddleware.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { requireRole } from "../middleware/requireRole.js";
+import { StorageService } from "../services/storageService.js";
 import {
   UserRole,
   NgoStatus,
@@ -645,12 +646,46 @@ export const createDisbursement = async (
         .json({ error: "Campaign not found or access denied" });
     }
 
+    if (campaign.status !== CampaignStatus.ACTIVE) {
+      return res.status(409).json({
+        error: "Disbursements can only be requested for ACTIVE campaigns",
+      });
+    }
+
+    const requestedAmount = Number(amountInr);
+    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+      return res
+        .status(400)
+        .json({ error: "amountInr must be a positive number" });
+    }
+
+    if (requestedAmount > Number(campaign.raisedAmount)) {
+      return res.status(400).json({
+        error: "amountInr cannot exceed the campaign amount raised",
+      });
+    }
+
+    if (cohortId) {
+      const cohort = await prisma.beneficiaryCohort.findFirst({
+        where: {
+          id: cohortId,
+          campaignId: targetCampaignId,
+          ngoId: userId,
+        },
+      });
+      if (!cohort) {
+        return res
+          .status(404)
+          .json({ error: "Cohort not found or access denied" });
+      }
+    }
+
     const disbursement = await prisma.disbursement.create({
       data: {
         campaignId: targetCampaignId,
         ngoId: userId,
         cohortId: cohortId || null,
-        amountInr: new Prisma.Decimal(amountInr.toString()),
+        amountInr: new Prisma.Decimal(requestedAmount.toString()),
         fieldReportUrl: fieldReportUrl || null,
         status: DisbursementStatus.PENDING,
       },
@@ -662,7 +697,7 @@ export const createDisbursement = async (
       entityType: "disbursement",
       entityId: disbursement.id,
       action: "DISBURSEMENT_CREATED",
-      metadata: { campaignId, amountInr: Number(amountInr) },
+      metadata: { campaignId: targetCampaignId, amountInr: requestedAmount },
     });
 
     res.status(201).json(disbursement);
@@ -1046,9 +1081,12 @@ export const uploadDisbursementProof = [
         return res
           .status(404)
           .json({ error: "Milestone not found or access denied" });
-      if (disbursement.status !== DisbursementStatus.PENDING) {
+      if (
+        disbursement.status !== DisbursementStatus.PENDING &&
+        disbursement.status !== DisbursementStatus.REJECTED
+      ) {
         return res.status(409).json({
-          error: `Cannot submit proof for a milestone in status ${disbursement.status}`,
+          error: `Cannot submit proof for a disbursement in status ${disbursement.status}`,
         });
       }
 
@@ -1059,6 +1097,14 @@ export const uploadDisbursementProof = [
       const storageBucket = "test-bucket";
       const storagePath = `milestone_proofs/${disbursementId}/${Date.now()}_${multerReq.file.originalname}`;
       const sha512Hash = `proof_hash_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+
+      const storageService = new StorageService(storageBucket);
+
+      await storageService.uploadFile(
+        multerReq.file.buffer,
+        storagePath,
+        multerReq.file.mimetype,
+      );
 
       const document = await prisma.document.create({
         data: {
@@ -1071,9 +1117,16 @@ export const uploadDisbursementProof = [
         },
       });
 
+      const wasRejected = disbursement.status === DisbursementStatus.REJECTED;
+
       const updated = await prisma.disbursement.update({
         where: { id: disbursementId },
-        data: { fieldReportUrl: storagePath, proofSubmittedAt: new Date() },
+        data: {
+          fieldReportUrl: storagePath,
+          proofSubmittedAt: new Date(),
+          status: DisbursementStatus.PENDING,
+          rejectionReason: null,
+        },
       });
 
       await writeAuditLog({
@@ -1081,7 +1134,9 @@ export const uploadDisbursementProof = [
         actorId: userId,
         entityType: "disbursement",
         entityId: disbursementId,
-        action: "MILESTONE_PROOF_UPLOADED",
+        action: wasRejected
+          ? "DISBURSEMENT_PROOF_RESUBMITTED"
+          : "MILESTONE_PROOF_UPLOADED",
         metadata: { documentId: document.id, sha512Hash },
       });
 

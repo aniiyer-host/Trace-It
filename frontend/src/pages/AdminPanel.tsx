@@ -36,6 +36,25 @@ function ActionRow({
   const [rejectReason, setRejectReason] = useState("");
   const isLoading = loadingId === item.id;
   const anyLoading = loadingId !== null;
+  const [proofLoading, setProofLoading] = useState(false);
+
+  const handleViewProof = async () => {
+    if (!item.fieldReportUrl) return;
+
+    try {
+      setProofLoading(true);
+
+      const response = await apiService.admin.getDisbursementProofUrl(
+        item.entityId,
+      );
+
+      window.open(response.url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      console.error("Failed to open proof:", error);
+    } finally {
+      setProofLoading(false);
+    }
+  };
 
   const handleRejectConfirm = () => {
     if (!rejectReason.trim()) return;
@@ -52,7 +71,7 @@ function ActionRow({
             className={`h-1.5 w-1.5 rounded-full ${item.type === "milestone" ? "bg-primary" : "bg-emerald-500"}`}
           />
           {item.type === "milestone"
-            ? "Milestone Proof"
+            ? "Disbursement Proof"
             : "Attestation Request"}
         </span>
       </td>
@@ -95,6 +114,19 @@ function ActionRow({
           </div>
         ) : (
           <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+            {item.type === "milestone" && item.fieldReportUrl && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => void handleViewProof()}
+                disabled={proofLoading || anyLoading}
+              >
+                {proofLoading ? (
+                  <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                ) : null}
+                {proofLoading ? "Loading..." : "View Proof"}
+              </Button>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -242,19 +274,17 @@ export default function AdminPanel() {
   const actionItems = useMemo(() => {
     const items: ActionItem[] = [];
     Object.entries(pendingMilestoneApprovals).forEach(([key, ms]) => {
-      const camp = campaigns.find((c) =>
-        (c.milestones || []).some((m) => m.id === ms.id),
-      );
       items.push({
         type: "milestone",
         id: key,
         entityId: ms.id,
         title:
-          camp?.milestones?.find((m) => m.id === ms.id)?.title ||
-          "Milestone Proof",
+          ms.cohort?.name ||
+          `Disbursement: ₹${Number(ms.amountInr).toLocaleString()}`,
         amount: Number(ms.amountInr),
-        ngo: camp?.ngo || "Unknown NGO",
-        campaign: camp?.title || "Unknown Campaign",
+        ngo: ms.ngo?.organisationName || ms.ngo?.id || "Unknown NGO",
+        campaign: ms.campaign?.title || "Unknown Campaign",
+        fieldReportUrl: ms.fieldReportUrl,
       });
     });
     Object.entries(pendingAttestations).forEach(([key, att]) => {
@@ -270,7 +300,7 @@ export default function AdminPanel() {
       });
     });
     return items;
-  }, [pendingMilestoneApprovals, pendingAttestations, campaigns]);
+  }, [pendingMilestoneApprovals, pendingAttestations]);
 
   const totalTarget = campaigns.reduce(
     (sum, c) => sum + Number(c.targetAmount),
@@ -301,7 +331,7 @@ export default function AdminPanel() {
       if (type === "milestone") {
         await approveMilestone(id);
         await fetchPendingMilestoneApprovals();
-        toast({ title: "Milestone approved & funds released!" });
+        toast({ title: "Disbursement approved!" });
       } else {
         await approveAttestation(id);
         await fetchPendingAttestations();
@@ -324,7 +354,7 @@ export default function AdminPanel() {
       if (type === "milestone") {
         await rejectMilestone(id, reason);
         await fetchPendingMilestoneApprovals();
-        toast({ title: "Milestone rejected" });
+        toast({ title: "Disbursement rejected" });
       } else {
         await rejectAttestation(id, reason);
         await fetchPendingAttestations();
@@ -469,7 +499,7 @@ export default function AdminPanel() {
       <div className="space-y-6">
         <div className="flex items-baseline justify-between">
           <h2 className="text-2xl font-bold tracking-tight">
-            Milestone & Attestation Queue
+            Disbursement & Attestation Queue
           </h2>
           {actionItems.length === 0 && (
             <span className="text-sm text-muted-foreground">All caught up</span>

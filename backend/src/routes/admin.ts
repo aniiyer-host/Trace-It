@@ -16,6 +16,7 @@ import {
 import { writeAuditLog } from "../services/auditLogService.js";
 import { allocateDonation } from "../services/statusService.js";
 import { getBlockchainService } from "../services/blockchainInstance.js";
+import { StorageService } from "../services/storageService.js";
 
 const adminRouter = Router();
 
@@ -1047,7 +1048,6 @@ export const getPendingAttestationsAdmin = async (
 
     const mapped = attestations.map((att) => ({
       ...att,
-      amount: (att.donation as any)?.amount,
       ngoName:
         (att.donation as any)?.ngo?.organisationName || att.donation?.ngoId,
       campaignTitle:
@@ -1165,6 +1165,11 @@ export const getPendingDisbursements = async (
         status: DisbursementStatus.PENDING,
         proofSubmittedAt: { not: null },
       },
+      include: {
+        campaign: { select: { id: true, title: true } },
+        ngo: { select: { id: true, organisationName: true } },
+        cohort: { select: { id: true, name: true } },
+      },
       orderBy: { proofSubmittedAt: "asc" },
     });
     res.json(milestones);
@@ -1254,6 +1259,48 @@ async function addToBlockchainRetryQueue(data: {
     // Don't fail the operation if queue fails
   }
 }
+
+// GET /disbursements/:id/proof-url - generate a short-lived signed URL for the proof file
+// Reason: fieldReportUrl stored in the DB is a raw S3 storage path (e.g.
+// "milestone_proofs/id/timestamp_file.png"), not a viewable URL. Opening it directly
+// in a browser shows a blank page or XML error. This endpoint generates a proper
+// 15-minute pre-signed URL that the admin can open to preview the proof image/PDF.
+export const getDisbursementProofUrl = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const disbursementId = req.params.id as string;
+
+    const disbursement = await prisma.disbursement.findUnique({
+      where: { id: disbursementId },
+    });
+
+    if (!disbursement) {
+      return res.status(404).json({ error: "Disbursement not found" });
+    }
+
+    if (!disbursement.fieldReportUrl) {
+      return res
+        .status(404)
+        .json({ error: "No proof file uploaded for this disbursement" });
+    }
+
+    // The fieldReportUrl is a raw storage path / S3 key, not a full URL.
+    // We use the same bucket ("test-bucket") that the proof upload handler uses
+    // (see charity.ts proof upload handler, line ~2294).
+    const storageService = new StorageService("test-bucket");
+    const signedUrl = await storageService.getSignedUrl(
+      disbursement.fieldReportUrl,
+      900, // 15-minute TTL
+    );
+
+    return res.json({ url: signedUrl });
+  } catch (err) {
+    next(err);
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Router — all route registrations grouped together, by resource
@@ -1384,6 +1431,15 @@ adminRouter.post(
   requireAuth,
   requireRole(UserRole.ADMIN),
   rejectDisbursement,
+);
+
+// Route to fetch a short-lived signed URL for viewing the proof file uploaded by the NGO.
+// Needed because fieldReportUrl is a raw storage path, not a publicly accessible URL.
+adminRouter.get(
+  "/disbursements/:id/proof-url",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getDisbursementProofUrl,
 );
 
 export default adminRouter;

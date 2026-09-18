@@ -91,7 +91,7 @@ export function MilestoneTimeline({ milestones, className }: Props) {
                                     {ms.status === 'disbursed' && !ms.approvedAt && (
                                         <div className="flex items-center gap-2 mt-2">
                                             <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                                            <span className="text-sm text-primary">Awaiting admin approval...</span>
+                                            <span className="text-sm text-primary">Awaiting fund transfer...</span>
                                         </div>
                                     )}
                                 </div>

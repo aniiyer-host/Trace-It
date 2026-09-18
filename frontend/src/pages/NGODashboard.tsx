@@ -18,15 +18,16 @@ import { useAuthStore } from "@/store/authStore";
 import { StatusBadge } from "@/components/StatusBadge";
 import { MilestoneTimeline } from "@/components/MilestoneTimeline";
 import { ProofUploadDialog } from "@/components/ProofUploadDialog";
+import DisbursementRequestDialog from "@/components/DisbursementRequestDialog";
 import { CreateCampaignDialog } from "@/components/CreateCampaignDialog";
 import AttestationSignDialog from "@/components/AttestationSignDialog";
-import { useDonationStore } from "@/store/donationStore";
+//import { useDonationStore } from "@/store/donationStore";
 import { useNGOStore } from "@/store/ngoStore";
 import { apiService } from "@/utils/apiClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatUSD, cn } from "@/lib/utils";
 import { useCountUp } from "@/hooks/useCountUp";
-import type { Campaign, Milestone } from "@/types";
+import type { Campaign, Milestone, DisbursementResponse } from "@/types";
 
 /*
  * OLD CODE PRESERVED (Commented):
@@ -149,7 +150,7 @@ export default function NGODashboard() {
   //Cause of LINT error
   // const { campaigns: _storeCampaigns, updateMilestoneStatus } =
   //   useDonationStore();
-  const { updateMilestoneStatus } = useDonationStore();
+  //const { updateMilestoneStatus } = useDonationStore();
   const { pendingAttestations, fetchPendingAttestations, attestationStatus } =
     useNGOStore();
 
@@ -164,6 +165,7 @@ export default function NGODashboard() {
   const [proofMs, setProofMs] = useState<Milestone | null>(null);
   const [proofCampaign, setProofCampaign] = useState<Campaign | null>(null);
   const [proofOpen, setProofOpen] = useState(false);
+  const [disbursementOpen, setDisbursementOpen] = useState(false);
   const [attestationDialogOpen, setAttestationDialogOpen] = useState(false);
   const [selectedAttestation, setSelectedAttestation] = useState<{
     id: string;
@@ -197,19 +199,19 @@ export default function NGODashboard() {
             };
       };
 
-      type DisbursementResponse = {
-        id: string;
-        campaignId: string;
-        amountInr: number | string;
-        status: string;
-        cohort?: {
-          name?: string;
-        };
-        fieldReportUrl?: string | null;
-        proofSubmittedAt?: string | null;
-        rejectionReason?: string | null;
-        solanaTxHash?: string | null;
-      };
+      // type DisbursementResponse = {
+      //   id: string;
+      //   campaignId: string;
+      //   amountInr: number | string;
+      //   status: string;
+      //   cohort?: {
+      //     name?: string;
+      //   };
+      //   fieldReportUrl?: string | null;
+      //   proofSubmittedAt?: string | null;
+      //   rejectionReason?: string | null;
+      //   solanaTxHash?: string | null;
+      // };
 
       // Stitch disbursements onto campaigns client-side as milestones
       //Cause of LINT Error
@@ -238,9 +240,17 @@ export default function NGODashboard() {
                   status:
                     d.status === "SETTLED"
                       ? "delivered"
-                      : d.status === "APPROVED"
+                      : d.status === "SENT" || d.status === "APPROVED"
                         ? "disbursed"
-                        : "allocated",
+                        : d.status === "REJECTED"
+                          ? "rejected"
+                          : d.status === "FAILED"
+                            ? "failed"
+                            : "allocated",
+
+                  // NEW: preserve the real backend status
+                  disbursementStatus: d.status,
+
                   proofSubmittedAt: d.proofSubmittedAt ?? undefined,
                   rejectionReason: d.rejectionReason ?? undefined,
                   txHash: d.solanaTxHash ?? undefined,
@@ -310,8 +320,12 @@ export default function NGODashboard() {
    * }
    */
 
-  const handleProofSuccess = (ms: Milestone) => {
-    updateMilestoneStatus(ms.id, ms.status);
+  const handleDisbursementRequested = async () => {
+    await fetchNgoData();
+  };
+  //Removed the param 'ms: Milestone' for below function
+  const handleProofSuccess = () => {
+    //updateMilestoneStatus(ms.id, ms.status);
     fetchNgoData();
     toast({ title: "Proof submitted — awaiting admin approval" });
   };
@@ -352,12 +366,38 @@ export default function NGODashboard() {
         (m) =>
           m.status === "allocated" ||
           m.status === "disbursed" ||
-          m.status === "delivered",
+          m.status === "delivered" ||
+          m.status === "rejected",
       )
       .map((m) => ({ campaign: camp, milestone: m }));
   });
 
   const selectedCampaignObj = ngoCampaigns.find((c) => c.id === selectedView);
+
+  const actionNavItems = [
+    ...Object.entries(pendingAttestations).map(([key, attestation]) => ({
+      id: `att-${key}`,
+      campaignId: attestation.donation?.campaignId,
+      label:
+        attestation.type === "DELIVERY"
+          ? `Delivery · ₹${Number(attestation.donation?.amount || 0).toLocaleString()}`
+          : `Receipt · ₹${Number(attestation.donation?.amount || 0).toLocaleString()}`,
+    })),
+
+    ...pendingMilestoneActions
+      .filter(
+        ({ milestone }) =>
+          !(
+            milestone.status === "delivered" &&
+            attestationStatus[`don-${milestone.id}`] === "confirmed"
+          ),
+      )
+      .map(({ campaign, milestone }) => ({
+        id: `disb-${milestone.id}`,
+        campaignId: campaign.id,
+        label: `Disbursement · ₹${Number(milestone.targetAmount).toLocaleString()}`,
+      })),
+  ];
 
   if (!user) {
     return (
@@ -396,6 +436,7 @@ export default function NGODashboard() {
             )}
           >
             <span>Action Inbox</span>
+
             {Object.keys(pendingAttestations).length +
               pendingMilestoneActions.filter(
                 (x) =>
@@ -419,7 +460,7 @@ export default function NGODashboard() {
             )}
           </button>
 
-          {ngoCampaigns.map((c) => {
+          {/* {ngoCampaigns.map((c) => {
             const count = pendingMilestoneActions.filter(
               (x) =>
                 x.campaign.id === c.id &&
@@ -454,6 +495,66 @@ export default function NGODashboard() {
                   </span>
                 )}
               </button>
+            );
+          })} */}
+          {ngoCampaigns.map((c) => {
+            const count = pendingMilestoneActions.filter(
+              (x) =>
+                x.campaign.id === c.id &&
+                !(
+                  x.milestone.status === "delivered" &&
+                  attestationStatus[`don-${x.milestone.id}`] === "confirmed"
+                ),
+            ).length;
+
+            return (
+              <div key={c.id}>
+                <button
+                  onClick={() => setSelectedView(c.id)}
+                  className={cn(
+                    "snap-start shrink-0 flex items-center justify-between md:w-full text-left py-4 px-6 md:px-4 text-sm font-medium transition-colors outline-none",
+                    selectedView === c.id
+                      ? "text-foreground border-b-2 md:border-b-0 md:border-l-2 border-foreground"
+                      : "text-foreground/50 border-b-2 md:border-b-0 md:border-l-2 border-transparent hover:text-foreground",
+                  )}
+                >
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <span className="truncate">
+                      {c.title.split("–")[0].trim()}
+                    </span>
+
+                    <StatusBadge
+                      status={c.status ?? "UNKNOWN"}
+                      className="shrink-0"
+                    />
+                  </div>
+
+                  {count > 0 && (
+                    <span className="text-foreground/40 ml-2 shrink-0">
+                      {count}
+                    </span>
+                  )}
+                </button>
+
+                {/* Action Inbox quick navigation */}
+                {selectedView === "inbox" &&
+                  actionNavItems
+                    .filter((item) => item.campaignId === c.id)
+                    .map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          document.getElementById(item.id)?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                          });
+                        }}
+                        className="flex items-center w-full text-left py-1.5 pl-10 md:pl-8 pr-4 text-xs text-foreground/45 hover:text-foreground transition-colors"
+                      >
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                    ))}
+              </div>
             );
           })}
         </div>
@@ -513,6 +614,7 @@ export default function NGODashboard() {
 
                     return (
                       <div
+                        id={`att-${key}`}
                         key={`att-${key}`}
                         className={cn(
                           "group flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 rounded-xl bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-foreground/5 border-l-4 transition-colors",
@@ -614,7 +716,7 @@ export default function NGODashboard() {
                       </div>
 
                       <div className="shrink-0 w-full sm:w-auto">
-                        {milestone.status === "allocated" && (
+                        {milestone.status === "rejected" && (
                           <Button
                             size="lg"
                             className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
@@ -624,14 +726,34 @@ export default function NGODashboard() {
                               setProofOpen(true);
                             }}
                           >
-                            <Upload className="mr-2 h-4 w-4" /> Upload Proof
+                            <Upload className="mr-2 h-4 w-4" /> Resubmit Proof
                           </Button>
                         )}
-                        {/* Fixed: NGO view for disbursed milestones - does not call admin endpoint */}
+                        {milestone.status === "allocated" &&
+                          !milestone.proofSubmittedAt && (
+                            <Button
+                              size="lg"
+                              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                              onClick={() => {
+                                setProofCampaign(campaign);
+                                setProofMs(milestone);
+                                setProofOpen(true);
+                              }}
+                            >
+                              <Upload className="mr-2 h-4 w-4" /> Upload Proof
+                            </Button>
+                          )}
+                        {milestone.status === "allocated" &&
+                          milestone.proofSubmittedAt && (
+                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-foreground/5 border border-foreground/10 text-sm font-medium text-foreground/70">
+                              <Clock className="h-4 w-4 text-primary animate-pulse" />
+                              Awaiting Admin Review
+                            </div>
+                          )}
                         {milestone.status === "disbursed" && (
                           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-foreground/5 border border-foreground/10 text-sm font-medium text-foreground/70">
                             <Clock className="h-4 w-4 text-primary animate-pulse" />
-                            Awaiting Admin Release
+                            Awaiting fund transfer
                           </div>
                         )}
                         {milestone.status === "delivered" &&
@@ -729,6 +851,25 @@ export default function NGODashboard() {
                 )}
               </div>
 
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-y border-foreground/10 py-5">
+                <div>
+                  <p className="font-semibold">Disbursement requests</p>
+                  <p className="text-sm text-foreground/50">
+                    Request campaign funds, then attach proof for admin review.
+                  </p>
+                </div>
+                {!selectedCampaignObj.milestones.some(
+                  (milestone) => milestone.status === "allocated",
+                ) && (
+                  <Button
+                    onClick={() => setDisbursementOpen(true)}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    Request Disbursement
+                  </Button>
+                )}
+              </div>
+
               {/* Top Stats Grid (No dividers, spatial tension) */}
               <div className="flex flex-wrap gap-x-16 gap-y-10">
                 <AnimatedStat
@@ -783,6 +924,15 @@ export default function NGODashboard() {
           fetchNgoData();
         }}
       />
+
+      {selectedCampaignObj && (
+        <DisbursementRequestDialog
+          campaign={selectedCampaignObj}
+          open={disbursementOpen}
+          onOpenChange={setDisbursementOpen}
+          onDisbursementRequested={() => void handleDisbursementRequested()}
+        />
+      )}
 
       <ProofUploadDialog
         data={

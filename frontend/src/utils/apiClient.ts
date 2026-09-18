@@ -296,6 +296,7 @@ import type {
   AdminPendingDisbursement,
   AdminAuditLog,
   AuditLogPagination,
+  AdminPendingAttestation,
 } from "@/types";
 import type { User } from "@/store/authStore";
 
@@ -571,6 +572,12 @@ export const apiService = {
       );
       return response.data;
     },
+    createDisbursement: (data: {
+      campaignId: string;
+      cohortId?: string;
+      amountInr: number;
+      fieldReportUrl?: string;
+    }) => post<DisbursementResponse>("/charity/disburse", data),
   },
 
   // NGOs
@@ -590,6 +597,15 @@ export const apiService = {
       }),
   },
 
+  //Disbursement
+
+  createDisbursement: (data: {
+    campaignId: string;
+    cohortId?: string;
+    amountInr: number;
+    fieldReportUrl?: string;
+  }) => post<DisbursementResponse>("/charity/disburse", data),
+
   // Admin
   admin: {
     //Change any to AdminPendingCampaign to fix LINT error
@@ -600,7 +616,7 @@ export const apiService = {
       post(`/admin/campaigns/${campaignId}/approve`),
     //Change any to AdminPendingAttestation to fix LINT error
     getPendingAttestations: () =>
-      get<AdminPendingCampaign[]>("/admin/attestations/pending"),
+      get<AdminPendingAttestation[]>("/admin/attestations/pending"),
 
     //Change any to AdminPendingDisbursement to fix LINT error
     getPendingMilestones: () =>
@@ -631,6 +647,11 @@ export const apiService = {
         auditLogs: AdminAuditLog[];
         pagination: AuditLogPagination;
       }>(`/admin/audit-logs?${query.toString()}`);
+    },
+    getDisbursementProofUrl: async (disbursementId: string) => {
+      return get<{ url: string }>(
+        `/admin/disbursements/${disbursementId}/proof-url`,
+      );
     },
   },
 

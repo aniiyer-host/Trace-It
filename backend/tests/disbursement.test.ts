@@ -57,6 +57,7 @@ describe("Disbursement API Integration Tests", () => {
         title: "Test Campaign for Disbursement",
         description: "Test Campaign",
         targetAmount: 10000,
+        raisedAmount: 10000,
         status: CampaignStatus.ACTIVE,
       },
     });

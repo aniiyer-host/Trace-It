@@ -1,49 +1,95 @@
-import { useState } from 'react'
+import { useState } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Loader2, Banknote } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
-import type { Milestone } from '@/types'
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Loader2, Banknote } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiService } from "@/utils/apiClient";
+import type { Campaign } from "@/types";
 
 interface DisbursementRequestDialogProps {
-  milestone: Milestone
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onDisbursementRequested: () => void
+  campaign: Campaign;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onDisbursementRequested: () => void;
 }
 
 export default function DisbursementRequestDialog({
-  milestone,
+  campaign,
   open,
   onOpenChange,
   onDisbursementRequested,
 }: DisbursementRequestDialogProps) {
-  const [loading, setLoading] = useState(false)
-  const { toast } = useToast()
+  const [amount, setAmount] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  const availableAmount = Math.max(
+    0,
+    Number(campaign.raisedAmount || 0) -
+      (campaign.milestones || []).reduce(
+        (sum, milestone) => sum + Number(milestone.targetAmount || 0),
+        0,
+      ),
+  );
 
   const handleRequestDisbursement = async () => {
-    setLoading(true)
-    try {
-      // In a real app, this would call an API to request disbursement
-      // For now, we'll simulate by updating the milestone status (though this is usually done by admin)
-      // We'll just show a success message and call the callback
+    const parsedAmount = Number(amount);
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       toast({
-        title: 'Disbursement requested successfully!',
-        description: `A request has been sent to disburse funds for "${milestone.title}".`,
-      })
-      onDisbursementRequested()
-    } catch (error) {
-      console.error('Failed to request disbursement:', error)
-      toast({
-        title: 'Failed to request disbursement',
-        variant: 'destructive',
-      })
-    } finally {
-      setLoading(false)
+        title: "Enter a valid amount",
+        description: "The disbursement amount must be greater than ₹0.",
+        variant: "destructive",
+      });
+      return;
     }
-  }
+
+    if (parsedAmount > Number(campaign.raisedAmount || 0)) {
+      toast({
+        title: "Amount exceeds funds raised",
+        description: `This campaign has raised ₹${Number(campaign.raisedAmount || 0).toLocaleString()}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await apiService.charity.createDisbursement({
+        campaignId: campaign.id,
+        amountInr: parsedAmount,
+      });
+
+      toast({
+        title: "Disbursement requested",
+        description: `₹${parsedAmount.toLocaleString()} is now awaiting proof submission.`,
+      });
+      setAmount("");
+      onOpenChange(false);
+      onDisbursementRequested();
+    } catch (error) {
+      console.error("Failed to request disbursement:", error);
+      const err = error as {
+        response?: { data?: { error?: string } };
+        message?: string;
+      };
+      toast({
+        title: "Failed to request disbursement",
+        description:
+          err.response?.data?.error || err.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -51,54 +97,67 @@ export default function DisbursementRequestDialog({
         <DialogHeader>
           <DialogTitle className="text-xl">Request Disbursement</DialogTitle>
           <DialogDescription>
-            Request the disbursement of funds for this milestone to the NGO's wallet.
+            Create a disbursement request for this campaign. After the request
+            is created, upload the supporting field proof so an admin can review
+            it.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 p-6">
+
+        <div className="space-y-5 p-6">
           <div className="space-y-2">
-            <p className="text-muted-foreground">
-              Milestone ID: {milestone.id.substring(0, 8)}...
+            <p className="font-semibold">{campaign.title}</p>
+            <p className="text-sm text-muted-foreground">
+              Raised: ₹{Number(campaign.raisedAmount || 0).toLocaleString()}
             </p>
-            <p className="text-muted-foreground">
-              Title: {milestone.title}
-            </p>
-            <p className="text-muted-foreground">
-              Target Amount: ₹{milestone.targetAmount.toLocaleString()}
-            </p>
-            <p className="text-muted-foreground">
-              Current Status: {milestone.status.split(/(?=[A-Z])/).join(' ').toLowerCase()}
-            </p>
-            {milestone.proofCid && (
-              <p className="text-muted-foreground">
-                Proof Submitted: Yes (CID: {milestone.proofCid.substring(0, 8)}...)
+            {availableAmount > 0 && (
+              <p className="text-sm text-muted-foreground">
+                Approx. unrequested funds: ₹{availableAmount.toLocaleString()}
               </p>
             )}
           </div>
 
-          <div className="space-y-3">
-            <p className="font-medium">What happens after disbursement?</p>
-            <ol className="list-decimal list-inside space-y-2 text-sm">
+          <div className="space-y-2">
+            <label
+              htmlFor="disbursement-amount"
+              className="text-sm font-medium"
+            >
+              Amount (INR)
+            </label>
+            <Input
+              id="disbursement-amount"
+              type="number"
+              min="1"
+              step="0.01"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              placeholder="Enter amount to request"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="rounded-lg border border-foreground/10 bg-foreground/[0.03] p-4 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground mb-1">Next steps</p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>Create the disbursement request.</li>
               <li>
-                Funds will be transferred from the escrow account to the NGO's wallet.
+                Upload the field report/proof from the campaign workspace.
               </li>
               <li>
-                The NGO will receive a notification and can use the funds for the milestone activities.
-              </li>
-              <li>
-                Upon completion, the NGO will submit proof and request milestone completion verification.
+                Admin reviews the proof and approves or rejects the request.
               </li>
             </ol>
           </div>
 
-          <div className="flex justify-end space-x-3">
+          <div className="flex justify-end gap-3">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={loading}
             >
               Cancel
             </Button>
             <Button
-              onClick={handleRequestDisbursement}
+              onClick={() => void handleRequestDisbursement()}
               disabled={loading}
               className="w-full md:w-auto"
             >
@@ -118,5 +177,5 @@ export default function DisbursementRequestDialog({
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
