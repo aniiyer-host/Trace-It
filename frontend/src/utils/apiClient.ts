@@ -450,6 +450,7 @@ export const apiService = {
         taxReceiptUrl: d.taxReceiptUrl,
         ngoId: d.ngo.id,
         ngoName: d.ngo.organisationName,
+        attestations: d.attestations as unknown as Attestation[],
       }));
     },
     create: (donationData: {
