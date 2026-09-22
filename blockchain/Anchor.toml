@@ -14,7 +14,10 @@ traceit = "5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3"
 cluster = "localnet"
 wallet = "~/.config/solana/devnet-traceit.json"
 
+[surfpool]
+rpc_port = 8900
+
 [scripts]
-test = "cargo test"
+test = "npm run test"
 
 [hooks]

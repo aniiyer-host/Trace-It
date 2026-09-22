@@ -10,6 +10,8 @@ import {
   CampaignStatus,
   KycStatus,
   GovernmentRequestStatus,
+  DocumentType,
+  AttestationStatus,
 } from "../../generated/prisma/enums.js";
 import { writeAuditLog } from "../services/auditLogService.js";
 import { allocateDonation } from "../services/statusService.js";
@@ -53,110 +55,218 @@ export const approveDisbursement = async (
       },
     });
 
+    // BLOCKCHAIN INTEGRATION: Record disbursement on-chain after approval (non-blocking)
+    // We don't await this to avoid slowing down the approval process
+    // Only run in non-test environments to avoid initialization errors during testing
+    if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
+      const recordDisbursementOnChain = async () => {
+        try {
+          const blockchainService = await getBlockchainService();
+          if (!blockchainService) {
+            console.warn(
+              "[Blockchain] Service not available — skipping on-chain recording",
+            );
+            return;
+          }
+
+          // We need the transaction hash of the actual funds transfer.
+          // For now, we assume that the disbursement record already has the solanaTxHash
+          // populated by a previous step (e.g., when funds are sent).
+          // If not, we skip and log a warning.
+          if (!disbursement.solanaTxHash) {
+            console.warn(
+              `Disbursement ${disbursementId} has no solanaTxHash. Skipping on-chain recording.`,
+            );
+            return;
+          }
+
+          // Convert amountInr to paisa (u64)
+          const amountPaisa = Math.round(Number(disbursement.amountInr) * 100);
+
+          const result = await blockchainService.recordDisbursement({
+            disbursementId: disbursement.id,
+            ngoId: disbursement.ngoId,
+            cohortId: disbursement.cohortId ?? "",
+            amountInr: Number(disbursement.amountInr),
+            currency: "INR",
+            timestamp: disbursement.createdAt, // Or use updatedAt? We'll use createdAt for now.
+            transactionHash: disbursement.solanaTxHash,
+          });
+
+          if (result.success) {
+            await writeAuditLog({
+              actorType: AuditActorType.USER,
+              actorId: adminId,
+              entityType: "disbursement",
+              entityId: disbursement.id,
+              action: "BLOCKCHAIN_DISBURSEMENT_RECORDED",
+              metadata: {
+                disbursementId: disbursement.id,
+                transactionHash: result.txHash,
+                ngoId: disbursement.ngoId,
+                cohortId: disbursement.cohortId,
+                amountInr: Number(disbursement.amountInr),
+              },
+            });
+            console.info(
+              `Blockchain disbursement recorded for disbursement ${disbursement.id}: ${result.txHash}`,
+            );
+          } else {
+            console.error(
+              `Failed to record disbursement ${disbursement.id} on-chain: ${result.error}`,
+            );
+
+            // Add to retry queue for disbursement recording
+            await addToBlockchainRetryQueue({
+              donationId: disbursement.id, // Using disbursementId as the key for the retry queue
+              error: result.error ?? "Unknown blockchain error",
+              retryCount: 0,
+              type: "DISBURSEMENT_RECORDING",
+            });
+
+            await writeAuditLog({
+              actorType: AuditActorType.USER,
+              actorId: adminId,
+              entityType: "disbursement",
+              entityId: disbursement.id,
+              action: "BLOCKCHAIN_DISBURSEMENT_RECORDING_FAILED",
+              metadata: {
+                disbursementId: disbursement.id,
+                error: result.error,
+              },
+            });
+          }
+        } catch (error) {
+          console.error(
+            "Error in blockchain disbursement recording integration:",
+            error,
+          );
+          // Don't fail the disbursement approval if blockchain integration fails
+        }
+      };
+      // Fire and forget
+      recordDisbursementOnChain();
+    }
+
     // BLOCKCHAIN INTEGRATION: Update donation status to ALLOCATED on-chain (non-blocking)
-// We don't await this to avoid slowing down the disbursement approval process
-// Only run in non-test environments to avoid initialization errors during testing
-	if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
-	  const updateDonationStatusOnChain = async () => {
-	    try {
-	      const blockchainService = await getBlockchainService();
+    // We don't await this to avoid slowing down the disbursement approval process
+    // Only run in non-test environments to avoid initialization errors during testing
+    if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
+      const updateDonationStatusOnChain = async () => {
+        try {
+          const blockchainService = await getBlockchainService();
+          if (!blockchainService) {
+            console.warn(
+              "[Blockchain] Service not available — skipping on-chain recording",
+            );
+            return;
+          }
 
-	      // Find associated donations for this disbursement
-	      const donations = await prisma.donation.findMany({
-	        where: {
-	          campaignId: disbursement.campaignId,
-	          status: "SUCCESS",
-	        },
-	        include: {
-	          ngo: true
-	        }
-	      });
+          // Find associated donations for this disbursement
+          const donations = await prisma.donation.findMany({
+            where: {
+              campaignId: disbursement.campaignId,
+              status: "SUCCESS",
+            },
+            include: {
+              ngo: true,
+            },
+          });
 
-	      // Update each donation in the campaign to ALLOCATED status
-	      for (const donation of donations) {
-	        if (donation.solanaTxHash) { // Only update if already recorded on-chain
-	          const result = await blockchainService.updateDonationStatus(
-	            donation.id,
-	            2 // ALLOCATED status
-	          );
+          // Update each donation in the campaign to ALLOCATED status
+          for (const donation of donations) {
+            if (donation.solanaTxHash) {
+              // Only update if already recorded on-chain
+              const result = await blockchainService.updateDonationStatus(
+                donation.id,
+                2, // ALLOCATED status
+              );
 
-	          if (result.success) {
-	            await writeAuditLog({
-	              actorType: AuditActorType.USER,
-	              actorId: adminId,
-	              entityType: "donation",
-	              entityId: donation.id,
-	              action: "BLOCKCHAIN_STATUS_UPDATE",
-	              metadata: {
-	                donationId: donation.id,
-	                transactionHash: result.txHash,
-	                newStatus: "ALLOCATED"
-	              },
-	            });
-	          } else {
-	            console.error(`Failed to update donation ${donation.id} status on-chain: ${result.error}`);
+              if (result.success) {
+                await writeAuditLog({
+                  actorType: AuditActorType.USER,
+                  actorId: adminId,
+                  entityType: "donation",
+                  entityId: donation.id,
+                  action: "BLOCKCHAIN_STATUS_UPDATE",
+                  metadata: {
+                    donationId: donation.id,
+                    transactionHash: result.txHash,
+                    newStatus: "ALLOCATED",
+                  },
+                });
+              } else {
+                console.error(
+                  `Failed to update donation ${donation.id} status on-chain: ${result.error}`,
+                );
 
-	            // Add to retry queue for status updates
-	            await addToBlockchainRetryQueue({
-	              donationId: donation.id,
-	              error: result.error ?? 'Unknown blockchain error',
-	              retryCount: 0,
-	              type: 'STATUS_UPDATE',
-	              targetStatus: 2
-	            });
-	          }
-	        } else {
-	          console.warn(`Donation ${donation.id} not yet recorded on-chain, skipping status update`);
-	        }
-	      }
-	    } catch (error) {
-	      console.error('Error in blockchain status update integration:', error);
-	      // Don't fail the disbursement approval if blockchain integration fails
-	    }
-	  };
-	}
+                // Add to retry queue for status updates
+                await addToBlockchainRetryQueue({
+                  donationId: donation.id,
+                  error: result.error ?? "Unknown blockchain error",
+                  retryCount: 0,
+                  type: "STATUS_UPDATE",
+                  targetStatus: 2,
+                });
+              }
+            } else {
+              console.warn(
+                `Donation ${donation.id} not yet recorded on-chain, skipping status update`,
+              );
+            }
+          }
+        } catch (error) {
+          console.error(
+            "Error in blockchain status update integration:",
+            error,
+          );
+          // Don't fail the disbursement approval if blockchain integration fails
+        }
+      };
+      // Fire and forget
+      updateDonationStatusOnChain();
+    }
 
+    // Allocate donations up to the disbursed amount
+    // First, find all SUCCESS donations for this campaign
+    const donationAllocations = await prisma.donation.findMany({
+      where: {
+        campaignId: disbursement.campaignId,
+        status: "SUCCESS",
+      },
+      orderBy: { createdAt: "asc" },
+    });
 
-// Allocate donations up to the disbursed amount
-// First, find all SUCCESS donations for this campaign
-const donationAllocations = await prisma.donation.findMany({
-  where: {
-    campaignId: disbursement.campaignId,
-    status: "SUCCESS",
-  },
-  orderBy: { createdAt: "asc" },
-});
+    let remainingToAllocate = Number(disbursement.amountInr);
 
-let remainingToAllocate = Number(disbursement.amountInr);
+    for (const donation of donationAllocations) {
+      if (remainingToAllocate <= 0) break;
 
-for (const donation of donationAllocations) {
-  if (remainingToAllocate <= 0) break;
+      const donationAmount = Number(donation.amount);
 
-  const donationAmount = Number(donation.amount);
+      // Call allocateDonation for each applicable donation
+      if (disbursement.cohortId) {
+        await allocateDonation(donation.id, disbursement.cohortId);
+      }
 
-  // Call allocateDonation for each applicable donation
-  if (disbursement.cohortId) {
-    await allocateDonation(donation.id, disbursement.cohortId);
-  }
+      // Deduct the donation amount from what's remaining to allocate
+      remainingToAllocate -= donationAmount;
+    }
 
-  // Deduct the donation amount from what's remaining to allocate
-  remainingToAllocate -= donationAmount;
-}
+    // Write audit log
+    await writeAuditLog({
+      actorType: AuditActorType.USER, // Admin is a user in the system
+      actorId: adminId,
+      entityType: "disbursement",
+      entityId: disbursement.id,
+      action: "DISBURSEMENT_APPROVED",
+      metadata: {
+        campaignId: disbursement.campaignId,
+        amountInr: Number(disbursement.amountInr),
+      },
+    });
 
-// Write audit log
-await writeAuditLog({
-  actorType: AuditActorType.USER, // Admin is a user in the system
-  actorId: adminId,
-  entityType: "disbursement",
-  entityId: disbursement.id,
-  action: "DISBURSEMENT_APPROVED",
-  metadata: {
-    campaignId: disbursement.campaignId,
-    amountInr: Number(disbursement.amountInr),
-  },
-});
-
-res.json(updated);
+    res.json(updated);
   } catch (err) {
     next(err);
   }
@@ -294,6 +404,99 @@ export const approveNgo = async (
       action: "NGO_APPROVED",
       metadata: {},
     });
+
+    // BLOCKCHAIN INTEGRATION: Register NGO on-chain after approval (non-blocking)
+    // We don't await this to avoid slowing down the approval process
+    // Only run in non-test environments to avoid initialization errors during testing
+    if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
+      const registerNgoOnChain = async () => {
+        try {
+          const blockchainService = await getBlockchainService();
+          if (!blockchainService) {
+            console.warn(
+              "[Blockchain] Service not available — skipping on-chain recording",
+            );
+            return;
+          }
+
+          // Find the latest NGO verification document (NGO_CERT) owned by this NGO
+          const verificationDoc = await prisma.document.findFirst({
+            where: {
+              ownerId: ngoId,
+              documentType: DocumentType.NGO_CERT,
+            },
+            orderBy: {
+              createdAt: "desc",
+            },
+          });
+
+          if (!verificationDoc) {
+            console.warn(
+              `No verification document found for NGO ${ngoId}. Skipping on-chain registration.`,
+            );
+            return;
+          }
+
+          const metadataHash = verificationDoc.sha512Hash;
+
+          const result = await blockchainService.registerNgo({
+            ngoId,
+            metadataHash,
+          });
+
+          if (result.success) {
+            await writeAuditLog({
+              actorType: AuditActorType.USER,
+              actorId: adminId,
+              entityType: "ngo",
+              entityId: ngoId,
+              action: "BLOCKCHAIN_NGO_REGISTERED",
+              metadata: {
+                ngoId: ngoId,
+                transactionHash: result.txHash,
+                metadataHash,
+              },
+            });
+            console.info(
+              `Blockchain NGO registration successful for NGO ${ngoId}: ${result.txHash}`,
+            );
+          } else {
+            console.error(
+              `Failed to register NGO ${ngoId} on-chain: ${result.error}`,
+            );
+
+            // Add to retry queue for NGO registration
+            await addToBlockchainRetryQueue({
+              donationId: ngoId, // Using ngoId as the key for the retry queue (though it's not a donation, we can adapt the queue)
+              error: result.error ?? "Unknown blockchain error",
+              retryCount: 0,
+              type: "NGO_REGISTRATION",
+            });
+
+            await writeAuditLog({
+              actorType: AuditActorType.USER,
+              actorId: adminId,
+              entityType: "ngo",
+              entityId: ngoId,
+              action: "BLOCKCHAIN_NGO_REGISTRATION_FAILED",
+              metadata: {
+                ngoId: ngoId,
+                error: result.error,
+              },
+            });
+          }
+        } catch (error) {
+          console.error(
+            "Error in blockchain NGO registration integration:",
+            error,
+          );
+          // Don't fail the NGO approval if blockchain integration fails
+        }
+      };
+      // Fire and forget
+      registerNgoOnChain();
+    }
+
     res.json(updated);
   } catch (err) {
     next(err);
@@ -353,7 +556,16 @@ export const getPendingCampaigns = async (
       },
       orderBy: { createdAt: "desc" },
     });
-    res.json(campaigns);
+    res.json(
+      campaigns.map((c) => {
+        const {
+          beneficiaryIdHash: _h,
+          beneficiaryIdEncrypted: _e,
+          ...safe
+        } = c as any;
+        return safe;
+      }),
+    );
   } catch (err) {
     next(err);
   }
@@ -393,7 +605,12 @@ export const approveCampaign = async (
       action: "CAMPAIGN_APPROVED",
       metadata: {},
     });
-    res.json(updated);
+    const {
+      beneficiaryIdHash: _h,
+      beneficiaryIdEncrypted: _e,
+      ...safe
+    } = updated as any;
+    res.json(safe);
   } catch (err) {
     next(err);
   }
@@ -485,7 +702,7 @@ export const getAmlFlags = async (
     ]);
 
     // Convert BigInt id to string for JSON serialization
-    const auditLogs = auditLogsResult.map(log => ({
+    const auditLogs = auditLogsResult.map((log) => ({
       ...log,
       id: log.id.toString(),
     }));
@@ -539,7 +756,7 @@ export const getAuditLogs = async (
     ]);
 
     // Convert BigInt id to string for JSON serialization
-    const auditLogs = auditLogsResult.map(log => ({
+    const auditLogs = auditLogsResult.map((log) => ({
       ...log,
       id: log.id.toString(),
     }));
@@ -627,14 +844,21 @@ export const holdGovernmentRequestDocuments = async (
     const { documentIds } = req.body;
 
     // Validate documentIds
-    if (!documentIds || !Array.isArray(documentIds) || documentIds.length === 0) {
+    if (
+      !documentIds ||
+      !Array.isArray(documentIds) ||
+      documentIds.length === 0
+    ) {
       return res.status(400).json({ error: "documentIds array is required" });
     }
 
     // Filter out null/undefined/invalid IDs
     const validDocumentIds = documentIds
-      .filter((id): id is string => id != null && typeof id === "string" && id.trim() !== "")
-      .map(id => id.trim());
+      .filter(
+        (id): id is string =>
+          id != null && typeof id === "string" && id.trim() !== "",
+      )
+      .map((id) => id.trim());
 
     if (validDocumentIds.length === 0) {
       return res.status(400).json({ error: "No valid document IDs provided" });
@@ -790,69 +1014,211 @@ export const exportGovernmentRequestDocuments = async (
   }
 };
 
-// ---------------------------------------------------------------------------
-// Router
-// ---------------------------------------------------------------------------
-adminRouter.post(
-  "/disburse/:id/approve",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  approveDisbursement,
-);
-adminRouter.get(
-  "/disbursements",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  getAllDisbursements,
-);
-adminRouter.get(
-  "/disbursements/:id",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  getDisbursementById,
-);
+// Attesatation
 
-// Admin Panel Routes
-adminRouter.get("/ngos", requireAuth, requireRole(UserRole.ADMIN), getNgos);
-adminRouter.post(
-  "/ngos/:id/approve",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  approveNgo,
-);
-adminRouter.post(
-  "/ngos/:id/reject",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  rejectNgo,
-);
-adminRouter.get(
-  "/campaigns/pending",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  getPendingCampaigns,
-);
-adminRouter.post(
-  "/campaigns/:id/approve",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  approveCampaign,
-);
-adminRouter.get("/users", requireAuth, requireRole(UserRole.ADMIN), getUsers);
-adminRouter.get(
-  "/aml-flags",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  getAmlFlags,
-);
-adminRouter.get(
-  "/audit-logs",
-  requireAuth,
-  requireRole(UserRole.ADMIN),
-  getAuditLogs,
-);
+// GET /attestations/pending - NGO-signed attestations awaiting admin review
+export const getPendingAttestationsAdmin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const attestations = await prisma.attestation.findMany({
+      where: {
+        status: AttestationStatus.NGO_SIGNED,
+        type: "DELIVERY",
+      },
+      include: {
+        donation: {
+          select: {
+            id: true,
+            publicId: true,
+            amount: true,
+            ngoId: true,
+            donorId: true,
+            campaignId: true,
+            project: { select: { title: true } },
+            ngo: { select: { organisationName: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    });
 
+    const mapped = attestations.map((att) => ({
+      ...att,
+      amount: (att.donation as any)?.amount,
+      ngoName:
+        (att.donation as any)?.ngo?.organisationName || att.donation?.ngoId,
+      campaignTitle:
+        (att.donation as any)?.project?.title ||
+        `Campaign ${(att.donation as any)?.campaignId?.substring(0, 8)}`,
+    }));
+
+    res.json(mapped);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const approveAttestation = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const adminId = req.user?.id;
+    // const { attestationId } = req.params;
+    const attestationId = req.params.attestationId as string;
+    if (!adminId)
+      return res.status(401).json({ error: "User not authenticated" });
+
+    const attestation = await prisma.attestation.findUnique({
+      where: { id: attestationId },
+    });
+    if (!attestation)
+      return res.status(404).json({ error: "Attestation not found" });
+    if (attestation.status !== AttestationStatus.NGO_SIGNED) {
+      return res.status(409).json({
+        error: `Cannot approve attestation in status ${attestation.status}`,
+      });
+    }
+
+    const updated = await prisma.attestation.update({
+      where: { id: attestationId },
+      data: {
+        status: AttestationStatus.APPROVED,
+        approvedBy: adminId,
+        approvedAt: new Date(),
+      },
+    });
+
+    await writeAuditLog({
+      actorType: AuditActorType.ADMIN,
+      actorId: adminId,
+      entityType: "attestation",
+      entityId: attestationId,
+      action: "ATTESTATION_APPROVED",
+      metadata: {},
+    });
+
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const rejectAttestation = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const adminId = req.user?.id;
+    // const { attestationId } = req.params;
+    const attestationId = req.params.attestationId as string;
+    const { reason } = req.body;
+    if (!adminId)
+      return res.status(401).json({ error: "User not authenticated" });
+    if (!reason) return res.status(400).json({ error: "reason is required" });
+
+    const attestation = await prisma.attestation.findUnique({
+      where: { id: attestationId },
+    });
+    if (!attestation)
+      return res.status(404).json({ error: "Attestation not found" });
+    if (attestation.status === AttestationStatus.APPROVED) {
+      return res
+        .status(409)
+        .json({ error: "Cannot reject an already-approved attestation" });
+    }
+
+    const updated = await prisma.attestation.update({
+      where: { id: attestationId },
+      data: { status: AttestationStatus.REJECTED, rejectionReason: reason },
+    });
+
+    await writeAuditLog({
+      actorType: AuditActorType.ADMIN,
+      actorId: adminId,
+      entityType: "attestation",
+      entityId: attestationId,
+      action: "ATTESTATION_REJECTED",
+      metadata: { reason },
+    });
+
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /disbursements/pending - disbursements with proof submitted, awaiting approval
+export const getPendingDisbursements = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const milestones = await prisma.disbursement.findMany({
+      where: {
+        status: DisbursementStatus.PENDING,
+        proofSubmittedAt: { not: null },
+      },
+      orderBy: { proofSubmittedAt: "asc" },
+    });
+    res.json(milestones);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /milestones/:id/reject
+export const rejectDisbursement = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const adminId = req.user?.id;
+    const disbursementId = req.params.id as string;
+    const { reason } = req.body;
+    if (!adminId)
+      return res.status(401).json({ error: "User not authenticated" });
+    if (!reason) return res.status(400).json({ error: "reason is required" });
+
+    const disbursement = await prisma.disbursement.findUnique({
+      where: { id: disbursementId },
+    });
+    if (!disbursement)
+      return res.status(404).json({ error: "Disbursement not found" });
+    if (disbursement.status !== DisbursementStatus.PENDING) {
+      return res.status(400).json({ error: "Disbursement is not PENDING" });
+    }
+
+    const updated = await prisma.disbursement.update({
+      where: { id: disbursementId },
+      data: { status: DisbursementStatus.REJECTED, rejectionReason: reason },
+    });
+
+    await writeAuditLog({
+      actorType: AuditActorType.ADMIN,
+      actorId: adminId,
+      entityType: "disbursement",
+      entityId: disbursementId,
+      action: "DISBURSEMENT_REJECTED",
+      metadata: { reason },
+    });
+
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ---------------------------------------------------------------------------
 // Helper function for retry queue
+// ---------------------------------------------------------------------------
 async function addToBlockchainRetryQueue(data: {
   donationId: string;
   error: string;
@@ -868,7 +1234,7 @@ async function addToBlockchainRetryQueue(data: {
         error: data.error,
         retryCount: data.retryCount + 1,
         lastAttempt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       },
       create: {
         donationId: data.donationId,
@@ -876,16 +1242,68 @@ async function addToBlockchainRetryQueue(data: {
         retryCount: data.retryCount + 1,
         lastAttempt: new Date(),
         createdAt: new Date(),
-        updatedAt: new Date()
-      }
+        updatedAt: new Date(),
+      },
     });
 
-    console.log(`Added donation ${data.donationId} to blockchain retry queue (attempt ${data.retryCount + 1})`);
+    console.log(
+      `Added donation ${data.donationId} to blockchain retry queue (attempt ${data.retryCount + 1})`,
+    );
   } catch (queueError) {
     console.error(`Failed to add to retry queue:`, queueError);
     // Don't fail the operation if queue fails
   }
 }
+
+// ---------------------------------------------------------------------------
+// Router — all route registrations grouped together, by resource
+// ---------------------------------------------------------------------------
+
+// NGOs
+adminRouter.get("/ngos", requireAuth, requireRole(UserRole.ADMIN), getNgos);
+adminRouter.post(
+  "/ngos/:id/approve",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  approveNgo,
+);
+adminRouter.post(
+  "/ngos/:id/reject",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  rejectNgo,
+);
+
+// Campaigns
+adminRouter.get(
+  "/campaigns/pending",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getPendingCampaigns,
+);
+adminRouter.post(
+  "/campaigns/:id/approve",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  approveCampaign,
+);
+
+// Users
+adminRouter.get("/users", requireAuth, requireRole(UserRole.ADMIN), getUsers);
+
+// AML / Audit
+adminRouter.get(
+  "/aml-flags",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getAmlFlags,
+);
+adminRouter.get(
+  "/audit-logs",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getAuditLogs,
+);
 
 // Government Request Endpoints
 adminRouter.post(
@@ -905,6 +1323,67 @@ adminRouter.post(
   requireAuth,
   requireRole(UserRole.ADMIN),
   exportGovernmentRequestDocuments,
+);
+
+// Attestations
+adminRouter.get(
+  "/attestations/pending",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getPendingAttestationsAdmin,
+);
+adminRouter.post(
+  "/attestations/:attestationId/approve",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  approveAttestation,
+);
+adminRouter.post(
+  "/attestations/:attestationId/reject",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  rejectAttestation,
+);
+
+// Disbursements
+adminRouter.get(
+  "/disbursements",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getAllDisbursements,
+);
+
+adminRouter.get(
+  "/disbursements/pending",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getPendingDisbursements,
+);
+
+adminRouter.get(
+  "/disbursements/:id",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getDisbursementById,
+);
+
+adminRouter.post(
+  "/disburse/:id/approve",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  approveDisbursement,
+);
+adminRouter.post(
+  "/disbursements/:id/approve",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  approveDisbursement,
+); // reused, per handoff notes' "could be merged" suggestion
+adminRouter.post(
+  "/disbursements/:id/reject",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  rejectDisbursement,
 );
 
 export default adminRouter;

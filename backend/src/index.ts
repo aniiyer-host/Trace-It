@@ -24,9 +24,22 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    credentials: true,
+  }),
+);
+
 app.use(cookieParser());
-app.use(express.json({ verify: (req, res, buf) => { (req as any).rawBody = buf; } }));
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      (req as any).rawBody = buf;
+    },
+  }),
+);
 // Removed mongoSanitize as Prisma parameterizes queries, and express-mongo-sanitize crashes Express 5
 // Request ID middleware
 import { requestIdMiddleware } from "./middleware/requestIdMiddleware.js";
@@ -42,7 +55,9 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-app.use(limiter);
+if (process.env.NODE_ENV === "production") {
+  app.use(limiter);
+}
 
 // Routes
 app.get("/", (req, res) => {
@@ -54,8 +69,8 @@ app.use("/api/public", publicRoutes);
 app.use("/api/donor", donorRoutes);
 app.use("/api/charity", charityRoutes);
 app.use("/api/admin", adminRoutes);
-//RazorPay
-//app.use("/api/webhooks", webhookRoutes);
+// Webhook Routes (Razorpay & Simulation)
+app.use("/api/webhooks", webhookRoutes);
 app.use("/api/webhooks/razorpay", webhookRoutes);
 
 //debugging line starts here
@@ -97,23 +112,5 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
     console.log(`Server is running on port ${PORT}`);
   });
 }
-
-// Start blockchain retry processor (only in non-test environments)
-//Duplicate block 
-// if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
-//   const retryProcessor = new BlockchainRetryProcessor();
-//   retryProcessor.start().catch(console.error);
-
-//   // Graceful shutdown handling
-//   process.on("SIGINT", () => {
-//     retryProcessor.stop();
-//     // ... existing shutdown code ...
-//   });
-
-//   process.on("SIGTERM", () => {
-//     retryProcessor.stop();
-//     // ... existing shutdown code ...
-//   });
-// }
 
 export default app;

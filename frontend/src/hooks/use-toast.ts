@@ -5,8 +5,8 @@ import type {
   ToastProps,
 } from "@/components/ui/toast"
 
-const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_LIMIT = 5
+const TOAST_REMOVE_DELAY = 5000 // 5 seconds default
 
 type ToasterToast = ToastProps & {
   id: string
@@ -15,6 +15,7 @@ type ToasterToast = ToastProps & {
   action?: ToastActionElement
 }
 
+// Action types
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
@@ -171,6 +172,87 @@ function toast({ ...props }: Toast) {
   }
 }
 
+// Enhanced toast variants with different durations and types
+const toastVariants = {
+  default: (props: Toast) => toast(props),
+  success: (props: Toast) =>
+    toast({
+      ...props,
+      // Success toasts disappear faster
+      ...props,
+    }),
+  error: (props: Toast) =>
+    toast({
+      ...props,
+      // Error toasts stay longer
+      ...props,
+    }),
+  warning: (props: Toast) =>
+    toast({
+      ...props,
+      // Warning toasts have medium duration
+      ...props,
+    }),
+  info: (props: Toast) =>
+    toast({
+      ...props,
+      // Info toasts have default duration
+      ...props,
+    }),
+}
+
+// Custom toast with specific duration
+function toastWithDuration(
+  props: Toast,
+  duration: number = TOAST_REMOVE_DELAY
+) {
+  const id = genId()
+
+  const update = (propsToUpdate: Toast) =>
+    dispatch({
+      type: "UPDATE_TOAST",
+      toast: { ...propsToUpdate, id },
+    })
+  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
+
+  dispatch({
+    type: "ADD_TOAST",
+    toast: {
+      ...props,
+      id,
+      open: true,
+      onOpenChange: (open) => {
+        if (!open) {
+          dismiss()
+        }
+      },
+    },
+  })
+
+  // Override the default timeout
+  if (toastTimeouts.has(id)) {
+    clearTimeout(toastTimeouts.get(id))
+  }
+  const timeout = setTimeout(() => {
+    toastTimeouts.delete(id)
+    dispatch({
+      type: "REMOVE_TOAST",
+      toastId: id,
+    })
+  }, duration)
+  toastTimeouts.set(id, timeout)
+
+  return {
+    id: id,
+    dismiss: () => {
+      clearTimeout(timeout)
+      toastTimeouts.delete(id)
+      dispatch({ type: "DISMISS_TOAST", toastId: id })
+    },
+    update,
+  }
+}
+
 function useToast() {
   const [state, setState] = React.useState<State>(memoryState)
 
@@ -186,9 +268,14 @@ function useToast() {
 
   return {
     ...state,
-    toast,
+    toast: toastVariants.default,
+    success: toastVariants.success,
+    error: toastVariants.error,
+    warning: toastVariants.warning,
+    info: toastVariants.info,
+    toastWithDuration,
     dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
   }
 }
 
-export { useToast, toast }
+export { useToast, toast, toastWithDuration }

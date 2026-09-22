@@ -3,8 +3,9 @@ import { getRetryEligibilityFilter } from "../src/services/blockchainRetryProces
 describe("getRetryEligibilityFilter", () => {
   it("requires both an available retry count and that retry count's backoff interval", () => {
     const now = new Date("2026-08-21T00:00:00.000Z");
+    const filter = getRetryEligibilityFilter(now, 5, 30_000) as any;
 
-    expect(getRetryEligibilityFilter(now, 5, 30_000)).toEqual({
+    expect(filter).toEqual({
       retryCount: { lt: 5 },
       OR: [
         {
@@ -32,10 +33,10 @@ describe("getRetryEligibilityFilter", () => {
   });
 
   it("does not create an eligibility branch for exhausted retry counts", () => {
-    const filter = getRetryEligibilityFilter(new Date(), 5, 30_000);
+    const filter = getRetryEligibilityFilter(new Date(), 5, 30_000) as any;
 
     expect(filter.retryCount).toEqual({ lt: 5 });
     expect(filter.OR).toHaveLength(5);
-    expect(filter.OR.some((condition) => condition.retryCount === 5)).toBe(false);
+    expect(filter.OR.some((condition: any) => condition.retryCount === 5)).toBe(false);
   });
 });

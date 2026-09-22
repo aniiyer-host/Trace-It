@@ -1,14 +1,131 @@
 {
+  "name": "traceit",
+  "version": "0.1.0",
   "address": "5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3",
   "metadata": {
     "name": "traceit",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "Created with Anchor"
+    "description": "Created with Anchor",
+    "address": "5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3"
   },
   "instructions": [
     {
-      "name": "record_donation",
+      "name": "recordDisbursement",
+      "discriminator": [
+        249,
+        39,
+        225,
+        180,
+        83,
+        171,
+        178,
+        224
+      ],
+      "accounts": [
+        {
+          "name": "disbursementRecord",
+          "writable": true,
+          "isMut": true,
+          "isSigner": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "type": { "array": ["u8", 12] },
+                "value": [
+                  100,
+                  105,
+                  115,
+                  98,
+                  117,
+                  114,
+                  115,
+                  101,
+                  109,
+                  101,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "type": "string",
+                "path": "disbursementId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ngoRecord",
+          "isMut": false,
+          "isSigner": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "type": { "array": ["u8", 3] },
+                "value": [
+                  110,
+                  103,
+                  111
+                ]
+              },
+              {
+                "kind": "arg",
+                "type": "string",
+                "path": "ngoId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false,
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "disbursementId",
+          "type": "string"
+        },
+        {
+          "name": "ngoId",
+          "type": "string"
+        },
+        {
+          "name": "cohortId",
+          "type": "string"
+        },
+        {
+          "name": "amountPaisa",
+          "type": "u64"
+        },
+        {
+          "name": "currency",
+          "type": "string"
+        },
+        {
+          "name": "timestamp",
+          "type": "i64"
+        },
+        {
+          "name": "transactionHash",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "recordDonation",
       "discriminator": [
         154,
         48,
@@ -21,12 +138,15 @@
       ],
       "accounts": [
         {
-          "name": "donation_record",
+          "name": "donationRecord",
           "writable": true,
+          "isMut": true,
+          "isSigner": false,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
+                "type": { "array": ["u8", 8] },
                 "value": [
                   100,
                   111,
@@ -40,7 +160,8 @@
               },
               {
                 "kind": "arg",
-                "path": "donation_id.replace(\"-\", \"\")"
+                "type": "string",
+                "path": "donationId"
               }
             ]
           }
@@ -48,32 +169,36 @@
         {
           "name": "authority",
           "writable": true,
-          "signer": true
+          "signer": true,
+          "isMut": true,
+          "isSigner": true
         },
         {
-          "name": "system_program",
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false,
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "donation_id",
+          "name": "donationId",
           "type": "string"
         },
         {
-          "name": "donor_id_hash",
+          "name": "donorIdHash",
           "type": "string"
         },
         {
-          "name": "ngo_id",
+          "name": "ngoId",
           "type": "string"
         },
         {
-          "name": "campaign_id",
+          "name": "campaignId",
           "type": "string"
         },
         {
-          "name": "amount_paisa",
+          "name": "amountPaisa",
           "type": "u64"
         },
         {
@@ -85,13 +210,167 @@
           "type": "i64"
         },
         {
-          "name": "record_hash",
+          "name": "recordHash",
           "type": "string"
         }
       ]
     },
     {
-      "name": "update_donation_status",
+      "name": "registerCohort",
+      "discriminator": [
+        101,
+        36,
+        42,
+        53,
+        71,
+        219,
+        248,
+        152
+      ],
+      "accounts": [
+        {
+          "name": "cohortRecord",
+          "writable": true,
+          "isMut": true,
+          "isSigner": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "type": { "array": ["u8", 6] },
+                "value": [
+                  99,
+                  111,
+                  104,
+                  111,
+                  114,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "type": "string",
+                "path": "cohortId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ngoRecord",
+          "isMut": false,
+          "isSigner": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "type": { "array": ["u8", 3] },
+                "value": [
+                  110,
+                  103,
+                  111
+                ]
+              },
+              {
+                "kind": "arg",
+                "type": "string",
+                "path": "ngoId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false,
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "cohortId",
+          "type": "string"
+        },
+        {
+          "name": "ngoId",
+          "type": "string"
+        },
+        {
+          "name": "metadataHash",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "registerNgo",
+      "discriminator": [
+        5,
+        168,
+        204,
+        75,
+        108,
+        93,
+        89,
+        244
+      ],
+      "accounts": [
+        {
+          "name": "ngoRecord",
+          "writable": true,
+          "isMut": true,
+          "isSigner": false,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "type": { "array": ["u8", 3] },
+                "value": [
+                  110,
+                  103,
+                  111
+                ]
+              },
+              {
+                "kind": "arg",
+                "type": "string",
+                "path": "ngoId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false,
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "ngoId",
+          "type": "string"
+        },
+        {
+          "name": "metadataHash",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "updateDonationStatus",
       "discriminator": [
         200,
         246,
@@ -104,12 +383,15 @@
       ],
       "accounts": [
         {
-          "name": "donation_record",
+          "name": "donationRecord",
           "writable": true,
+          "isMut": true,
+          "isSigner": false,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
+                "type": { "array": ["u8", 8] },
                 "value": [
                   100,
                   111,
@@ -123,7 +405,8 @@
               },
               {
                 "kind": "arg",
-                "path": "donation_id.replace(\"-\", \"\")"
+                "type": "string",
+                "path": "donationId"
               }
             ]
           }
@@ -131,22 +414,75 @@
         {
           "name": "authority",
           "writable": true,
-          "signer": true
+          "signer": true,
+          "isMut": true,
+          "isSigner": true
         }
       ],
       "args": [
         {
-          "name": "donation_id",
+          "name": "donationId",
           "type": "string"
         },
         {
-          "name": "new_status",
+          "name": "newStatus",
           "type": "u8"
         }
       ]
     }
   ],
   "accounts": [
+    {
+      "name": "CohortRecord",
+      "discriminator": [
+        1,
+        24,
+        253,
+        23,
+        85,
+        92,
+        89,
+        20
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "cohortId", "type": "string" },
+          { "name": "ngoId", "type": "string" },
+          { "name": "sha512DocHash", "type": "string" },
+          { "name": "beneficiaryCount", "type": "u32" },
+          { "name": "createdAt", "type": "i64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "DisbursementRecord",
+      "discriminator": [
+        19,
+        91,
+        111,
+        207,
+        88,
+        250,
+        182,
+        118
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "disbursementId", "type": "string" },
+          { "name": "ngoId", "type": "string" },
+          { "name": "cohortId", "type": "string" },
+          { "name": "amountPaisa", "type": "u64" },
+          { "name": "currency", "type": "string" },
+          { "name": "timestamp", "type": "i64" },
+          { "name": "transactionHash", "type": "string" },
+          { "name": "status", "type": "u8" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    },
     {
       "name": "DonationRecord",
       "discriminator": [
@@ -158,7 +494,45 @@
         70,
         71,
         0
-      ]
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "donationId", "type": "string" },
+          { "name": "donorIdHash", "type": "string" },
+          { "name": "ngoId", "type": "string" },
+          { "name": "campaignId", "type": "string" },
+          { "name": "amountPaisa", "type": "u64" },
+          { "name": "currency", "type": "string" },
+          { "name": "timestamp", "type": "i64" },
+          { "name": "status", "type": "u8" },
+          { "name": "recordHash", "type": "string" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "NgoRecord",
+      "discriminator": [
+        85,
+        190,
+        215,
+        237,
+        77,
+        252,
+        211,
+        42
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "ngoId", "type": "string" },
+          { "name": "status", "type": "u8" },
+          { "name": "metadataHash", "type": "string" },
+          { "name": "registeredAt", "type": "i64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
     }
   ],
   "errors": [
@@ -179,11 +553,122 @@
     },
     {
       "code": 6003,
+      "name": "NgoNotActive",
+      "msg": "NGO is not active"
+    },
+    {
+      "code": 6004,
       "name": "Unauthorized",
       "msg": "Unauthorized: only the program authority can perform this action"
     }
   ],
   "types": [
+    {
+      "name": "CohortRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "cohort_id",
+            "type": "string"
+          },
+          {
+            "name": "ngo_id",
+            "type": "string"
+          },
+          {
+            "name": "sha512_doc_hash",
+            "docs": [
+              "SHA-512 hash of the cohort proof document bundle"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "beneficiary_count",
+            "docs": [
+              "Beneficiary count"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Unix timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DisbursementRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "disbursement_id",
+            "type": "string"
+          },
+          {
+            "name": "ngo_id",
+            "type": "string"
+          },
+          {
+            "name": "cohort_id",
+            "type": "string"
+          },
+          {
+            "name": "amount_paisa",
+            "docs": [
+              "Amount in paisa"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "currency",
+            "docs": [
+              "Currency code (always \"INR\")"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Unix timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "transaction_hash",
+            "docs": [
+              "Transaction hash on Solana"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "0=Pending, 1=Approved, 2=Sent, 3=Settled, 4=Failed"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
     {
       "name": "DonationRecord",
       "type": {
@@ -256,6 +741,46 @@
             "name": "bump",
             "docs": [
               "Bump seed for PDA derivation"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "NgoRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ngo_id",
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "0=Pending, 1=Active, 2=Rejected, 3=Suspended"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "metadata_hash",
+            "docs": [
+              "SHA-512 hash of NGO verification documents"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "registered_at",
+            "docs": [
+              "Unix timestamp of registration"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA"
             ],
             "type": "u8"
           }

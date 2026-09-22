@@ -57,6 +57,7 @@ export const getPublicCampaigns = async (
         ngo: {
           select: {
             organisationName: true,
+            id: true,
           },
         },
         _count: {
@@ -86,6 +87,7 @@ export const getPublicCampaigns = async (
         startDate: c.startDate,
         endDate: c.endDate,
         sdgTags: c.sdgTags,
+        ngoId: (c as unknown as { ngo?: { id: string } }).ngo?.id ?? null,
         ngoName: (c as unknown as { ngo?: { organisationName: string | null } }).ngo?.organisationName ?? null,
         successDonationCount: (c as unknown as { _count?: { donations: number } })._count?.donations ?? 0,
       })),
@@ -248,6 +250,46 @@ export const getPublicDonationByPublicId = async (
 };
 
 // ---------------------------------------------------------------------------
+// GET /api/public/ngos
+// ---------------------------------------------------------------------------
+
+export const getPublicNgos = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const ngos = await prisma.profile.findMany({
+      where: { role: 'CHARITY', ngoStatus: 'ACTIVE' },
+      select: {
+        id: true,
+        organisationName: true,
+        campaigns: {
+          select: {
+            id: true,
+            status: true,
+            raisedAmount: true,
+            targetAmount: true,
+          }
+        }
+      }
+    });
+    const formattedNgos = ngos.map(ngo => ({
+      id: ngo.id,
+      name: ngo.organisationName,
+      totalCampaigns: ngo.campaigns.length,
+      activeCampaigns: ngo.campaigns
+        .filter(c => c.status === 'ACTIVE').length,
+      totalRaised: ngo.campaigns
+        .reduce((sum, c) => sum + Number(c.raisedAmount), 0),
+    }));
+    res.json(formattedNgos);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -255,5 +297,6 @@ const publicRouter = Router();
 publicRouter.get('/campaigns', getPublicCampaigns);
 publicRouter.get('/campaigns/:id', getPublicCampaignById);
 publicRouter.get('/donation/:publicId', getPublicDonationByPublicId);
+publicRouter.get('/ngos', getPublicNgos);
 
 export default publicRouter;

@@ -11,6 +11,9 @@ pub enum TraceItError {
     #[msg("Invalid status transition")]
     InvalidStatusTransition,
 
+    #[msg("NGO is not active")]
+    NgoNotActive,
+
     #[msg("Unauthorized: only the program authority can perform this action")]
     Unauthorized,
 }

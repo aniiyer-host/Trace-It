@@ -43,4 +43,43 @@ pub mod traceit {
     ) -> Result<()> {
         instructions::update_status::handler(ctx, donation_id, new_status)
     }
+
+    pub fn register_ngo(
+        ctx: Context<RegisterNgo>,
+        ngo_id: String,
+        metadata_hash: String,
+    ) -> Result<()> {
+        instructions::register_ngo::handler(ctx, ngo_id, metadata_hash)
+    }
+
+    pub fn register_cohort(
+        ctx: Context<RegisterCohort>,
+        cohort_id: String,
+        ngo_id: String,
+        metadata_hash: String,
+    ) -> Result<()> {
+        instructions::register_cohort::handler(ctx, cohort_id, ngo_id, metadata_hash)
+    }
+
+    pub fn record_disbursement(
+        ctx: Context<RecordDisbursement>,
+        disbursement_id: String,
+        ngo_id: String,
+        cohort_id: String,
+        amount_paisa: u64,
+        currency: String,
+        timestamp: i64,
+        transaction_hash: String,
+    ) -> Result<()> {
+        instructions::record_disbursement::handler(
+            ctx,
+            disbursement_id,
+            ngo_id,
+            cohort_id,
+            amount_paisa,
+            currency,
+            timestamp,
+            transaction_hash,
+        )
+    }
 }

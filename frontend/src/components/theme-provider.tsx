@@ -1,69 +1,68 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import * as React from "react"
 
-type Theme = "dark" | "light" | "system";
+type Theme = "light" | "dark" | "system"
 
-type ThemeProviderProps = {
+interface ThemeProviderProps {
+  defaultTheme: Theme;
+  storageKey: string;
   children: React.ReactNode;
-  defaultTheme?: Theme;
-  storageKey?: string;
-};
+}
 
-type ThemeProviderState = {
+interface ThemeContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
-};
+}
 
-const initialState: ThemeProviderState = {
-  theme: "system",
-  setTheme: () => null,
-};
+const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
 
-const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
+export { ThemeContext };
 
 export function ThemeProvider({
-  children,
   defaultTheme = "system",
   storageKey = "traceit-theme",
-  ...props
+  children,
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme,
-  );
+  const [theme, setTheme] = React.useState<Theme>(() => {
+    // Read from localStorage
+    const savedTheme = window.localStorage.getItem(storageKey) as Theme | null;
+    if (savedTheme) {
+      return savedTheme;
+    }
 
-  useEffect(() => {
+    // Check system preference
+    if (defaultTheme === "system") {
+      const prefersDark = window.matchMedia(
+        "(prefers-color-scheme: dark)"
+      ).matches;
+      return prefersDark ? "dark" : "light";
+    }
+
+    return defaultTheme;
+  });
+
+  // Update the theme when it changes
+  React.useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove("light", "dark");
 
-    if (theme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)")
-        .matches
+    let themeToApply = theme;
+    if (themeToApply === "system") {
+      themeToApply = window.matchMedia("(prefers-color-scheme: dark)").matches
         ? "dark"
         : "light";
-      root.classList.add(systemTheme);
-      return;
     }
-    root.classList.add(theme);
-  }, [theme]);
 
-  const value = {
-    theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme);
-      setTheme(theme);
-    },
+    root.classList.add(themeToApply);
+    window.localStorage.setItem(storageKey, theme);
+  }, [theme, storageKey]);
+
+  const setThemeValue = (theme: Theme) => {
+    setTheme(theme);
   };
 
   return (
-    <ThemeProviderContext.Provider {...props} value={value}>
+    <ThemeContext.Provider value={{ theme, setTheme: setThemeValue }}>
       {children}
-    </ThemeProviderContext.Provider>
+    </ThemeContext.Provider>
   );
 }
-
-// eslint-disable-next-line react-refresh/only-export-components
-export const useTheme = () => {
-  const context = useContext(ThemeProviderContext);
-  if (context === undefined)
-    throw new Error("useTheme must be used within a ThemeProvider");
-  return context;
-};

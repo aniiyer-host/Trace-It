@@ -1,59 +1,46 @@
-// StatusBadge – colour-coded tag for DonationStatus values
-import type { DonationStatus } from '@/types'
-import { cn, STATUS_COLORS } from '@/lib/utils'
-import { CheckCircle2, Clock, Banknote, Truck } from 'lucide-react'
-
-// Validate status to prevent potential injection risks
-function getStatusConfig(status: DonationStatus) {
-    // Validate that status is one of the expected values
-    const validStatuses: DonationStatus[] = ['pending', 'allocated', 'disbursed', 'delivered']
-    if (!validStatuses.includes(status)) {
-        throw new Error(`Invalid status: ${status}`)
-    }
-
-    const ICONS: Record<DonationStatus, React.ReactNode> = {
-        pending: <Clock className="h-3 w-3" />,
-        allocated: <Banknote className="h-3 w-3" />,
-        disbursed: <Truck className="h-3 w-3" />,
-        delivered: <CheckCircle2 className="h-3 w-3" />,
-    }
-
-    const LABELS: Record<DonationStatus, string> = {
-        pending: 'Pending',
-        allocated: 'Allocated',
-        disbursed: 'Disbursed',
-        delivered: 'Delivered ✓',
-    }
-
-    return {
-        status,
-        // eslint-disable-next-line security/detect-object-injection
-        icon: ICONS[status],
-        // eslint-disable-next-line security/detect-object-injection
-        label: LABELS[status],
-        // eslint-disable-next-line security/detect-object-injection
-        color: STATUS_COLORS[status],
-    }
-}
+import type { DonationStatus, ExtendedStatus } from '@/types'
+import { cn } from '@/lib/utils'
 
 interface Props {
-    status: DonationStatus
-    className?: string
+  status: DonationStatus | ExtendedStatus | string
+  className?: string
+  size?: 'default' | 'sm' | 'lg' // Kept for prop compatibility but unused internally
 }
 
 export function StatusBadge({ status, className }: Props) {
-    const { icon, label, color } = getStatusConfig(status)
+  const normStatus = (status || '').toString().toUpperCase()
 
-    return (
-        <span
-            className={cn(
-                'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border',
-                color,
-                className,
-            )}
-        >
-            {icon}
-            {label}
-        </span>
-    )
+  let dotColor = 'bg-gray-400'
+  let label = normStatus.charAt(0) + normStatus.slice(1).toLowerCase()
+
+  if (normStatus === 'SUCCESS' || normStatus === 'DELIVERED' || normStatus === 'ACTIVE') {
+    dotColor = 'bg-green-500'
+  } else if (normStatus === 'PENDING' || normStatus === 'INITIATED' || normStatus === 'PENDING_APPROVAL') {
+    dotColor = 'bg-yellow-500'
+  } else if (normStatus === 'FAILED' || normStatus === 'REJECTED') {
+    dotColor = 'bg-red-500'
+  }
+
+  // Handle specific label overwrites if needed based on previous design
+  if (normStatus === 'INITIATED') label = 'Initiated'
+  if (normStatus === 'PENDING') label = 'Pending'
+  if (normStatus === 'PENDING_APPROVAL') label = 'Awaiting Approval'
+  if (normStatus === 'ACTIVE') label = 'Active'
+  if (normStatus === 'SUCCESS') label = 'Success'
+  if (normStatus === 'FAILED') label = 'Failed'
+  if (normStatus === 'DELIVERED') label = 'Delivered'
+  if (normStatus === 'REJECTED') label = 'Rejected'
+  if (normStatus === 'PROCESSING') label = 'Processing'
+  if (normStatus === 'REFUNDED') label = 'Refunded'
+  if (normStatus === 'CANCELLED') label = 'Cancelled'
+  if (normStatus === 'VERIFIED') label = 'Verified'
+  if (normStatus === 'ALLOCATED') label = 'Allocated'
+  if (normStatus === 'DISBURSED') label = 'Disbursed'
+
+  return (
+    <span className={cn('flex items-center gap-2 text-xs font-medium', className)}>
+      <span className={cn('w-2 h-2 rounded-full inline-block', dotColor)} />
+      {label}
+    </span>
+  )
 }

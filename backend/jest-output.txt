@@ -1,0 +1,532 @@
+  console.log
+    ◇ injected env (11) from .env.test // tip: ⌘ suppress logs { quiet: true }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+(node:65006) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+{"actorId":"98ffa1df-61b5-4913-9b0e-931242581e9f","actorType":"USER","entityId":"cbaa0a7f-bfb3-45e8-b179-049529fb29f3","entityType":"campaign","eventType":"CAMPAIGN_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"targetAmount":10000,"title":"Test Campaign for E2E"},"requestId":null,"timestamp":"2026-09-14T16:18:37.646Z"}
+{"durationMs":21,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"cf8263d3-8996-4669-8cb9-8d00aa208b8f","statusCode":201,"timestamp":"2026-09-14T16:18:37.650Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":"98ffa1df-61b5-4913-9b0e-931242581e9f","actorType":"USER","entityId":"cbaa0a7f-bfb3-45e8-b179-049529fb29f3","entityType":"campaign","eventType":"CAMPAIGN_SUBMITTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"title":"Test Campaign for E2E"},"requestId":null,"timestamp":"2026-09-14T16:18:37.668Z"}
+{"durationMs":14,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/cbaa0a7f-bfb3-45e8-b179-049529fb29f3/submit","requestId":"3c261bf8-0818-49e6-975d-30d8ced17d5c","statusCode":200,"timestamp":"2026-09-14T16:18:37.669Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":"721dba06-180c-47e5-bdba-dbb68c99b97d","actorType":"USER","entityId":"cbaa0a7f-bfb3-45e8-b179-049529fb29f3","entityType":"campaign","eventType":"CAMPAIGN_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-14T16:18:37.686Z"}
+{"durationMs":10,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/cbaa0a7f-bfb3-45e8-b179-049529fb29f3/approve","requestId":"a1af9c85-29b9-40d3-aae3-651671db0900","statusCode":200,"timestamp":"2026-09-14T16:18:37.687Z","userId":"721dba06-180c-47e5-bdba-dbb68c99b97d"}
+{"durationMs":10,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"46479e71-5a80-4b07-8d75-b2a304107f93","statusCode":201,"timestamp":"2026-09-14T16:18:37.700Z","userId":"08af34b5-8ea5-455f-893a-cdf88414bc53"}
+{"actorId":"08af34b5-8ea5-455f-893a-cdf88414bc53","actorType":"USER","entityId":"a4db9fba-45df-4e51-8a31-2d9e8403d365","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":5000,"campaignId":"cbaa0a7f-bfb3-45e8-b179-049529fb29f3","ngoId":"98ffa1df-61b5-4913-9b0e-931242581e9f","paymentMethod":"UPI","razorpayOrderId":"order_64695d45ecaaa0aa467f"},"requestId":null,"timestamp":"2026-09-14T16:18:37.703Z"}
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/","requestId":"8b4fedb1-30bd-4e77-8c56-ea38f3dac3ee","statusCode":401,"timestamp":"2026-09-14T16:18:37.716Z","userId":null}
+{"actorId":null,"actorType":"WEBHOOK","entityId":null,"entityType":"webhook","eventType":"WEBHOOK_TAMPER_ATTEMPT","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"headers":{"accept-encoding":"gzip, deflate","connection":"close","content-length":"199","content-type":"application/json","host":"127.0.0.1:50215"},"reason":"Missing signature or raw body"},"requestId":null,"timestamp":"2026-09-14T16:18:37.719Z"}
+{"actorId":"98ffa1df-61b5-4913-9b0e-931242581e9f","actorType":"USER","entityId":"aa77a172-fbab-4f1a-b946-4f3ccc76fda4","entityType":"campaign","eventType":"CAMPAIGN_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"targetAmount":10000,"title":"Test Campaign for Timeline"},"requestId":null,"timestamp":"2026-09-14T16:18:37.726Z"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"7496d4c3-8b7a-4a23-812c-b09e4484e1d9","statusCode":201,"timestamp":"2026-09-14T16:18:37.727Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":"98ffa1df-61b5-4913-9b0e-931242581e9f","actorType":"USER","entityId":"aa77a172-fbab-4f1a-b946-4f3ccc76fda4","entityType":"campaign","eventType":"CAMPAIGN_SUBMITTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"title":"Test Campaign for Timeline"},"requestId":null,"timestamp":"2026-09-14T16:18:37.740Z"}
+{"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/aa77a172-fbab-4f1a-b946-4f3ccc76fda4/submit","requestId":"2bcf2767-88d1-4133-9bc8-6ab3020a6dc8","statusCode":200,"timestamp":"2026-09-14T16:18:37.741Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":"721dba06-180c-47e5-bdba-dbb68c99b97d","actorType":"USER","entityId":"aa77a172-fbab-4f1a-b946-4f3ccc76fda4","entityType":"campaign","eventType":"CAMPAIGN_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-14T16:18:37.748Z"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/aa77a172-fbab-4f1a-b946-4f3ccc76fda4/approve","requestId":"932f5b62-4384-4ff1-9872-80f4bb236fc6","statusCode":200,"timestamp":"2026-09-14T16:18:37.749Z","userId":"721dba06-180c-47e5-bdba-dbb68c99b97d"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"aeb55c56-80af-458b-86be-2e40c22f1469","statusCode":201,"timestamp":"2026-09-14T16:18:37.759Z","userId":"cade3db0-6188-4114-87c5-935153618b87"}
+{"actorId":"cade3db0-6188-4114-87c5-935153618b87","actorType":"USER","entityId":"674ca204-70a1-4758-8814-77fcbf6ba3a7","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":5000,"campaignId":"aa77a172-fbab-4f1a-b946-4f3ccc76fda4","ngoId":"98ffa1df-61b5-4913-9b0e-931242581e9f","paymentMethod":"UPI","razorpayOrderId":"order_a2fc3cbf1d7cec8fea3c"},"requestId":null,"timestamp":"2026-09-14T16:18:37.762Z"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/donations/674ca204-70a1-4758-8814-77fcbf6ba3a7/timeline","requestId":"b2c70e22-e8f3-4b46-980e-de48c8904f40","statusCode":200,"timestamp":"2026-09-14T16:18:37.770Z","userId":"cade3db0-6188-4114-87c5-935153618b87"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/receipt/a4db9fba-45df-4e51-8a31-2d9e8403d365","requestId":"8b4bd5d9-f4a2-457d-bc9f-eceeeae0bb96","statusCode":400,"timestamp":"2026-09-14T16:18:37.780Z","userId":"08af34b5-8ea5-455f-893a-cdf88414bc53"}
+{"actorId":"64100705-a5fe-4e1e-a154-c79310387d95","actorType":"USER","entityId":"64100705-a5fe-4e1e-a154-c79310387d95","entityType":"profile","eventType":"NGO_ONBOARDED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"organisationName":"Test NGO Org","registrationNo":"TESTREG001"},"requestId":null,"timestamp":"2026-09-14T16:18:37.790Z"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/onboard","requestId":"8ca71798-4e61-42d5-9a51-d584fca441d8","statusCode":200,"timestamp":"2026-09-14T16:18:37.791Z","userId":"64100705-a5fe-4e1e-a154-c79310387d95"}
+{"actorId":"98ffa1df-61b5-4913-9b0e-931242581e9f","actorType":"USER","entityId":"a3bad3b6-c1f2-4d88-a500-1d2820370379","entityType":"document","eventType":"DOCUMENT_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentType":"NGO_CERT","sha512HashSnippet":"hash_178"},"requestId":null,"timestamp":"2026-09-14T16:18:37.805Z"}
+{"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/documents/upload","requestId":"88696793-870a-4904-9a0e-f601cd595502","statusCode":201,"timestamp":"2026-09-14T16:18:37.806Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":"98ffa1df-61b5-4913-9b0e-931242581e9f","actorType":"USER","entityId":"4194ff5a-9794-413a-86dc-9023a2f2d267","entityType":"cohort","eventType":"COHORT_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"campaignId":"cbaa0a7f-bfb3-45e8-b179-049529fb29f3","name":"Test Cohort"},"requestId":null,"timestamp":"2026-09-14T16:18:37.816Z"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/cohorts","requestId":"7f96e41d-3f96-4f45-950b-e0b7f6868638","statusCode":201,"timestamp":"2026-09-14T16:18:37.816Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":"98ffa1df-61b5-4913-9b0e-931242581e9f","actorType":"USER","entityId":"4194ff5a-9794-413a-86dc-9023a2f2d267","entityType":"cohort","eventType":"COHORT_PROOF_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentId":"4b9d4797-37f8-4f7a-8b70-537819526c57","sha512DocHash":"proof_hash_1789402717827_i0o4blftqp"},"requestId":null,"timestamp":"2026-09-14T16:18:37.830Z"}
+{"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/cohorts/4194ff5a-9794-413a-86dc-9023a2f2d267/proof","requestId":"110530bf-624c-42df-8f40-634794bc18bc","statusCode":201,"timestamp":"2026-09-14T16:18:37.831Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":"98ffa1df-61b5-4913-9b0e-931242581e9f","actorType":"USER","entityId":"a26cb6d2-7bf0-4ed8-8b88-f6b3af2162e9","entityType":"disbursement","eventType":"DISBURSEMENT_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"amountInr":3000},"requestId":null,"timestamp":"2026-09-14T16:18:37.844Z"}
+{"durationMs":7,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disburse","requestId":"006aeaba-09cb-45fd-a0d7-5e2612eecc70","statusCode":201,"timestamp":"2026-09-14T16:18:37.845Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/disbursements","requestId":"0621ac57-4e8d-435f-8194-9efd9f99ba42","statusCode":200,"timestamp":"2026-09-14T16:18:37.850Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":null,"actorType":"SYSTEM","entityId":"a4db9fba-45df-4e51-8a31-2d9e8403d365","entityType":"donation","eventType":"DONATION_ALLOCATED","govRequestId":null,"ip":"system","level":"info","message":"Security Event","metadata":{"amount":"5000","cohortId":"4194ff5a-9794-413a-86dc-9023a2f2d267","donationId":"a4db9fba-45df-4e51-8a31-2d9e8403d365","donorId":"08af34b5-8ea5-455f-893a-cdf88414bc53","ngoId":"98ffa1df-61b5-4913-9b0e-931242581e9f"},"requestId":null,"timestamp":"2026-09-14T16:18:37.865Z"}
+{"actorId":"721dba06-180c-47e5-bdba-dbb68c99b97d","actorType":"USER","entityId":"a26cb6d2-7bf0-4ed8-8b88-f6b3af2162e9","entityType":"disbursement","eventType":"DISBURSEMENT_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"amountInr":3000,"campaignId":"cbaa0a7f-bfb3-45e8-b179-049529fb29f3"},"requestId":null,"timestamp":"2026-09-14T16:18:37.870Z"}
+{"durationMs":18,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disburse/a26cb6d2-7bf0-4ed8-8b88-f6b3af2162e9/approve","requestId":"28767b07-9a73-488e-95cd-ec4ada963461","statusCode":200,"timestamp":"2026-09-14T16:18:37.871Z","userId":"721dba06-180c-47e5-bdba-dbb68c99b97d"}
+{"durationMs":7,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/audit-logs","requestId":"8ed82dbc-f473-454b-b1b4-9bfba5338d4a","statusCode":200,"timestamp":"2026-09-14T16:18:37.882Z","userId":"721dba06-180c-47e5-bdba-dbb68c99b97d"}
+{"actorId":"98ffa1df-61b5-4913-9b0e-931242581e9f","actorType":"USER","entityId":"0a83d944-1383-4078-8f26-4e0a9d38338a","entityType":"campaign","eventType":"CAMPAIGN_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"targetAmount":10000,"title":"Test Campaign for FCRA"},"requestId":null,"timestamp":"2026-09-14T16:18:37.890Z"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"9fffdaa2-6d42-46c7-9f02-43e93969c9bb","statusCode":201,"timestamp":"2026-09-14T16:18:37.890Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":"98ffa1df-61b5-4913-9b0e-931242581e9f","actorType":"USER","entityId":"0a83d944-1383-4078-8f26-4e0a9d38338a","entityType":"campaign","eventType":"CAMPAIGN_SUBMITTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"title":"Test Campaign for FCRA"},"requestId":null,"timestamp":"2026-09-14T16:18:37.896Z"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/0a83d944-1383-4078-8f26-4e0a9d38338a/submit","requestId":"8ed36f04-2b13-445a-85ee-811f3bf00391","statusCode":200,"timestamp":"2026-09-14T16:18:37.897Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":"721dba06-180c-47e5-bdba-dbb68c99b97d","actorType":"USER","entityId":"0a83d944-1383-4078-8f26-4e0a9d38338a","entityType":"campaign","eventType":"CAMPAIGN_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-14T16:18:37.904Z"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/0a83d944-1383-4078-8f26-4e0a9d38338a/approve","requestId":"4caaad45-5d12-437b-bdb1-aa9c1c8cca9c","statusCode":200,"timestamp":"2026-09-14T16:18:37.904Z","userId":"721dba06-180c-47e5-bdba-dbb68c99b97d"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"11dafe06-7a63-4ae2-b6ef-5d72a063ecea","statusCode":201,"timestamp":"2026-09-14T16:18:37.916Z","userId":"5f10a773-2659-40e6-bb9a-f03d2d286580"}
+{"actorId":"5f10a773-2659-40e6-bb9a-f03d2d286580","actorType":"USER","entityId":"e3a1a860-d075-4050-9627-b5e4b2f20d6c","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":5000,"campaignId":"0a83d944-1383-4078-8f26-4e0a9d38338a","ngoId":"98ffa1df-61b5-4913-9b0e-931242581e9f","paymentMethod":"UPI","razorpayOrderId":"order_97f55d961ffcf18f287f"},"requestId":null,"timestamp":"2026-09-14T16:18:37.918Z"}
+{"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/reports/fcra","requestId":"9428ac2d-79af-4792-9600-988417ba1e86","statusCode":200,"timestamp":"2026-09-14T16:18:37.922Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":"98ffa1df-61b5-4913-9b0e-931242581e9f","actorType":"USER","entityId":"8673120c-962a-403f-92fd-ccc3775f8128","entityType":"campaign","eventType":"CAMPAIGN_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"targetAmount":10000,"title":"Test Campaign for 80G"},"requestId":null,"timestamp":"2026-09-14T16:18:37.931Z"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"1baf42b9-0e38-4ee0-9fb5-e75a3b6c947f","statusCode":201,"timestamp":"2026-09-14T16:18:37.932Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":"98ffa1df-61b5-4913-9b0e-931242581e9f","actorType":"USER","entityId":"8673120c-962a-403f-92fd-ccc3775f8128","entityType":"campaign","eventType":"CAMPAIGN_SUBMITTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"title":"Test Campaign for 80G"},"requestId":null,"timestamp":"2026-09-14T16:18:37.938Z"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/8673120c-962a-403f-92fd-ccc3775f8128/submit","requestId":"dfda03c4-ff97-48b2-b9b0-cbc7e16dfb50","statusCode":200,"timestamp":"2026-09-14T16:18:37.939Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":"721dba06-180c-47e5-bdba-dbb68c99b97d","actorType":"USER","entityId":"8673120c-962a-403f-92fd-ccc3775f8128","entityType":"campaign","eventType":"CAMPAIGN_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-14T16:18:37.946Z"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/8673120c-962a-403f-92fd-ccc3775f8128/approve","requestId":"61d1d458-cb9e-4d31-bf41-c07893638308","statusCode":200,"timestamp":"2026-09-14T16:18:37.947Z","userId":"721dba06-180c-47e5-bdba-dbb68c99b97d"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"f9729f7b-105d-4bd0-91a8-a366cdc9ce83","statusCode":201,"timestamp":"2026-09-14T16:18:37.957Z","userId":"0110036a-820f-4063-a790-188c7712d4da"}
+{"actorId":"0110036a-820f-4063-a790-188c7712d4da","actorType":"USER","entityId":"89d51f01-1461-4f26-90bc-a10219cceee9","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":5000,"campaignId":"8673120c-962a-403f-92fd-ccc3775f8128","ngoId":"98ffa1df-61b5-4913-9b0e-931242581e9f","paymentMethod":"UPI","razorpayOrderId":"order_82ee8f817ccac5b895b7"},"requestId":null,"timestamp":"2026-09-14T16:18:37.959Z"}
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/reports/80g","requestId":"ed3d9cdf-de09-4996-881d-4e1559808fda","statusCode":200,"timestamp":"2026-09-14T16:18:37.963Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":"721dba06-180c-47e5-bdba-dbb68c99b97d","actorType":"USER","entityId":"5d70f8c0-8aba-406f-9342-d0217208cd1c","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"legalBasis":"FCRA Act 2010","requestingBody":"Ministry of Home Affairs"},"requestId":null,"timestamp":"2026-09-14T16:18:37.970Z"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests","requestId":"b61089b1-29de-47f0-be12-2572ff98f18f","statusCode":201,"timestamp":"2026-09-14T16:18:37.971Z","userId":"721dba06-180c-47e5-bdba-dbb68c99b97d"}
+{"actorId":"721dba06-180c-47e5-bdba-dbb68c99b97d","actorType":"USER","entityId":"daebc6c5-4602-4ec4-ac23-a10944726291","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"legalBasis":"Section 133 of Income Tax Act","requestingBody":"Income Tax Department","targetUserId":"98ffa1df-61b5-4913-9b0e-931242581e9f"},"requestId":null,"timestamp":"2026-09-14T16:18:37.978Z"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests","requestId":"8832b434-9c28-4283-9728-3dac16f8c168","statusCode":201,"timestamp":"2026-09-14T16:18:37.979Z","userId":"721dba06-180c-47e5-bdba-dbb68c99b97d"}
+{"actorId":"721dba06-180c-47e5-bdba-dbb68c99b97d","actorType":"USER","entityId":"daebc6c5-4602-4ec4-ac23-a10944726291","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_DOCUMENTS_HELD","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"count":1,"documentIds":["a3bad3b6-c1f2-4d88-a500-1d2820370379"]},"requestId":null,"timestamp":"2026-09-14T16:18:37.991Z"}
+{"durationMs":10,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests/daebc6c5-4602-4ec4-ac23-a10944726291/hold","requestId":"cffde671-0473-4c57-bb60-b08a890d72bd","statusCode":200,"timestamp":"2026-09-14T16:18:37.992Z","userId":"721dba06-180c-47e5-bdba-dbb68c99b97d"}
+{"actorId":"721dba06-180c-47e5-bdba-dbb68c99b97d","actorType":"USER","entityId":"12887549-9a5d-412a-a4f1-a5c8d052924b","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"legalBasis":"FEMA 1999","requestingBody":"Enforcement Directorate","targetUserId":"98ffa1df-61b5-4913-9b0e-931242581e9f"},"requestId":null,"timestamp":"2026-09-14T16:18:37.998Z"}
+{"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests","requestId":"9fcd3d7b-1db3-4d4e-b94f-6c48f9a07155","statusCode":201,"timestamp":"2026-09-14T16:18:37.999Z","userId":"721dba06-180c-47e5-bdba-dbb68c99b97d"}
+{"actorId":"98ffa1df-61b5-4913-9b0e-931242581e9f","actorType":"USER","entityId":"e53342c0-6134-4b14-b429-9fab966b18a2","entityType":"document","eventType":"DOCUMENT_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentType":"NGO_CERT","sha512HashSnippet":"hash_178"},"requestId":null,"timestamp":"2026-09-14T16:18:38.006Z"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/documents/upload","requestId":"b7225849-98bc-4d49-88ec-7d4d8eccfaf9","statusCode":201,"timestamp":"2026-09-14T16:18:38.007Z","userId":"98ffa1df-61b5-4913-9b0e-931242581e9f"}
+{"actorId":"721dba06-180c-47e5-bdba-dbb68c99b97d","actorType":"USER","entityId":"12887549-9a5d-412a-a4f1-a5c8d052924b","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_DOCUMENTS_HELD","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"count":1,"documentIds":["e53342c0-6134-4b14-b429-9fab966b18a2"]},"requestId":null,"timestamp":"2026-09-14T16:18:38.015Z"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests/12887549-9a5d-412a-a4f1-a5c8d052924b/hold","requestId":"cf84026a-7931-4e1d-86fd-20114cd1f5fe","statusCode":200,"timestamp":"2026-09-14T16:18:38.016Z","userId":"721dba06-180c-47e5-bdba-dbb68c99b97d"}
+{"actorId":"721dba06-180c-47e5-bdba-dbb68c99b97d","actorType":"USER","entityId":"12887549-9a5d-412a-a4f1-a5c8d052924b","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_DOCUMENTS_EXPORTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentCount":2},"requestId":null,"timestamp":"2026-09-14T16:18:38.023Z"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests/12887549-9a5d-412a-a4f1-a5c8d052924b/export","requestId":"53002009-d9ea-4f9e-b842-d8496183f033","statusCode":200,"timestamp":"2026-09-14T16:18:38.023Z","userId":"721dba06-180c-47e5-bdba-dbb68c99b97d"}
+{"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/campaigns","requestId":"911ed3d3-1dd3-4a5e-9683-2063aa2239b2","statusCode":403,"timestamp":"2026-09-14T16:18:38.029Z","userId":"08af34b5-8ea5-455f-893a-cdf88414bc53"}
+{"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"239fcae1-ed51-4273-8842-6699664ba559","statusCode":402,"timestamp":"2026-09-14T16:18:38.034Z","userId":"04df539a-5a0b-4167-a9f0-3404c6c2e0aa"}
+{"actorId":"04df539a-5a0b-4167-a9f0-3404c6c2e0aa","actorType":"USER","entityId":"04df539a-5a0b-4167-a9f0-3404c6c2e0aa","entityType":"profile","eventType":"KYC_REQUIRED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":15000,"kycStatus":"NOT_REQUIRED"},"requestId":null,"timestamp":"2026-09-14T16:18:38.037Z"}
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/api/donor/donations/cmu1g6dj500005qv09hgoabl1'%20OR%20'1'='1","requestId":"24b7a8ff-f571-4f59-acb9-a7a47d35dc3c","statusCode":404,"timestamp":"2026-09-14T16:18:38.039Z","userId":"08af34b5-8ea5-455f-893a-cdf88414bc53"}
+{"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/api/health","requestId":"827cd285-8c39-4a24-b489-63b0706c078f","statusCode":404,"timestamp":"2026-09-14T16:18:38.042Z","userId":null}
+{"durationMs":15,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"bedf0bda-8b4c-4f2d-b6c8-961d7a550107","statusCode":201,"timestamp":"2026-09-14T16:18:38.063Z","userId":"08af34b5-8ea5-455f-893a-cdf88414bc53"}
+{"durationMs":16,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"d7d79d4e-07a5-475e-b943-4dbcfc27d265","statusCode":201,"timestamp":"2026-09-14T16:18:38.065Z","userId":"08af34b5-8ea5-455f-893a-cdf88414bc53"}
+{"actorId":"08af34b5-8ea5-455f-893a-cdf88414bc53","actorType":"USER","entityId":"eb214ea6-2b27-440d-af51-d8e797f55728","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":1100,"campaignId":"cbaa0a7f-bfb3-45e8-b179-049529fb29f3","ngoId":"98ffa1df-61b5-4913-9b0e-931242581e9f","paymentMethod":"UPI","razorpayOrderId":"order_3058438eba8b00161e5d"},"requestId":null,"timestamp":"2026-09-14T16:18:38.069Z"}
+{"actorId":"08af34b5-8ea5-455f-893a-cdf88414bc53","actorType":"USER","entityId":"83896c9b-6196-4ab3-9278-2c3fa452a621","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":1000,"campaignId":"cbaa0a7f-bfb3-45e8-b179-049529fb29f3","ngoId":"98ffa1df-61b5-4913-9b0e-931242581e9f","paymentMethod":"UPI","razorpayOrderId":"order_4c975a458368153d07ae"},"requestId":null,"timestamp":"2026-09-14T16:18:38.071Z"}
+{"durationMs":22,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"82b535fd-8210-4da4-837b-d9f5be88243d","statusCode":201,"timestamp":"2026-09-14T16:18:38.077Z","userId":"08af34b5-8ea5-455f-893a-cdf88414bc53"}
+{"durationMs":28,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"7b9a747e-2574-4c85-84e3-610770339acd","statusCode":201,"timestamp":"2026-09-14T16:18:38.079Z","userId":"08af34b5-8ea5-455f-893a-cdf88414bc53"}
+{"durationMs":27,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"a467213b-8adf-400f-badb-d7c990add457","statusCode":201,"timestamp":"2026-09-14T16:18:38.080Z","userId":"08af34b5-8ea5-455f-893a-cdf88414bc53"}
+{"actorId":"08af34b5-8ea5-455f-893a-cdf88414bc53","actorType":"USER","entityId":"f616c4ed-ea46-48e1-97eb-cc5fd63c25f5","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":1200,"campaignId":"cbaa0a7f-bfb3-45e8-b179-049529fb29f3","ngoId":"98ffa1df-61b5-4913-9b0e-931242581e9f","paymentMethod":"UPI","razorpayOrderId":"order_7feb2a2dbfb93d463a94"},"requestId":null,"timestamp":"2026-09-14T16:18:38.081Z"}
+{"actorId":"08af34b5-8ea5-455f-893a-cdf88414bc53","actorType":"USER","entityId":"f4ed6a85-4601-4c40-bd54-3a85fdde8c0e","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":1400,"campaignId":"cbaa0a7f-bfb3-45e8-b179-049529fb29f3","ngoId":"98ffa1df-61b5-4913-9b0e-931242581e9f","paymentMethod":"UPI","razorpayOrderId":"order_17355f071490ce870138"},"requestId":null,"timestamp":"2026-09-14T16:18:38.082Z"}
+{"actorId":"08af34b5-8ea5-455f-893a-cdf88414bc53","actorType":"USER","entityId":"08114326-89cd-4b71-9788-1b69b894d694","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":1300,"campaignId":"cbaa0a7f-bfb3-45e8-b179-049529fb29f3","ngoId":"98ffa1df-61b5-4913-9b0e-931242581e9f","paymentMethod":"UPI","razorpayOrderId":"order_535aa57d62ac39b32cc0"},"requestId":null,"timestamp":"2026-09-14T16:18:38.085Z"}
+{"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/ngos","requestId":"a64c4a1a-60b9-4287-87c9-d515e3cd1527","statusCode":200,"timestamp":"2026-09-14T16:18:38.089Z","userId":null}
+PASS tests/e2e.test.ts
+  End-to-End Flow Tests
+    Complete Donor Flow
+      ✓ should allow donor to signup and verify email (1 ms)
+      ✓ should allow KYC approved donor to make donation (96 ms)
+      ✓ should handle webhook success and update donation status (6 ms)
+      ✓ should allow donor to check donation status (54 ms)
+      ✓ should generate 80G receipt after successful donation (9 ms)
+    Complete NGO Flow
+      ✓ should allow NGO onboarding (14 ms)
+      ✓ should allow NGO to upload documents (12 ms)
+      ✓ should allow NGO to create campaign (1 ms)
+      ✓ should allow NGO to create beneficiary cohort (10 ms)
+      ✓ should allow NGO to upload cohort proof (14 ms)
+      ✓ should allow NGO to create disbursement (14 ms)
+      ✓ should allow NGO to view disbursements (6 ms)
+    Admin Approval Flow
+      ✓ should allow admin to approve disbursement (20 ms)
+      ✓ should trigger donation allocation on disbursement approval (1 ms)
+      ✓ should allow admin to view audit logs (10 ms)
+    Compliance Reporting
+      ✓ should generate FCRA report for NGO (40 ms)
+      ✓ should generate 80G report for NGO (41 ms)
+    Legal Gateway Flow
+      ✓ should allow admin to create government request (7 ms)
+      ✓ should allow admin to place legal hold on documents (21 ms)
+      ✓ should allow admin to export held documents (33 ms)
+    Negative Tests & Security
+      ✓ should return empty campaigns list for non-NGO users (4 ms)
+      ✓ should prevent donor without KYC from making large donations (5 ms)
+      ✓ should prevent SQL injection attempts (4 ms)
+    System Health & Performance
+      ✓ should respond to health checks (3 ms)
+      ✓ should handle concurrent requests (40 ms)
+    Public Routes - NGO Directory
+      ✓ GET /api/public/ngos returns array of active NGOs with stats (7 ms)
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ⌘ suppress logs { quiet: true }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+{"durationMs":7,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donations/bc0509f9-49a9-4ec1-8eb2-933351dcb93f/attestation","requestId":"d6a309bc-61aa-438b-80f9-829d2558773f","statusCode":201,"timestamp":"2026-09-14T16:18:38.247Z","userId":"bc2947bf-1919-4afe-8a87-f7ae65802bcc"}
+{"actorId":"bc2947bf-1919-4afe-8a87-f7ae65802bcc","actorType":"USER","entityId":"7c533170-a782-426a-9579-ca541b5c7925","entityType":"attestation","eventType":"ATTESTATION_REQUESTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"donationId":"bc0509f9-49a9-4ec1-8eb2-933351dcb93f","type":"RECEIPT"},"requestId":null,"timestamp":"2026-09-14T16:18:38.251Z"}
+{"durationMs":38,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donations/bc0509f9-49a9-4ec1-8eb2-933351dcb93f/attestation","requestId":"9896d540-d5ce-4a84-9910-5e62dcf280b6","statusCode":409,"timestamp":"2026-09-14T16:18:38.290Z","userId":"bc2947bf-1919-4afe-8a87-f7ae65802bcc"}
+{"durationMs":10,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/donations/bc0509f9-49a9-4ec1-8eb2-933351dcb93f/attestation","requestId":"c9391f19-21e1-422e-a5ba-a49e054e9d30","statusCode":200,"timestamp":"2026-09-14T16:18:38.304Z","userId":"bc2947bf-1919-4afe-8a87-f7ae65802bcc"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/attestations/pending","requestId":"309fe864-2041-4081-9fb4-ee738a72d40f","statusCode":200,"timestamp":"2026-09-14T16:18:38.311Z","userId":"090b5057-e5f8-4d92-beb2-ef9cc47221a3"}
+{"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/attestations/pending","requestId":"c79dc4fe-df14-4b99-b498-2520b74893ff","statusCode":200,"timestamp":"2026-09-14T16:18:38.316Z","userId":"14987bf8-34c0-42ef-a5b0-ce805dcbe80a"}
+{"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/attestations","requestId":"7c8bbaed-8451-4235-ba41-c2f96b263235","statusCode":404,"timestamp":"2026-09-14T16:18:38.325Z","userId":"14987bf8-34c0-42ef-a5b0-ce805dcbe80a"}
+{"actorId":"090b5057-e5f8-4d92-beb2-ef9cc47221a3","actorType":"USER","entityId":"7c533170-a782-426a-9579-ca541b5c7925","entityType":"attestation","eventType":"ATTESTATION_NGO_SIGNED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"donationId":"bc0509f9-49a9-4ec1-8eb2-933351dcb93f","type":"RECEIPT"},"requestId":null,"timestamp":"2026-09-14T16:18:38.339Z"}
+  console.error
+    [AuditLog] Failed to write audit log {
+      actorType: 'SYSTEM',
+      actorId: 'system',
+      entityType: 'attestation',
+      entityId: '7c533170-a782-426a-9579-ca541b5c7925',
+      action: 'ATTESTATION_APPROVED',
+      metadata: {
+        donationId: 'bc0509f9-49a9-4ec1-8eb2-933351dcb93f',
+        type: 'RECEIPT',
+        autoApproved: true
+      },
+      err: PrismaClientKnownRequestError: 
+      Invalid `prisma.auditLog.create()` invocation in
+      /Users/adison/Programming/Trace-It/backend/src/services/auditLogService.ts:23:27
+      
+        20  */
+        21 export const writeAuditLog = async (params: AuditLogParams): Promise<void> => {
+        22   try {
+      → 23     await prisma.auditLog.create(
+      Foreign key constraint violated on the constraint: `audit_logs_actorId_fkey`
+          at Jr.handleRequestError (/Users/adison/Programming/Trace-It/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:237:13)
+          at Jr.handleAndLogRequestError (/Users/adison/Programming/Trace-It/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:183:12)
+          at Jr.request (/Users/adison/Programming/Trace-It/backend/node_modules/@prisma/client/src/runtime/RequestHandler.ts:152:12)
+          at processTicksAndRejections (node:internal/process/task_queues:104:5)
+          at a (/Users/adison/Programming/Trace-It/backend/node_modules/@prisma/client/src/runtime/getPrismaClient.ts:1014:24)
+          at writeAuditLog (/Users/adison/Programming/Trace-It/backend/src/services/auditLogService.ts:23:5)
+          at signAttestation (/Users/adison/Programming/Trace-It/backend/src/routes/charity.ts:957:7) {
+        code: 'P2003',
+        meta: { modelName: 'AuditLog', driverAdapterError: [DriverAdapterError] },
+        clientVersion: '7.9.1'
+      }
+    }
+
+      49 |   } catch (err) {
+      50 |     // Audit log failures must never crash the API
+    > 51 |     console.error('[AuditLog] Failed to write audit log', {
+         |             ^
+      52 |       ...params,
+      53 |       err,
+      54 |     });
+
+      at error (src/services/auditLogService.ts:51:13)
+      at signAttestation (src/routes/charity.ts:957:7)
+
+{"durationMs":18,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/attestations","requestId":"c96c8370-353f-4bf9-9d45-12d5e104ab60","statusCode":200,"timestamp":"2026-09-14T16:18:38.346Z","userId":"090b5057-e5f8-4d92-beb2-ef9cc47221a3"}
+{"durationMs":10,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/attestations","requestId":"62c03949-3353-4b86-a0bd-2111331e1338","statusCode":409,"timestamp":"2026-09-14T16:18:38.360Z","userId":"090b5057-e5f8-4d92-beb2-ef9cc47221a3"}
+{"actorId":"090b5057-e5f8-4d92-beb2-ef9cc47221a3","actorType":"USER","entityId":"ee3382d4-8c03-4c25-8184-32d821e31177","entityType":"attestation","eventType":"ATTESTATION_NGO_SIGNED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"donationId":"bc0509f9-49a9-4ec1-8eb2-933351dcb93f","type":"DELIVERY"},"requestId":null,"timestamp":"2026-09-14T16:18:38.375Z"}
+{"durationMs":13,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/attestations","requestId":"4dc3dfa8-745d-445f-a924-fbcb00243f7a","statusCode":200,"timestamp":"2026-09-14T16:18:38.376Z","userId":"090b5057-e5f8-4d92-beb2-ef9cc47221a3"}
+{"durationMs":11,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/attestations/pending","requestId":"6d211bc7-43e7-4cc0-aba8-e655236c72fb","statusCode":200,"timestamp":"2026-09-14T16:18:38.389Z","userId":"da7b6ed0-0aba-4f90-9197-856fe181c043"}
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/attestations/ee3382d4-8c03-4c25-8184-32d821e31177/approve","requestId":"0506b5a8-2e4b-4ca2-b054-83205069468c","statusCode":403,"timestamp":"2026-09-14T16:18:38.394Z","userId":"bc2947bf-1919-4afe-8a87-f7ae65802bcc"}
+{"actorId":"da7b6ed0-0aba-4f90-9197-856fe181c043","actorType":"ADMIN","entityId":"ee3382d4-8c03-4c25-8184-32d821e31177","entityType":"attestation","eventType":"ATTESTATION_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-14T16:18:38.403Z"}
+{"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/attestations/ee3382d4-8c03-4c25-8184-32d821e31177/approve","requestId":"4f142160-3c62-46db-83e7-4e7e2560761c","statusCode":200,"timestamp":"2026-09-14T16:18:38.404Z","userId":"da7b6ed0-0aba-4f90-9197-856fe181c043"}
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/attestations/ee3382d4-8c03-4c25-8184-32d821e31177/reject","requestId":"6b087171-5df9-4129-94db-11c328100b2b","statusCode":409,"timestamp":"2026-09-14T16:18:38.409Z","userId":"da7b6ed0-0aba-4f90-9197-856fe181c043"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disburse/031a972a-a6da-49f2-9965-2002d584db68/proof","requestId":"aa15dbe4-4eba-4b8d-a17c-06ea1a9e75f3","statusCode":404,"timestamp":"2026-09-14T16:18:38.417Z","userId":"14987bf8-34c0-42ef-a5b0-ce805dcbe80a"}
+{"actorId":"090b5057-e5f8-4d92-beb2-ef9cc47221a3","actorType":"USER","entityId":"031a972a-a6da-49f2-9965-2002d584db68","entityType":"disbursement","eventType":"MILESTONE_PROOF_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentId":"bf78257d-84df-4ea1-a9e3-e412b5480830","sha512Hash":"proof_hash_1789402718424_2axdam0453e"},"requestId":null,"timestamp":"2026-09-14T16:18:38.431Z"}
+{"durationMs":11,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disburse/031a972a-a6da-49f2-9965-2002d584db68/proof","requestId":"28f6d645-b050-4482-97ee-79efdf455ce9","statusCode":201,"timestamp":"2026-09-14T16:18:38.432Z","userId":"090b5057-e5f8-4d92-beb2-ef9cc47221a3"}
+{"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/milestones/pending","requestId":"45d41e21-d32d-4161-8fda-7614538dae92","statusCode":200,"timestamp":"2026-09-14T16:18:38.437Z","userId":"da7b6ed0-0aba-4f90-9197-856fe181c043"}
+{"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/milestones/031a972a-a6da-49f2-9965-2002d584db68/reject","requestId":"cf88ac0e-b451-413c-af89-e2658e31a717","statusCode":403,"timestamp":"2026-09-14T16:18:38.441Z","userId":"090b5057-e5f8-4d92-beb2-ef9cc47221a3"}
+{"actorId":"da7b6ed0-0aba-4f90-9197-856fe181c043","actorType":"ADMIN","entityId":"031a972a-a6da-49f2-9965-2002d584db68","entityType":"disbursement","eventType":"DISBURSEMENT_REJECTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"reason":"field report insufficient"},"requestId":null,"timestamp":"2026-09-14T16:18:38.448Z"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/milestones/031a972a-a6da-49f2-9965-2002d584db68/reject","requestId":"79759aa5-7ba9-41a3-b748-c6de97d0a404","statusCode":200,"timestamp":"2026-09-14T16:18:38.448Z","userId":"da7b6ed0-0aba-4f90-9197-856fe181c043"}
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/milestones/031a972a-a6da-49f2-9965-2002d584db68/approve","requestId":"33de67a1-66bf-4083-b8e0-7a4327edf3d0","statusCode":400,"timestamp":"2026-09-14T16:18:38.453Z","userId":"da7b6ed0-0aba-4f90-9197-856fe181c043"}
+PASS tests/attestation.test.ts
+  Attestation & Milestone API Integration Tests
+    ✓ POST /api/donor/donations/:id/attestation - donor requests a RECEIPT attestation (12 ms)
+    ✓ POST /api/donor/donations/:id/attestation - duplicate request for same type is rejected (42 ms)
+    ✓ GET /api/donor/donations/:id/attestation - donor can view own attestations (13 ms)
+    ✓ GET /api/charity/attestations/pending - the OWNING ngo sees it, an unrelated ngo does not (12 ms)
+    ✓ POST /api/charity/attestations - an UNRELATED ngo cannot sign someone else's attestation (9 ms)
+    ✓ POST /api/charity/attestations - the owning NGO signs the attestation (20 ms)
+    ✓ POST /api/charity/attestations - signing again is rejected (already signed) (14 ms)
+    ✓ POST /api/charity/attestations - NGO signs DELIVERY attestation (16 ms)
+    ✓ GET /api/admin/attestations/pending - admin sees the NGO-signed attestation (13 ms)
+    ✓ POST /api/admin/attestations/:id/approve - a DONOR cannot approve (RBAC) (5 ms)
+    ✓ POST /api/admin/attestations/:id/approve - admin approves (10 ms)
+    ✓ POST /api/admin/attestations/:id/reject - cannot reject an already-approved attestation (5 ms)
+    ✓ POST /api/charity/disburse/:id/proof - an UNRELATED ngo cannot upload proof (7 ms)
+    ✓ POST /api/charity/disburse/:id/proof - owning ngo uploads proof (15 ms)
+    ✓ GET /api/admin/milestones/pending - admin sees the milestone with submitted proof (5 ms)
+    ✓ POST /api/admin/milestones/:id/reject - a CHARITY cannot reject (RBAC) (4 ms)
+    ✓ POST /api/admin/milestones/:id/reject - admin rejects with a reason (8 ms)
+    ✓ POST /api/admin/milestones/:id/approve - cannot approve a rejected milestone (4 ms)
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ◈ secrets for agents [www.dotenvx.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+{"actorId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd","actorType":"USER","entityId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd","entityType":"profile","eventType":"NGO_ONBOARDED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"organisationName":"Test NGO","registrationNo":"REG123"},"requestId":null,"timestamp":"2026-09-14T16:18:38.594Z"}
+{"durationMs":11,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/onboard","requestId":"8b08192d-fc47-4c5c-8ced-453b1d783cfb","statusCode":200,"timestamp":"2026-09-14T16:18:38.595Z","userId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd"}
+{"actorId":"35730485-e014-487f-a0ca-70f925933dde","actorType":"USER","entityId":"35730485-e014-487f-a0ca-70f925933dde","entityType":"profile","eventType":"NGO_ONBOARDED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"organisationName":"New NGO","registrationNo":"NEW123"},"requestId":null,"timestamp":"2026-09-14T16:18:38.604Z"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/onboard","requestId":"8805739c-91e6-4ff4-9ae9-c242ba9bf591","statusCode":200,"timestamp":"2026-09-14T16:18:38.605Z","userId":"35730485-e014-487f-a0ca-70f925933dde"}
+{"actorId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd","actorType":"USER","entityId":"f691273a-4be4-4bef-a161-212ad18dac10","entityType":"campaign","eventType":"CAMPAIGN_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"targetAmount":50000,"title":"Save the Turtles"},"requestId":null,"timestamp":"2026-09-14T16:18:38.621Z"}
+{"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"0d86cc54-5333-453d-a282-a47af79e5fb6","statusCode":201,"timestamp":"2026-09-14T16:18:38.622Z","userId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd"}
+{"actorId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd","actorType":"USER","entityId":"f691273a-4be4-4bef-a161-212ad18dac10","entityType":"campaign","eventType":"CAMPAIGN_SUBMITTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"title":"Save the Turtles"},"requestId":null,"timestamp":"2026-09-14T16:18:38.630Z"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/f691273a-4be4-4bef-a161-212ad18dac10/submit","requestId":"1da2abdb-5d9b-4c30-9e6e-7798d02cd584","statusCode":200,"timestamp":"2026-09-14T16:18:38.631Z","userId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd"}
+{"actorId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd","actorType":"USER","entityId":"81f514a5-3877-4e62-88f8-73364e65d4ae","entityType":"cohort","eventType":"COHORT_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"campaignId":"f691273a-4be4-4bef-a161-212ad18dac10","name":"Turtle Rescuers"},"requestId":null,"timestamp":"2026-09-14T16:18:38.639Z"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/cohorts","requestId":"2ef9e486-4e27-4843-b630-c6212054a156","statusCode":201,"timestamp":"2026-09-14T16:18:38.640Z","userId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd"}
+{"actorId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd","actorType":"USER","entityId":"f28a669e-b95c-4910-9af7-d41546b4cc2c","entityType":"document","eventType":"DOCUMENT_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentType":"NGO_CERT","sha512HashSnippet":"hash_178"},"requestId":null,"timestamp":"2026-09-14T16:18:38.648Z"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/documents/upload","requestId":"c44df65e-fa17-45a1-af97-d546368c4618","statusCode":201,"timestamp":"2026-09-14T16:18:38.649Z","userId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd"}
+{"actorId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd","actorType":"USER","entityId":"81f514a5-3877-4e62-88f8-73364e65d4ae","entityType":"cohort","eventType":"COHORT_PROOF_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentId":"6f275993-e1c5-4fe1-bfd1-c35eca20ab21","sha512DocHash":"proof_hash_1789402718656_pxx1tce04k"},"requestId":null,"timestamp":"2026-09-14T16:18:38.658Z"}
+{"durationMs":7,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/cohorts/81f514a5-3877-4e62-88f8-73364e65d4ae/proof","requestId":"91536c4c-c938-4861-b1d0-254a25ddef21","statusCode":201,"timestamp":"2026-09-14T16:18:38.659Z","userId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd"}
+{"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/documents","requestId":"ffd5ea49-9b0a-4e0d-a13e-b1f338d4dc1d","statusCode":200,"timestamp":"2026-09-14T16:18:38.664Z","userId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd"}
+{"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/reports/fcra","requestId":"0e435361-0e78-4ea9-8cc3-a357e0bd6088","statusCode":200,"timestamp":"2026-09-14T16:18:38.670Z","userId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd"}
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/reports/80g","requestId":"522c0fa2-dde6-48f4-a0e1-088630c87241","statusCode":200,"timestamp":"2026-09-14T16:18:38.674Z","userId":"b6f6d93b-f57e-4cdb-83c1-b2424b3a68cd"}
+{"actorId":"9d67ac1a-f401-4327-bcf4-9442782d1da3","actorType":"USER","entityId":"9d67ac1a-f401-4327-bcf4-9442782d1da3","entityType":"profile","eventType":"NGO_ONBOARDED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"organisationName":"Aspiring NGO","registrationNo":"ASP123"},"requestId":null,"timestamp":"2026-09-14T16:18:38.688Z"}
+{"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/onboard","requestId":"b420365a-b374-4b63-9f8a-3f49e4a75dc1","statusCode":200,"timestamp":"2026-09-14T16:18:38.689Z","userId":"9d67ac1a-f401-4327-bcf4-9442782d1da3"}
+{"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"d99388ee-ca4a-4d8e-b45c-fca0a2ab16a1","statusCode":403,"timestamp":"2026-09-14T16:18:38.693Z","userId":"778e504b-4214-4098-80c1-a11170552050"}
+{"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/documents","requestId":"bb31e2b4-f711-478a-9019-45b1ea6f6005","statusCode":403,"timestamp":"2026-09-14T16:18:38.697Z","userId":"778e504b-4214-4098-80c1-a11170552050"}
+{"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/reports/fcra","requestId":"12bd06c8-28c1-4469-8258-179eb7779969","statusCode":403,"timestamp":"2026-09-14T16:18:38.700Z","userId":"778e504b-4214-4098-80c1-a11170552050"}
+{"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/documents/upload","requestId":"4926bdf5-3baf-4cef-aec8-7fac10517f6f","statusCode":403,"timestamp":"2026-09-14T16:18:38.704Z","userId":"778e504b-4214-4098-80c1-a11170552050"}
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/onboard","requestId":"f4298c6e-a7e7-464d-914a-abb6a4807476","statusCode":403,"timestamp":"2026-09-14T16:18:38.709Z","userId":"e7d0c43b-85a1-45af-96d6-3d89771696e6"}
+PASS tests/charity.test.ts
+  Charity API Integration Tests
+    ✓ POST /api/charity/onboard - update NGO details (30 ms)
+    ✓ POST /api/charity/campaigns - create a campaign (11 ms)
+    ✓ POST /api/charity/campaigns/:id/submit - submit campaign (9 ms)
+    ✓ POST /api/charity/cohorts - create cohort (9 ms)
+    ✓ POST /api/charity/documents/upload - upload file (9 ms)
+    ✓ POST /api/charity/cohorts/:id/proof - upload proof for cohort (10 ms)
+    ✓ GET /api/charity/documents - list documents (5 ms)
+    ✓ GET /api/charity/reports/fcra - FCRA report (6 ms)
+    ✓ GET /api/charity/reports/80g - 80G report (5 ms)
+  Charity API Role Enforcement
+    ✓ POST /api/charity/onboard - a plain DONOR CAN apply to become an NGO (8 ms)
+    ✓ POST /api/charity/campaigns - a DONOR who has NOT onboarded is rejected (4 ms)
+    ✓ GET /api/charity/documents - a DONOR who has NOT onboarded is rejected (3 ms)
+    ✓ GET /api/charity/reports/fcra - a DONOR who has NOT onboarded is rejected (3 ms)
+    ✓ POST /api/charity/documents/upload - a DONOR who has NOT onboarded is rejected (4 ms)
+    ✓ POST /api/charity/onboard - an ADMIN cannot onboard as an NGO (5 ms)
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+{"durationMs":9,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"50e7850d-f322-40a2-9ea7-0b14f196087b","statusCode":201,"timestamp":"2026-09-14T16:18:38.845Z","userId":"7a15af86-254a-439a-996a-2e3204c9189d"}
+{"actorId":"7a15af86-254a-439a-996a-2e3204c9189d","actorType":"USER","entityId":"bfb0c7fc-3b75-43a7-8d19-e0f373b0d852","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":250,"campaignId":"968462bb-eb91-49f1-8555-ef4c2c3b0975","ngoId":"3339db28-e1e4-45bd-8bd6-0076bf53307c","paymentMethod":"UPI","razorpayOrderId":"order_3fcbcac59ba8a3f480b5"},"requestId":null,"timestamp":"2026-09-14T16:18:38.852Z"}
+{"durationMs":9,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"f69adf54-9a1e-483b-b48c-a39dfce0d14e","statusCode":201,"timestamp":"2026-09-14T16:18:38.871Z","userId":"7a15af86-254a-439a-996a-2e3204c9189d"}
+{"actorId":"7a15af86-254a-439a-996a-2e3204c9189d","actorType":"USER","entityId":"deecc831-25fc-48d7-8366-95a619b0fb90","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":500,"campaignId":"968462bb-eb91-49f1-8555-ef4c2c3b0975","ngoId":"3339db28-e1e4-45bd-8bd6-0076bf53307c","paymentMethod":"UPI","razorpayOrderId":"order_af2818676a531c414be7"},"requestId":null,"timestamp":"2026-09-14T16:18:38.873Z"}
+{"durationMs":14,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/simulate-success","requestId":"1e5e9034-a468-4e12-a73d-b7096ef1245f","statusCode":200,"timestamp":"2026-09-14T16:18:38.888Z","userId":null}
+{"actorId":null,"actorType":"SYSTEM","entityId":"deecc831-25fc-48d7-8366-95a619b0fb90","entityType":"donation","eventType":"PAYMENT_SUCCESS","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":"500","donorId":"7a15af86-254a-439a-996a-2e3204c9189d","ngoId":"3339db28-e1e4-45bd-8bd6-0076bf53307c","razorpayOrderId":"order_af2818676a531c414be7","razorpayPaymentId":"pay_sim_deecc83125fc48"},"requestId":null,"timestamp":"2026-09-14T16:18:38.889Z"}
+{"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/attestations/pending","requestId":"f92962c6-a3a1-498a-8684-037b52bc3eb0","statusCode":200,"timestamp":"2026-09-14T16:18:38.897Z","userId":"3339db28-e1e4-45bd-8bd6-0076bf53307c"}
+
+ReferenceError: You are trying to `require` a file after the Jest environment has been torn down. From tests/simulation.test.ts.
+
+      at Object.httpAgentProvider (node_modules/@smithy/node-http-handler/dist-cjs/index.js:429:35)
+      at NodeHttpHandler.handle (node_modules/@smithy/node-http-handler/dist-cjs/index.js:277:55)
+      at node_modules/@aws-sdk/checksums/dist-cjs/submodules/flexible-checksums/index.js:378:20
+      at node_modules/@aws-sdk/middleware-sdk-s3/dist-cjs/submodules/s3/index.js:388:20
+      at node_modules/@smithy/core/dist-cjs/submodules/schema/index.js:19:26
+  console.error
+    Error uploading file to tax-receipts/receipts/deecc831-25fc-48d7-8366-95a619b0fb90/TI-CMU1G6EF-1789402718899.html: [TypeError: Cannot read properties of undefined (reading 'default')] {
+      '$metadata': { attempts: 1, totalRetryDelay: 0 }
+    }
+
+      50 |       console.error(`Error uploading file to ${this.bucketName}/${path}:`, error);
+      51 |       throw error;
+    > 52 |     }
+         |      ^
+      53 |   }
+      54 |
+      55 |   /**
+
+      at StorageService.uploadFile (src/services/storageService.ts:52:21)
+      at generateAndStoreReceipt (src/services/receiptService.ts:152:5)
+
+  console.error
+    [ReceiptService] Failed to generate receipt for donation deecc831-25fc-48d7-8366-95a619b0fb90 [TypeError: Cannot read properties of undefined (reading 'default')] {
+      '$metadata': { attempts: 1, totalRetryDelay: 0 }
+    }
+
+      168 |     return signedUrl;
+      169 |   } catch (err) {
+    > 170 |     console.error(`[ReceiptService] Failed to generate receipt for donation ${donationId}`, err);
+          |             ^
+      171 |     return null;
+      172 |   }
+      173 | };
+
+      at error (src/services/receiptService.ts:170:13)
+
+PASS tests/simulation.test.ts
+  Donation Webhook Simulation & Auto-Attestation Tests
+    ✓ POST /api/donor/donate should return id, orderId, and publicDonationId (27 ms)
+    ✓ POST /api/webhooks/simulate-success transitions INITIATED donation to SUCCESS and auto-creates RECEIPT attestation (38 ms)
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ◈ encrypted .env [www.dotenvx.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+{"actorId":null,"actorType":"SYSTEM","entityId":"deecc831-25fc-48d7-8366-95a619b0fb90","entityType":"donation","eventType":"RECEIPT_GENERATION_STARTED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"donationId":"deecc831-25fc-48d7-8366-95a619b0fb90"},"requestId":null,"timestamp":"2026-09-14T16:18:39.011Z"}
+{"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/ngos","requestId":"339fc02d-1811-464a-9232-1439339cfe7c","statusCode":200,"timestamp":"2026-09-14T16:18:39.039Z","userId":"c04e4058-56e4-4ac0-b611-7b2840140473"}
+{"actorId":"c04e4058-56e4-4ac0-b611-7b2840140473","actorType":"USER","entityId":"50261648-dd02-43dc-9345-e567217776c3","entityType":"profile","eventType":"NGO_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-14T16:18:39.051Z"}
+{"durationMs":10,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/ngos/50261648-dd02-43dc-9345-e567217776c3/approve","requestId":"cf58b09a-fcc2-48cb-b52f-c2f5f3a777b1","statusCode":200,"timestamp":"2026-09-14T16:18:39.052Z","userId":"c04e4058-56e4-4ac0-b611-7b2840140473"}
+{"actorId":"c04e4058-56e4-4ac0-b611-7b2840140473","actorType":"USER","entityId":"29493c1f-1149-47cd-a0b4-d1b8ffb9af54","entityType":"campaign","eventType":"CAMPAIGN_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-14T16:18:39.060Z"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/29493c1f-1149-47cd-a0b4-d1b8ffb9af54/approve","requestId":"a38134b7-bf1e-4473-97f2-fd381f6d18f1","statusCode":200,"timestamp":"2026-09-14T16:18:39.061Z","userId":"c04e4058-56e4-4ac0-b611-7b2840140473"}
+{"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/users","requestId":"824aff96-b140-4941-98b6-dc97f07e1cbb","statusCode":200,"timestamp":"2026-09-14T16:18:39.067Z","userId":"c04e4058-56e4-4ac0-b611-7b2840140473"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/audit-logs","requestId":"5d24d9ed-0b11-4cd6-8e3e-f6ee879e0e5a","statusCode":200,"timestamp":"2026-09-14T16:18:39.075Z","userId":"c04e4058-56e4-4ac0-b611-7b2840140473"}
+{"actorId":"c04e4058-56e4-4ac0-b611-7b2840140473","actorType":"USER","entityId":"e888e227-21fb-4ce6-874f-7181d5fe72af","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"legalBasis":"FCRA Act 2010","requestingBody":"Ministry of Home Affairs"},"requestId":null,"timestamp":"2026-09-14T16:18:39.083Z"}
+{"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests","requestId":"c2f717fa-5548-4da4-ad80-27ea0556a48c","statusCode":201,"timestamp":"2026-09-14T16:18:39.084Z","userId":"c04e4058-56e4-4ac0-b611-7b2840140473"}
+{"actorId":"e487801b-ad20-4907-a2fe-b573784732c1","actorType":"USER","entityId":"e1a85441-d158-47e0-9d38-087f052ba0d1","entityType":"document","eventType":"DOCUMENT_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentType":"NGO_CERT","sha512HashSnippet":"hash_178"},"requestId":null,"timestamp":"2026-09-14T16:18:39.094Z"}
+{"durationMs":7,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/documents/upload","requestId":"adc78754-f90e-4b30-bc9d-605c7c7677c3","statusCode":201,"timestamp":"2026-09-14T16:18:39.095Z","userId":"e487801b-ad20-4907-a2fe-b573784732c1"}
+{"actorId":"c04e4058-56e4-4ac0-b611-7b2840140473","actorType":"USER","entityId":"efdd3c8d-28a2-480c-be4b-44e9d09e7f95","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"legalBasis":"Section 133 of Income Tax Act","requestingBody":"Income Tax Department","targetUserId":"e487801b-ad20-4907-a2fe-b573784732c1"},"requestId":null,"timestamp":"2026-09-14T16:18:39.101Z"}
+{"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests","requestId":"bde19974-32c7-45f9-90cd-0dceda2224ca","statusCode":201,"timestamp":"2026-09-14T16:18:39.101Z","userId":"c04e4058-56e4-4ac0-b611-7b2840140473"}
+{"actorId":"c04e4058-56e4-4ac0-b611-7b2840140473","actorType":"USER","entityId":"efdd3c8d-28a2-480c-be4b-44e9d09e7f95","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_DOCUMENTS_HELD","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"count":1,"documentIds":["e1a85441-d158-47e0-9d38-087f052ba0d1"]},"requestId":null,"timestamp":"2026-09-14T16:18:39.111Z"}
+{"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests/efdd3c8d-28a2-480c-be4b-44e9d09e7f95/hold","requestId":"ac66bd6a-7aca-4eb7-a631-b10750800154","statusCode":200,"timestamp":"2026-09-14T16:18:39.112Z","userId":"c04e4058-56e4-4ac0-b611-7b2840140473"}
+{"actorId":"c04e4058-56e4-4ac0-b611-7b2840140473","actorType":"USER","entityId":"bbeecfa8-d95e-4b4a-a3df-ad8f14cf6e32","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"legalBasis":"FEMA 1999","requestingBody":"Enforcement Directorate","targetUserId":"196f9126-a5d4-4afd-9fe4-878143005db6"},"requestId":null,"timestamp":"2026-09-14T16:18:39.123Z"}
+{"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests","requestId":"1c31d1ab-ab17-4eb8-a65c-9c44d59cfe59","statusCode":201,"timestamp":"2026-09-14T16:18:39.124Z","userId":"c04e4058-56e4-4ac0-b611-7b2840140473"}
+{"actorId":"196f9126-a5d4-4afd-9fe4-878143005db6","actorType":"USER","entityId":"f88c6793-296f-4536-87c7-6f3944f5a2e9","entityType":"document","eventType":"DOCUMENT_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentType":"NGO_CERT","sha512HashSnippet":"hash_178"},"requestId":null,"timestamp":"2026-09-14T16:18:39.130Z"}
+{"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/documents/upload","requestId":"b6da9e72-d7d7-4289-8a0a-e133c1b097bf","statusCode":201,"timestamp":"2026-09-14T16:18:39.131Z","userId":"196f9126-a5d4-4afd-9fe4-878143005db6"}
+{"actorId":"c04e4058-56e4-4ac0-b611-7b2840140473","actorType":"USER","entityId":"bbeecfa8-d95e-4b4a-a3df-ad8f14cf6e32","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_DOCUMENTS_HELD","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"count":1,"documentIds":["f88c6793-296f-4536-87c7-6f3944f5a2e9"]},"requestId":null,"timestamp":"2026-09-14T16:18:39.140Z"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests/bbeecfa8-d95e-4b4a-a3df-ad8f14cf6e32/hold","requestId":"27e39569-04b1-4600-9ca1-ba646d1aed44","statusCode":200,"timestamp":"2026-09-14T16:18:39.141Z","userId":"c04e4058-56e4-4ac0-b611-7b2840140473"}
+{"actorId":"c04e4058-56e4-4ac0-b611-7b2840140473","actorType":"USER","entityId":"bbeecfa8-d95e-4b4a-a3df-ad8f14cf6e32","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_DOCUMENTS_EXPORTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentCount":1},"requestId":null,"timestamp":"2026-09-14T16:18:39.148Z"}
+{"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests/bbeecfa8-d95e-4b4a-a3df-ad8f14cf6e32/export","requestId":"270b3d95-ba2c-4e4a-b07d-a3558ca6ad5a","statusCode":200,"timestamp":"2026-09-14T16:18:39.149Z","userId":"c04e4058-56e4-4ac0-b611-7b2840140473"}
+PASS tests/admin.test.ts
+  Admin API Integration Tests
+    ✓ GET /api/admin/ngos - should list NGOs (8 ms)
+    ✓ POST /api/admin/ngos/:id/approve - should approve NGO (12 ms)
+    ✓ POST /api/admin/campaigns/:id/approve - should approve campaign (9 ms)
+    ✓ GET /api/admin/users - should list users (6 ms)
+    ✓ GET /api/admin/audit-logs - should fetch audit logs (8 ms)
+    ✓ POST /api/admin/government-requests - should create government request (8 ms)
+    ✓ POST /api/admin/government-requests/:id/hold - should place legal hold on documents (33 ms)
+    ✓ POST /api/admin/government-requests/:id/export - should export held documents (34 ms)
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+{"actorId":"1fc1ad26-0550-4470-b5de-d9e56e78e9f2","actorType":"USER","entityId":"e859c6b0-fe64-4d7c-ab46-2f6377d5b2a0","entityType":"disbursement","eventType":"DISBURSEMENT_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"amountInr":6000,"campaignId":"5881e57a-811a-4aed-b2bd-727be8c52d67"},"requestId":null,"timestamp":"2026-09-14T16:18:39.288Z"}
+{"durationMs":7,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disburse","requestId":"028e80fe-d5c3-4282-abfd-8ac1701f0b85","statusCode":201,"timestamp":"2026-09-14T16:18:39.289Z","userId":"1fc1ad26-0550-4470-b5de-d9e56e78e9f2"}
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/disbursements","requestId":"69d0a929-d6e2-4588-aaad-4a472dff03bc","statusCode":200,"timestamp":"2026-09-14T16:18:39.294Z","userId":"1fc1ad26-0550-4470-b5de-d9e56e78e9f2"}
+{"durationMs":7,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/disbursements","requestId":"dc33d603-7e19-45ab-a7ee-a34b4ad83088","statusCode":200,"timestamp":"2026-09-14T16:18:39.304Z","userId":"10b91580-7b21-4679-b137-a965cf96c3d8"}
+{"actorId":null,"actorType":"SYSTEM","entityId":"8166e56e-e8bb-4741-8fad-01c4f6bbe46a","entityType":"donation","eventType":"DONATION_ALLOCATED","govRequestId":null,"ip":"system","level":"info","message":"Security Event","metadata":{"amount":"5000","cohortId":"c4d875a1-ee68-4fa4-924a-6c7aae9f57ab","donationId":"8166e56e-e8bb-4741-8fad-01c4f6bbe46a","donorId":"10b91580-7b21-4679-b137-a965cf96c3d8","ngoId":"1fc1ad26-0550-4470-b5de-d9e56e78e9f2"},"requestId":null,"timestamp":"2026-09-14T16:18:39.323Z"}
+{"actorId":null,"actorType":"SYSTEM","entityId":"c25598ec-f2bc-4392-a8ff-18827a5810dd","entityType":"donation","eventType":"DONATION_ALLOCATED","govRequestId":null,"ip":"system","level":"info","message":"Security Event","metadata":{"amount":"5000","cohortId":"c4d875a1-ee68-4fa4-924a-6c7aae9f57ab","donationId":"c25598ec-f2bc-4392-a8ff-18827a5810dd","donorId":"10b91580-7b21-4679-b137-a965cf96c3d8","ngoId":"1fc1ad26-0550-4470-b5de-d9e56e78e9f2"},"requestId":null,"timestamp":"2026-09-14T16:18:39.327Z"}
+{"actorId":"10b91580-7b21-4679-b137-a965cf96c3d8","actorType":"USER","entityId":"e859c6b0-fe64-4d7c-ab46-2f6377d5b2a0","entityType":"disbursement","eventType":"DISBURSEMENT_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"amountInr":6000,"campaignId":"5881e57a-811a-4aed-b2bd-727be8c52d67"},"requestId":null,"timestamp":"2026-09-14T16:18:39.331Z"}
+{"durationMs":25,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disburse/e859c6b0-fe64-4d7c-ab46-2f6377d5b2a0/approve","requestId":"e962fb0b-c1e1-4cd6-85a6-4647e747dd38","statusCode":200,"timestamp":"2026-09-14T16:18:39.331Z","userId":"10b91580-7b21-4679-b137-a965cf96c3d8"}
+PASS tests/disbursement.test.ts
+  Disbursement API Integration Tests
+    ✓ POST /api/charity/disburse - create a disbursement (11 ms)
+    ✓ GET /api/charity/disbursements - list disbursements for NGO (5 ms)
+    ✓ GET /api/admin/disbursements - list all disbursements (Admin) (9 ms)
+    ✓ POST /api/admin/disburse/:id/approve - approve disbursement (29 ms)
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ⌘ suppress logs { quiet: true }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+{"actorId":"382e98d7-11b6-448c-8ecd-16ff726dd661","actorType":"USER","entityId":"fcaf2e69-7dcc-4ac0-b711-b04043dbcccd","entityType":"campaign","eventType":"CAMPAIGN_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"targetAmount":1000,"title":"Test Beneficiary"},"requestId":null,"timestamp":"2026-09-14T16:18:39.472Z"}
+{"durationMs":13,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"b688601c-0b85-4a80-bc3a-4a275e3b8b9d","statusCode":201,"timestamp":"2026-09-14T16:18:39.474Z","userId":"382e98d7-11b6-448c-8ecd-16ff726dd661"}
+{"actorId":"382e98d7-11b6-448c-8ecd-16ff726dd661","actorType":"USER","entityId":"34f47856-c6be-4c9e-b4ef-74112bc98edc","entityType":"campaign","eventType":"CAMPAIGN_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"targetAmount":1000,"title":"Test Leaks 1"},"requestId":null,"timestamp":"2026-09-14T16:18:39.487Z"}
+{"durationMs":7,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"f4891c53-1379-4a3c-a4a7-bd4cec1dc1e0","statusCode":201,"timestamp":"2026-09-14T16:18:39.488Z","userId":"382e98d7-11b6-448c-8ecd-16ff726dd661"}
+{"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/campaigns","requestId":"7d92beb7-a5a1-4cf0-8a19-f6e4b6b1f0e4","statusCode":200,"timestamp":"2026-09-14T16:18:39.500Z","userId":"382e98d7-11b6-448c-8ecd-16ff726dd661"}
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/campaigns/fcaf2e69-7dcc-4ac0-b711-b04043dbcccd/beneficiary-id","requestId":"e948b575-652c-47eb-90d7-332fa5a50c28","statusCode":200,"timestamp":"2026-09-14T16:18:39.505Z","userId":"382e98d7-11b6-448c-8ecd-16ff726dd661"}
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/campaigns/fcaf2e69-7dcc-4ac0-b711-b04043dbcccd/beneficiary-id","requestId":"65d58792-7534-4f94-a713-d33a2aebbedf","statusCode":404,"timestamp":"2026-09-14T16:18:39.510Z","userId":"e723cbc1-7da8-4277-a47b-82a52182f2b5"}
+{"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/campaigns/fcaf2e69-7dcc-4ac0-b711-b04043dbcccd/beneficiary-id","requestId":"04b364f5-345f-48c3-97bd-2d91a7e718ef","statusCode":403,"timestamp":"2026-09-14T16:18:39.514Z","userId":"ccc9263e-d2f1-4b22-bb70-610f31657a79"}
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/campaigns/fcaf2e69-7dcc-4ac0-b711-b04043dbcccd/beneficiary-id","requestId":"34d0abd6-2c4b-4e7d-abcb-1432f3d93b4b","statusCode":403,"timestamp":"2026-09-14T16:18:39.518Z","userId":"d51aefce-ff62-44c0-a878-e0a4bae7d253"}
+PASS tests/beneficiary-id.test.ts
+  Beneficiary ID Feature
+    HashService Encryption/Decryption Round-trip
+      ✓ encrypting and decrypting a beneficiary ID returns the original string (1 ms)
+    Campaign Response Stripping
+      ✓ beneficiaryIdEncrypted is never present in the response body of POST /api/charity/campaigns (16 ms)
+      ✓ beneficiaryIdEncrypted is never present in GET /api/charity/campaigns (6 ms)
+    GET /api/charity/campaigns/:id/beneficiary-id
+      ✓ returns the decrypted ID for the owning NGO (5 ms)
+      ✓ returns 404/access denied for a different NGO (5 ms)
+      ✓ returns 403 for ADMIN role (4 ms)
+      ✓ returns 403 for DONOR role (4 ms)
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ⌘ override existing { override: true }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+{"actorId":"8ea7862a-e6fa-4873-92a8-243d8ae2be28","actorType":"USER","entityId":"de1537e6-8d95-478e-b05f-fbdb6a04ff96","entityType":"disbursement","eventType":"DISBURSEMENT_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"amountInr":1000,"campaignId":"2f3f2d1c-8451-4ec8-9b55-82d20d44d24a"},"requestId":null,"timestamp":"2026-09-14T16:18:39.670Z"}
+{"durationMs":13,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disburse/de1537e6-8d95-478e-b05f-fbdb6a04ff96/approve","requestId":"5e1d4d73-a883-4c7d-9bc0-9d9c25e3175f","statusCode":200,"timestamp":"2026-09-14T16:18:39.671Z","userId":"8ea7862a-e6fa-4873-92a8-243d8ae2be28"}
+PASS tests/disbursement-recording-blockchain.test.ts
+  Disbursement Recording on Blockchain
+    ✓ should record a disbursement on-chain when approved (17 ms)
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ⌘ suppress logs { quiet: true }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/documents/fa54bc06-4ece-49f0-a258-8750b559536f/verify","requestId":"8ddba81d-1ea3-41c0-b24d-760897e39855","statusCode":200,"timestamp":"2026-09-14T16:18:39.802Z","userId":null}
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/documents/00000000-0000-0000-0000-000000000000/verify","requestId":"2b06caea-46d0-46b1-9ef2-5346befe52f9","statusCode":404,"timestamp":"2026-09-14T16:18:39.814Z","userId":null}
+{"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/documents/fce1f2df-8ae0-410b-98bd-fb2aae374383/verify","requestId":"a5d96294-17b2-488e-97f6-9a8521d74702","statusCode":400,"timestamp":"2026-09-14T16:18:39.818Z","userId":null}
+PASS tests/document-verification-blockchain.test.ts
+  Document Hash Verification Endpoint
+    ✓ should verify a document's hash against the on-chain record (13 ms)
+    ✓ should return 404 for non-existent document (4 ms)
+    ✓ should return 400 for non-COHORT_PROOF document (4 ms)
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ◈ encrypted .env [www.dotenvx.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+{"actorId":"b54347d4-4a9e-4717-8a04-84253e7c523d","actorType":"USER","entityId":"e891947f-acba-49d2-a483-23a24494188e","entityType":"cohort","eventType":"COHORT_PROOF_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentId":"97b13330-25af-453e-8f2a-475b4fe3c697","sha512DocHash":"proof_hash_1789402719958_begbnny0lpr"},"requestId":null,"timestamp":"2026-09-14T16:18:39.962Z"}
+{"durationMs":10,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/cohorts/e891947f-acba-49d2-a483-23a24494188e/proof","requestId":"abdd37bf-993d-4178-8c8b-b29b66d01194","statusCode":201,"timestamp":"2026-09-14T16:18:39.963Z","userId":"b54347d4-4a9e-4717-8a04-84253e7c523d"}
+PASS tests/cohort-registration-blockchain.test.ts
+  Cohort Registration on Blockchain
+    ✓ should register a cohort on-chain when proof is uploaded (18 ms)
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ⌁ auth for agents [www.vestauth.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+{"actorId":"d849ccc1-c75e-450c-b0a2-bf1e0d83e912","actorType":"USER","entityId":"b829012a-bf1d-4767-aca7-be1c952dd4a1","entityType":"profile","eventType":"NGO_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-14T16:18:40.097Z"}
+{"durationMs":16,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/ngos/b829012a-bf1d-4767-aca7-be1c952dd4a1/approve","requestId":"3a589080-a811-4c45-8df1-b253d1bf6149","statusCode":200,"timestamp":"2026-09-14T16:18:40.099Z","userId":"d849ccc1-c75e-450c-b0a2-bf1e0d83e912"}
+{"actorId":"d849ccc1-c75e-450c-b0a2-bf1e0d83e912","actorType":"USER","entityId":"b829012a-bf1d-4767-aca7-be1c952dd4a1","entityType":"profile","eventType":"NGO_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-14T16:18:40.105Z"}
+{"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/ngos/b829012a-bf1d-4767-aca7-be1c952dd4a1/approve","requestId":"e5316273-c026-4750-9ae2-1629a09fde09","statusCode":200,"timestamp":"2026-09-14T16:18:40.106Z","userId":"d849ccc1-c75e-450c-b0a2-bf1e0d83e912"}
+PASS tests/ngo-registration-blockchain.test.ts
+  NGO Registration on Blockchain
+    ✓ should register an NGO on-chain when approved (19 ms)
+    ✓ should handle duplicate NGO registration gracefully (7 ms)
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ⌁ auth for agents [www.vestauth.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+PASS tests/donationServiceSecrets.test.ts
+  verifyRazorpaySignature configuration
+    ✓ rejects signature verification without an explicit secret (3 ms)
+    ✓ uses the configured secret for signature verification (1 ms)
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+PASS tests/blockchainRetryProcessor.test.ts
+  getRetryEligibilityFilter
+    ✓ requires both an available retry count and that retry count's backoff interval
+    ✓ does not create an eligibility branch for exhausted retry counts (1 ms)
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ⌁ auth for agents [www.vestauth.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+PASS tests/blockchainService.test.ts
+  BlockchainService & HashService Unit Tests
+    HashService
+      ✓ computes consistent SHA-512 hash (1 ms)
+      ✓ computes consistent HMAC-SHA-512 hash for donor ID
+    BlockchainService PDA & Helper Logic
+      ✓ instantiates cleanly with keypair path (1 ms)
+      ✓ instantiates cleanly with keypair bytes (1 ms)
+      ✓ generates correct explorer URLs
+      ✓ correctly derives program address seeds for donation PDAs (<=32 bytes) (1 ms)
+      ✓ verifies donation integrity hash matches off-chain computed hash (1 ms)
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ◈ encrypted .env [www.dotenvx.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+PASS tests/envValidator.test.ts
+  validateEnvironment
+    ✓ fails fast in production when required secrets are missing (1 ms)
+    ✓ accepts production configuration with all required secrets
+    ✓ does not require production secrets outside production (1 ms)
+    ✓ rejects a missing security-sensitive environment value
+    ✓ returns a configured security-sensitive environment value
+
+  console.log
+    ◇ injected env (11) from .env.test // tip: ⌘ enable debugging { debug: true }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+PASS tests/governmentRequestStatus.test.ts
+  BUG-P2-01 — GovernmentRequestStatus enum
+    ✓ exports GovernmentRequestStatus from generated client
+    ✓ has all four required enum values (1 ms)
+    ✓ has exactly four values (no undocumented extras)
+    ✓ enum is consistent with the initial migration default 'OPEN'
+    ✓ type-only check: GovernmentRequestStatus values are all strings
+
+Test Suites: 16 passed, 16 total
+Tests:       108 passed, 108 total
+Snapshots:   0 total
+Time:        3.268 s
+Ran all test suites.

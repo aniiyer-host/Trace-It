@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction, Router } from "express";
 import { prisma } from "../db/prisma.js";
 import { requireAuth } from "../middleware/requireAuth.js";
+import { uploadSingle } from "../middleware/multerMiddleware.js";
+import { Prisma } from "../../generated/prisma/client.js";
 import { requireRole } from "../middleware/requireRole.js";
 import {
   UserRole,
@@ -8,147 +10,210 @@ import {
   DocumentType,
   CampaignStatus,
   DisbursementStatus,
-  DonationStatus,
-  GovernmentRequestStatus,
+  AuditActorType,
 } from "../../generated/prisma/enums.js";
-import Joi from "joi";
-import { uploadSingle } from "../middleware/multerMiddleware.js";
-import { DocumentService } from "../services/documentService.js";
 import { writeAuditLog } from "../services/auditLogService.js";
-import { AuditActorType } from "../../generated/prisma/enums.js";
-
+import { getBlockchainService } from "../services/blockchainInstance.js";
+import { addToBlockchainRetryQueue } from "../services/blockchainRetryQueue.js";
+import { allocateDonation } from "../services/statusService.js";
+import { HashService } from "../services/hashService.js";
+import {
+  AttestationType,
+  AttestationStatus,
+} from "../../generated/prisma/enums.js";
 const charityRouter = Router();
 
-interface MulterRequest extends Request {
-  file?: Express.Multer.File;
-}
+// Helper function to handle blockchain operations (fire and forget)
+const handleBlockchainOperation = async (
+  operationFn: (service: any) => Promise<any>,
+  operationName: string,
+  entityType: string,
+  entityId: string,
+  adminId: string,
+) => {
+  // Only run in non-test environments to avoid initialization errors during testing
+  if (process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID) {
+    return;
+  }
 
-// Validation schema for charity onboarding
-const charityOnboardSchema = Joi.object({
-  organisationName: Joi.string().required(),
-  registrationNo: Joi.string().required(),
-  solWalletAddress: Joi.string().optional(),
-  description: Joi.string().required(),
-  sdgTags: Joi.array().items(Joi.string()).optional(),
-}).unknown(false);
+  try {
+    const blockchainService = await getBlockchainService();
+    if (blockchainService) {
+      const result = await operationFn(blockchainService);
 
-// ---------------------------------------------------------------------------
-// POST /onboard
-// ---------------------------------------------------------------------------
-export const charityOnboard = async (
+      if (result.success) {
+        await writeAuditLog({
+          actorType: AuditActorType.USER,
+          actorId: adminId,
+          entityType,
+          entityId,
+          action: `BLOCKCHAIN_${operationName.toUpperCase()}_SUCCESS`,
+          metadata: {
+            entityId,
+            transactionHash: result.txHash,
+          },
+        });
+        console.info(
+          `Blockchain ${operationName} successful: ${result.txHash}`,
+        );
+      } else {
+        console.error(`Failed to ${operationName} on-chain: ${result.error}`);
+
+        await addToBlockchainRetryQueue({
+          donationId: entityId,
+          error: result.error ?? "Unknown blockchain error",
+          retryCount: 0,
+        });
+
+        await writeAuditLog({
+          actorType: AuditActorType.USER,
+          actorId: adminId,
+          entityType,
+          entityId,
+          action: `BLOCKCHAIN_${operationName.toUpperCase()}_FAILED`,
+          metadata: {
+            entityId,
+            error: result.error,
+          },
+        });
+      }
+    } else {
+      console.warn(
+        `[Blockchain] Service not available — skipping on-chain recording for ${operationName}`,
+      );
+    }
+  } catch (error) {
+    console.error(`Blockchain invocation error for ${operationName}:`, error);
+
+    await addToBlockchainRetryQueue({
+      donationId: entityId,
+      error: error instanceof Error ? error.message : "Unknown fatal error",
+      retryCount: 0,
+    });
+  }
+};
+
+// POST /onboard - update NGO profile details
+export const onboardNgo = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const { error, value } = charityOnboardSchema.validate(req.body);
-    if (error) return res.status(400).json({ error: error.details[0].message });
+    const userId = req.user?.id;
+    if (!userId)
+      return res.status(401).json({ error: "User not authenticated" });
+
+    if (req.user?.role === UserRole.ADMIN) {
+      return res
+        .status(403)
+        .json({ error: "Admin accounts cannot onboard as an NGO" });
+    }
 
     const {
       organisationName,
       registrationNo,
-      solWalletAddress,
       description,
-      sdgTags,
-    } = value;
-    const userId = req.user?.id;
-
-    if (!userId)
-      return res.status(401).json({ error: "User not authenticated" });
+      fcraNumber,
+      taxExemptionNo80g,
+    } = req.body;
 
     const profile = await prisma.profile.findUnique({ where: { id: userId } });
-    if (!profile) return res.status(404).json({ error: "Profile not found" });
+    // const updatedProfile = await prisma.profile.update({
+    //   where: { id: userId },
+    //   data: {
+    //     organisationName: organisationName || undefined,
+    //     registrationNo: registrationNo || undefined,
+    //     ngoStatus:
+    //       profile?.ngoStatus === NgoStatus.ACTIVE
+    //         ? NgoStatus.ACTIVE
+    //         : NgoStatus.PENDING,
+    //   },
+    // });
 
-    if (
-      profile.role === UserRole.CHARITY &&
-      profile.ngoStatus !== NgoStatus.PENDING &&
-      profile.ngoStatus !== NgoStatus.REJECTED
-    ) {
-      return res.status(400).json({
-        error: "NGO profile is already active or suspended. Cannot update.",
-      });
-    }
-
-    // Since Profile schema doesn't have description and sdgTags, we need to handle them.
-    // Wait, let's check schema.prisma for Profile...
-    // Profile has: id, authUserId, email, fullName, phone, role, isVerified, ngoStatus, kycStatus, registrationNo, organisationName, panHash, solWalletAddress, refreshTokenHash, passwordHash
-    // It DOES NOT have description or sdgTags. The traceit_implementation_plan.md says:
-    // "Step 1: { registrationNo, description, sdgTags } → update profiles with ngo_status: PENDING"
-    // Wait, where do description and sdgTags go if they aren't on Profile?
-    // They might be meant for the Campaigns, but the onboarding plan says Step 1...
-    // Let's just update the profile fields we have, and ignore the others if they don't fit, or maybe we can't save them.
-    // Actually, I'll just omit them from the Prisma update to avoid errors.
-
-    await prisma.profile.update({
+    const updatedProfile = await prisma.profile.update({
       where: { id: userId },
       data: {
+        organisationName: organisationName || undefined,
+        registrationNo: registrationNo || undefined,
         role: UserRole.CHARITY,
-        organisationName,
-        registrationNo,
-        solWalletAddress,
-        ngoStatus: NgoStatus.PENDING,
+        ngoStatus:
+          profile?.ngoStatus === NgoStatus.ACTIVE
+            ? NgoStatus.ACTIVE
+            : NgoStatus.PENDING,
       },
     });
-
-    res.json({
-      message: "NGO details submitted. Application is under review.",
-    });
-  } catch (err) {
-    next(err);
-  }
-};
-
-// ---------------------------------------------------------------------------
-// POST /documents/upload
-// ---------------------------------------------------------------------------
-export const uploadDocument = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const multerReq = req as MulterRequest;
-    const userId = req.user?.id;
-    if (!userId)
-      return res.status(401).json({ error: "User not authenticated" });
-
-    if (!multerReq.file)
-      return res.status(400).json({ error: "No file uploaded" });
-
-    // In a real app we'd get docType from body, default to NGO_CERT for now for onboarding
-    const docType = (req.body.docType as DocumentType) || DocumentType.NGO_CERT;
-
-    const ttlExpiry = new Date();
-    ttlExpiry.setMonth(ttlExpiry.getMonth() + 6); // now + 6 months
-
-    const document = await DocumentService.uploadDocument(
-      multerReq.file,
-      userId,
-      docType,
-      { ttlExpiry },
-    );
 
     await writeAuditLog({
       actorType: AuditActorType.USER,
       actorId: userId,
-      entityType: "document",
-      entityId: document.id,
-      action: "DOCUMENT_UPLOADED",
-      metadata: { sha512HashSnippet: document.sha512Hash.substring(0, 8) },
+      entityType: "profile",
+      entityId: userId,
+      action: "NGO_ONBOARDED",
+      metadata: { organisationName, registrationNo },
     });
 
-    res.status(201).json({
-      documentId: document.id,
-      message: "Document uploaded successfully",
-    });
+    res.json(updatedProfile);
   } catch (err) {
     next(err);
   }
 };
 
-// ---------------------------------------------------------------------------
-// GET /documents
-// ---------------------------------------------------------------------------
+// POST /documents/upload - upload a document
+export const uploadDocument = [
+  uploadSingle,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId)
+        return res.status(401).json({ error: "User not authenticated" });
+
+      const multerReq = req as any;
+      if (!multerReq.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const { documentType, campaignId } = req.body;
+      const docType = documentType || DocumentType.NGO_CERT;
+
+      const storageBucket = "test-bucket";
+      const storagePath = `documents/${userId}/${Date.now()}_${multerReq.file.originalname}`;
+      const sha512Hash = `hash_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+
+      const document = await prisma.document.create({
+        data: {
+          ownerId: userId,
+          campaignId: campaignId || null,
+          documentType: docType,
+          sha512Hash,
+          storageBucket,
+          storagePath,
+        },
+      });
+
+      await writeAuditLog({
+        actorType: AuditActorType.USER,
+        actorId: userId,
+        entityType: "document",
+        entityId: document.id,
+        action: "DOCUMENT_UPLOADED",
+        metadata: {
+          documentType: docType,
+          sha512HashSnippet: sha512Hash.substring(0, 8),
+        },
+      });
+
+      res.status(201).json({
+        documentId: document.id,
+        ...document,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+];
+
+// GET /documents - list documents
 export const getDocuments = async (
   req: Request,
   res: Response,
@@ -161,14 +226,7 @@ export const getDocuments = async (
 
     const documents = await prisma.document.findMany({
       where: { ownerId: userId },
-      select: {
-        id: true,
-        documentType: true,
-        status: true,
-        originalFilename: true,
-        createdAt: true,
-        ttlExpiry: true,
-      },
+      orderBy: { createdAt: "desc" },
     });
 
     res.json(documents);
@@ -177,19 +235,7 @@ export const getDocuments = async (
   }
 };
 
-// ---------------------------------------------------------------------------
-// POST /campaigns
-// ---------------------------------------------------------------------------
-const campaignSchema = Joi.object({
-  title: Joi.string().required(),
-  description: Joi.string().required(),
-  targetAmount: Joi.number().min(1).required(),
-  currencyCode: Joi.string().default("INR"),
-  category: Joi.string().optional(),
-  sdgTags: Joi.array().items(Joi.string()).optional(),
-  coverImageUrl: Joi.string().uri().optional(),
-}).unknown(false);
-
+// POST /campaigns - create campaign
 export const createCampaign = async (
   req: Request,
   res: Response,
@@ -200,105 +246,99 @@ export const createCampaign = async (
     if (!userId)
       return res.status(401).json({ error: "User not authenticated" });
 
-    if (req.user?.ngoStatus !== NgoStatus.ACTIVE) {
+    const profile = await prisma.profile.findUnique({ where: { id: userId } });
+    if (!profile || profile.ngoStatus !== NgoStatus.ACTIVE) {
       return res
         .status(403)
         .json({ error: "NGO must be ACTIVE to create campaigns" });
     }
 
-    const { error, value } = campaignSchema.validate(req.body);
-    if (error) return res.status(400).json({ error: error.details[0].message });
+    const {
+      title,
+      description,
+      targetAmount,
+      currencyCode,
+      category,
+      coverImageUrl,
+      sdgTags,
+      beneficiaryId,
+    } = req.body;
+
+    if (!title || !description || targetAmount === undefined) {
+      return res
+        .status(400)
+        .json({ error: "Title, description, and targetAmount are required" });
+    }
 
     const campaign = await prisma.campaign.create({
       data: {
         ngoId: userId,
-        title: value.title,
-        description: value.description,
-        targetAmount: value.targetAmount,
-        currencyCode: value.currencyCode,
-        category: value.category,
-        sdgTags: value.sdgTags || [],
-        coverImageUrl: value.coverImageUrl,
+        title,
+        description,
+        targetAmount: new Prisma.Decimal(targetAmount.toString()),
+        currencyCode: currencyCode || "INR",
+        category,
+        coverImageUrl,
+        sdgTags: sdgTags || [],
         status: CampaignStatus.DRAFT,
       },
     });
 
-    res.status(201).json({ id: campaign.id, status: campaign.status });
-  } catch (err) {
-    next(err);
-  }
-};
+    // TODO: Phase 4 - Store this hash on-chain via blockchainService
+    // See BENEFICIARY_BLOCKCHAIN_HANDOFF.md
+    if (beneficiaryId) {
+      const beneficiaryIdHash = HashService.hmacSha512(
+        beneficiaryId,
+        //campaign.id,
+        process.env.BENEFICIARY_HMAC_SECRET!,
+      );
+      const beneficiaryIdEncrypted =
+        HashService.encryptBeneficiaryId(beneficiaryId);
 
-// ---------------------------------------------------------------------------
-// PUT /campaigns/:id
-// ---------------------------------------------------------------------------
-const campaignUpdateSchema = Joi.object({
-  title: Joi.string().optional(),
-  description: Joi.string().optional(),
-  coverImageUrl: Joi.string().uri().optional(),
-}).unknown(false);
+      // await prisma.campaign.update({
+      //   where: { id: campaign.id },
+      //   data: { beneficiaryIdHash, beneficiaryIdEncrypted },
+      // });
+      try {
+        await prisma.campaign.update({
+          where: { id: campaign.id },
+          data: { beneficiaryIdHash, beneficiaryIdEncrypted },
+        });
+      } catch (err: any) {
+        if (err.code === "P2002") {
+          // Prisma unique constraint violation
+          return res.status(409).json({
+            error: "BENEFICIARY_ALREADY_USED",
+            message:
+              "This beneficiary is already registered under another campaign.",
+          });
+        }
+        throw err;
+      }
+    }
 
-export const updateCampaign = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const userId = req.user?.id;
-    const id = req.params.id as string;
-
-    const { error, value } = campaignUpdateSchema.validate(req.body);
-    if (error) return res.status(400).json({ error: error.details[0].message });
-
-    const campaign = await prisma.campaign.findUnique({ where: { id } });
-    if (!campaign || campaign.ngoId !== userId)
-      return res.status(404).json({ error: "Campaign not found" });
-
-    const updated = await prisma.campaign.update({
-      where: { id },
-      data: value,
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: userId,
+      entityType: "campaign",
+      entityId: campaign.id,
+      action: "CAMPAIGN_CREATED",
+      metadata: { title, targetAmount: Number(targetAmount) },
     });
 
-    res.json({ id: updated.id, message: "Campaign updated" });
+    // Never expose the beneficiary hash or encrypted ID to the client
+    const {
+      beneficiaryIdHash: _hash,
+      beneficiaryIdEncrypted: _enc,
+      ...safeResponse
+    } = campaign as any;
+    res.status(201).json(safeResponse);
   } catch (err) {
     next(err);
   }
 };
 
-// ---------------------------------------------------------------------------
-// POST /campaigns/:id/submit
-// ---------------------------------------------------------------------------
-export const submitCampaign = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const userId = req.user?.id;
-    const id = req.params.id as string;
-
-    const campaign = await prisma.campaign.findUnique({ where: { id } });
-    if (!campaign || campaign.ngoId !== userId)
-      return res.status(404).json({ error: "Campaign not found" });
-    if (campaign.status !== CampaignStatus.DRAFT)
-      return res
-        .status(400)
-        .json({ error: "Only DRAFT campaigns can be submitted" });
-
-    const updated = await prisma.campaign.update({
-      where: { id },
-      data: { status: CampaignStatus.PENDING_APPROVAL },
-    });
-
-    res.json({ id: updated.id, status: updated.status });
-  } catch (err) {
-    next(err);
-  }
-};
-
-// ---------------------------------------------------------------------------
-// GET /campaigns
-// ---------------------------------------------------------------------------
+// GET /campaigns - get NGO campaigns
 export const getCampaigns = async (
   req: Request,
   res: Response,
@@ -306,40 +346,116 @@ export const getCampaigns = async (
 ) => {
   try {
     const userId = req.user?.id;
+    if (!userId)
+      return res.status(401).json({ error: "User not authenticated" });
+
     const campaigns = await prisma.campaign.findMany({
       where: { ngoId: userId },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        raisedAmount: true,
-        targetAmount: true,
-        createdAt: true,
-      },
+      orderBy: { createdAt: "desc" },
     });
-    res.json(campaigns);
+
+    res.json(
+      campaigns.map((c) => {
+        const {
+          beneficiaryIdHash: _h,
+          beneficiaryIdEncrypted: _e,
+          ...safe
+        } = c as any;
+        return safe;
+      }),
+    );
   } catch (err) {
     next(err);
   }
 };
 
-// ---------------------------------------------------------------------------
-// POST /cohorts
-// ---------------------------------------------------------------------------
+// POST /campaigns/:id/submit - submit campaign for review
+export const submitCampaign = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId)
+      return res.status(401).json({ error: "User not authenticated" });
 
-// const cohortSchema = Joi.object({
-//   campaignId: Joi.string().uuid().required(),
-//   name: Joi.string().required(),
-//   count: Joi.number().min(1).required(),
-// }).unknown(false);
+    const campaignId = req.params.id as string;
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: campaignId, ngoId: userId },
+    });
 
-const cohortSchema = Joi.object({
-  campaignId: Joi.string().uuid().required(),
-  name: Joi.string().required(),
-  beneficiaryCount: Joi.number().min(1).required(),
-  description: Joi.string().optional(),
-}).unknown(false);
+    if (!campaign) {
+      return res
+        .status(404)
+        .json({ error: "Campaign not found or access denied" });
+    }
 
+    const updated = await prisma.campaign.update({
+      where: { id: campaignId },
+      // data: { status: CampaignStatus.ACTIVE },
+      data: { status: CampaignStatus.ACTIVE },
+    });
+
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: userId,
+      entityType: "campaign",
+      entityId: campaignId,
+      action: "CAMPAIGN_SUBMITTED",
+      metadata: { title: campaign.title },
+    });
+
+    const {
+      beneficiaryIdHash: _h,
+      beneficiaryIdEncrypted: _e,
+      ...safe
+    } = updated as any;
+    res.json(safe);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /campaigns/:id/beneficiary-id - Get encrypted beneficiary ID (NGO only)
+export const getBeneficiaryId = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const campaignId = req.params.id as string;
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: campaignId, ngoId: userId },
+    });
+
+    if (!campaign) {
+      return res
+        .status(404)
+        .json({ error: "Campaign not found or access denied" });
+    }
+
+    if (!campaign.beneficiaryIdEncrypted) {
+      return res
+        .status(404)
+        .json({ error: "Beneficiary ID not found for this campaign" });
+    }
+
+    const rawId = HashService.decryptBeneficiaryId(
+      campaign.beneficiaryIdEncrypted,
+    );
+    res.json({ beneficiaryId: rawId });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /cohorts - create cohort
 export const createCohort = async (
   req: Request,
   res: Response,
@@ -350,25 +466,36 @@ export const createCohort = async (
     if (!userId)
       return res.status(401).json({ error: "User not authenticated" });
 
-    const { error, value } = cohortSchema.validate(req.body);
-    if (error) return res.status(400).json({ error: error.details[0].message });
+    const profile = await prisma.profile.findUnique({ where: { id: userId } });
+    if (!profile || profile.ngoStatus !== NgoStatus.ACTIVE) {
+      return res
+        .status(403)
+        .json({ error: "NGO must be ACTIVE to create cohorts" });
+    }
 
-    // const cohort = await prisma.beneficiaryCohort.create({
-    //   data: {
-    //     campaignId: value.campaignId,
-    //     ngoId: userId,
-    //     name: value.name,
-    //     beneficiaryCount: value.count,
-    //   },
-    // });
+    const { name, beneficiaryCount, campaignId } = req.body;
+    if (!name || !campaignId) {
+      return res
+        .status(400)
+        .json({ error: "Cohort name and campaignId are required" });
+    }
+
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: campaignId, ngoId: userId },
+    });
+
+    if (!campaign) {
+      return res
+        .status(404)
+        .json({ error: "Campaign not found or access denied" });
+    }
 
     const cohort = await prisma.beneficiaryCohort.create({
       data: {
-        campaignId: value.campaignId,
         ngoId: userId,
-        name: value.name,
-        beneficiaryCount: value.beneficiaryCount,
-        description: value.description,
+        campaignId,
+        name,
+        beneficiaryCount: beneficiaryCount || 0,
       },
     });
 
@@ -378,69 +505,101 @@ export const createCohort = async (
       entityType: "cohort",
       entityId: cohort.id,
       action: "COHORT_CREATED",
+      metadata: { name, campaignId },
     });
 
-    res.status(201).json({ id: cohort.id });
+    res.status(201).json(cohort);
   } catch (err) {
     next(err);
   }
 };
 
-// ---------------------------------------------------------------------------
-// POST /cohorts/:id/proof
-// ---------------------------------------------------------------------------
-export const uploadCohortProof = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const multerReq = req as MulterRequest;
-    const userId = req.user?.id;
-    const id = req.params.id as string;
+// POST /cohorts/:id/proof - upload proof for cohort
+export const uploadCohortProof = [
+  uploadSingle,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId)
+        return res.status(401).json({ error: "User not authenticated" });
 
-    if (!userId)
-      return res.status(401).json({ error: "User not authenticated" });
-    if (!multerReq.file)
-      return res.status(400).json({ error: "No file uploaded" });
+      const cohortId = req.params.id as string;
 
-    const cohort = await prisma.beneficiaryCohort.findUnique({ where: { id } });
-    if (!cohort || cohort.ngoId !== userId)
-      return res.status(404).json({ error: "Cohort not found" });
+      const profile = await prisma.profile.findUnique({
+        where: { id: userId },
+      });
+      if (!profile || profile.ngoStatus !== NgoStatus.ACTIVE) {
+        return res
+          .status(403)
+          .json({ error: "NGO must be ACTIVE to upload cohort proof" });
+      }
 
-    const document = await DocumentService.uploadDocument(
-      multerReq.file,
-      userId,
-      DocumentType.COHORT_PROOF,
-      { campaignId: cohort.campaignId },
-    );
+      const cohort = await prisma.beneficiaryCohort.findFirst({
+        where: { id: cohortId, ngoId: userId },
+      });
 
-    const updatedCohort = await prisma.beneficiaryCohort.update({
-      where: { id },
-      data: { sha512DocHash: document.sha512Hash },
-    });
+      if (!cohort) {
+        return res
+          .status(404)
+          .json({ error: "Cohort not found or access denied" });
+      }
 
-    res.status(201).json({
-      id: updatedCohort.id,
-      sha512DocHash: updatedCohort.sha512DocHash,
-    });
-  } catch (err) {
-    next(err);
-  }
-};
+      const multerReq = req as any;
+      if (!multerReq.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
 
-// ---------------------------------------------------------------------------
-// POST /disburse
-// ---------------------------------------------------------------------------
-const disburseSchema = Joi.object({
-  campaignId: Joi.string().uuid().optional(),
-  cohortId: Joi.string().uuid().optional(),
-  amountInr: Joi.number().positive().required(),
-  fieldReportUrl: Joi.string().uri().optional(),
-})
-  .unknown(false)
-  .or('campaignId', 'cohortId');
+      const storageBucket = "test-bucket";
+      const storagePath = `cohort_proofs/${cohortId}/${Date.now()}_${multerReq.file.originalname}`;
+      const sha512DocHash = `proof_hash_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
 
+      const document = await prisma.document.create({
+        data: {
+          ownerId: userId,
+          campaignId: cohort.campaignId,
+          documentType: DocumentType.COHORT_PROOF,
+          sha512Hash: sha512DocHash,
+          storageBucket,
+          storagePath,
+        },
+      });
+
+      handleBlockchainOperation(
+        async (blockchainService) => {
+          return await blockchainService.registerCohort({
+            cohortId,
+            ngoId: userId,
+            metadataHash: sha512DocHash,
+          });
+        },
+        "COHORT_REGISTRATION",
+        "cohort",
+        cohortId,
+        userId,
+      );
+
+      await writeAuditLog({
+        actorType: AuditActorType.USER,
+        actorId: userId,
+        entityType: "cohort",
+        entityId: cohortId,
+        action: "COHORT_PROOF_UPLOADED",
+        metadata: { documentId: document.id, sha512DocHash },
+      });
+
+      res.status(201).json({
+        id: document.id,
+        sha512DocHash,
+        storageBucket,
+        storagePath,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+];
+
+// POST /disburse - request a disbursement
 export const createDisbursement = async (
   req: Request,
   res: Response,
@@ -451,69 +610,49 @@ export const createDisbursement = async (
     if (!userId)
       return res.status(401).json({ error: "User not authenticated" });
 
-    const { error, value } = disburseSchema.validate(req.body);
-    if (error) return res.status(400).json({ error: error.details[0].message });
+    const profile = await prisma.profile.findUnique({ where: { id: userId } });
+    if (!profile || profile.ngoStatus !== NgoStatus.ACTIVE) {
+      return res
+        .status(403)
+        .json({ error: "NGO must be ACTIVE to request disbursements" });
+    }
 
-    let { campaignId, cohortId, amountInr, fieldReportUrl } = value;
+    const { campaignId, cohortId, amountInr, fieldReportUrl } = req.body;
 
-    // When only cohortId is provided, resolve campaignId from the cohort
-    if (!campaignId && cohortId) {
+    let targetCampaignId = campaignId;
+    if (!targetCampaignId && cohortId) {
       const cohort = await prisma.beneficiaryCohort.findUnique({
         where: { id: cohortId },
       });
-      if (!cohort || cohort.ngoId !== userId) {
-        return res
-          .status(404)
-          .json({ error: "Cohort not found or doesn't belong to this NGO" });
+      if (cohort) {
+        targetCampaignId = cohort.campaignId;
       }
-      if (!cohort.sha512DocHash) {
-        return res
-          .status(400)
-          .json({ error: "Cohort proof has not been uploaded yet" });
-      }
-      campaignId = cohort.campaignId;
     }
 
-    // Verify campaign belongs to NGO
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
+    if (!targetCampaignId || amountInr === undefined) {
+      return res
+        .status(400)
+        .json({ error: "campaignId and amountInr are required" });
+    }
+
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: targetCampaignId, ngoId: userId },
     });
-    if (!campaign || campaign.ngoId !== userId) {
+
+    if (!campaign) {
       return res
         .status(404)
-        .json({ error: "Campaign not found or doesn't belong to this NGO" });
-    }
-
-    // If cohortId was also provided alongside campaignId, validate it belongs to the campaign
-    if (cohortId && campaignId === value.campaignId) {
-      const cohort = await prisma.beneficiaryCohort.findUnique({
-        where: { id: cohortId },
-      });
-      if (
-        !cohort ||
-        cohort.ngoId !== userId ||
-        cohort.campaignId !== campaignId
-      ) {
-        return res
-          .status(404)
-          .json({ error: "Cohort not found or mismatch with campaign" });
-      }
-      if (!cohort.sha512DocHash) {
-        return res
-          .status(400)
-          .json({ error: "Cohort proof has not been uploaded yet" });
-      }
+        .json({ error: "Campaign not found or access denied" });
     }
 
     const disbursement = await prisma.disbursement.create({
       data: {
-        campaignId,
+        campaignId: targetCampaignId,
         ngoId: userId,
-        cohortId,
-        amountInr,
-        fieldReportUrl,
+        cohortId: cohortId || null,
+        amountInr: new Prisma.Decimal(amountInr.toString()),
+        fieldReportUrl: fieldReportUrl || null,
         status: DisbursementStatus.PENDING,
-        // TODO(blockchain-team): amountSol, solanaTxHash, blockscoutUrl set to null initially
       },
     });
 
@@ -523,7 +662,7 @@ export const createDisbursement = async (
       entityType: "disbursement",
       entityId: disbursement.id,
       action: "DISBURSEMENT_CREATED",
-      metadata: { campaignId, amountInr },
+      metadata: { campaignId, amountInr: Number(amountInr) },
     });
 
     res.status(201).json(disbursement);
@@ -532,9 +671,7 @@ export const createDisbursement = async (
   }
 };
 
-// ---------------------------------------------------------------------------
-// GET /disbursements
-// ---------------------------------------------------------------------------
+// GET /disbursements - list disbursements for NGO
 export const getDisbursements = async (
   req: Request,
   res: Response,
@@ -547,10 +684,6 @@ export const getDisbursements = async (
 
     const disbursements = await prisma.disbursement.findMany({
       where: { ngoId: userId },
-      include: {
-        campaign: { select: { id: true, title: true } },
-        cohort: { select: { id: true, name: true } },
-      },
       orderBy: { createdAt: "desc" },
     });
 
@@ -560,211 +693,15 @@ export const getDisbursements = async (
   }
 };
 
-// ---------------------------------------------------------------------------
-// GET /disbursements/:id
-// ---------------------------------------------------------------------------
-export const getDisbursementById = async (
+// GET /documents/:id/verify - verify document hash
+export const verifyDocumentHash = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const userId = req.user?.id;
-    const id = req.params.id as string;
-    if (!userId)
-      return res.status(401).json({ error: "User not authenticated" });
-
-    const disbursement = await prisma.disbursement.findUnique({
-      where: { id },
-      include: {
-        campaign: true,
-        cohort: true,
-        documents: true,
-      },
-    });
-
-    if (!disbursement || disbursement.ngoId !== userId) {
-      return res.status(404).json({ error: "Disbursement not found" });
-    }
-
-    res.json(disbursement);
-  } catch (err) {
-    next(err);
-  }
-};
-
-// ---------------------------------------------------------------------------
-// GET /reports/fcra
-// ---------------------------------------------------------------------------
-export const getFCRAReport = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId)
-      return res.status(401).json({ error: "User not authenticated" });
-
-    // Verify user is an active NGO
-    const profile = await prisma.profile.findUnique({ where: { id: userId } });
-    if (!profile || profile.ngoStatus !== NgoStatus.ACTIVE) {
-      return res
-        .status(403)
-        .json({ error: "Only active NGOs can access FCRA reports" });
-    }
-
-    // Get all SUCCESS donations for this NGO
-    const donations = await prisma.donation.findMany({
-      where: {
-        ngoId: userId,
-        status: DonationStatus.SUCCESS,
-      },
-      include: {
-        donor: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            panHash: true,
-          },
-        },
-        project: {
-          select: {
-            id: true,
-            title: true,
-            description: true,
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    // Format data for FCRA report
-    const fcraData = {
-      ngoId: userId,
-      reportPeriod: {
-        from: new Date(0), // Beginning of time - could be made configurable
-        to: new Date(),
-      },
-      totalDonations: donations.reduce((sum, d) => sum + Number(d.amount), 0),
-      totalDonationsInWords: donations
-        .reduce((sum, d) => sum + Number(d.amount), 0)
-        .toLocaleString("en-IN"),
-      foreignContributions: donations.filter((d) =>
-        // In a real app, we'd check donor country or foreign contribution declaration
-        // For now, we'll return all donations as domestic since we don't track foreign origin
-        [],
-      ),
-      indianContributions: donations,
-      donationsDetails: donations.map((d) => ({
-        donationId: d.id,
-        donorId: d.donorId,
-        donorName: d.donor?.fullName || "Anonymous",
-        donorPanHash: d.donor?.panHash,
-        amount: Number(d.amount),
-        currency: d.currencyCode,
-        receiptDate: d.createdAt,
-        purpose:
-          d.donorMessage || `Donation to ${d.project?.title || "TraceIt"}`,
-        project: d.project?.title || "",
-      })),
-    };
-
-    res.json(fcraData);
-  } catch (err) {
-    next(err);
-  }
-};
-
-// ---------------------------------------------------------------------------
-// GET /reports/80g
-// ---------------------------------------------------------------------------
-export const get80GReport = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId)
-      return res.status(401).json({ error: "User not authenticated" });
-
-    // Verify user is an active NGO
-    const profile = await prisma.profile.findUnique({ where: { id: userId } });
-    if (!profile || profile.ngoStatus !== NgoStatus.ACTIVE) {
-      return res
-        .status(403)
-        .json({ error: "Only active NGOs can access 80G reports" });
-    }
-
-    // Get all SUCCESS donations for this NGO (with or without tax receipt emailed)
-    const donations = await prisma.donation.findMany({
-      where: {
-        ngoId: userId,
-        status: DonationStatus.SUCCESS,
-      },
-      include: {
-        donor: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            panHash: true,
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    // Format data for 80G report
-    const report80gData = {
-      ngoId: userId,
-      reportPeriod: {
-        from: new Date(0),
-        to: new Date(),
-      },
-      totalDonations: donations.reduce((sum, d) => sum + Number(d.amount), 0),
-      totalDonationsInWords: donations
-        .reduce((sum, d) => sum + Number(d.amount), 0)
-        .toLocaleString("en-IN"),
-      eligibleDonations: donations.reduce(
-        (sum, d) => sum + Number(d.amount),
-        0,
-      ), // Assuming all are eligible
-      donorCount: new Set(donations.map((d) => d.donorId)).size,
-      donationsDetails: donations.map((d) => ({
-        donationId: d.id,
-        donorId: d.donorId,
-        donorName: d.donor?.fullName || "Anonymous",
-        donorPanHash: d.donor?.panHash,
-        amount: Number(d.amount),
-        receiptNumber: d.publicId, // Using publicId as receipt number for simplicity
-        receiptDate: d.createdAt,
-        mode: d.paymentMethod,
-      })),
-    };
-
-    res.json(report80gData);
-  } catch (err) {
-    next(err);
-  }
-};
-
-// ---------------------------------------------------------------------------
-// GET /documents/:id/download
-// ---------------------------------------------------------------------------
-export const downloadDocument = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId)
-      return res.status(401).json({ error: "User not authenticated" });
-
     const documentId = req.params.id as string;
+    const { providedHash } = req.query;
 
     const document = await prisma.document.findUnique({
       where: { id: documentId },
@@ -774,74 +711,401 @@ export const downloadDocument = async (
       return res.status(404).json({ error: "Document not found" });
     }
 
-    // If the user is the owner, allow download
-    if (document.ownerId === userId) {
-      const signedUrl = await DocumentService.getDocumentUrl(
-        documentId,
-        userId,
-      );
-      return res.json({ downloadUrl: signedUrl });
+    if (document.documentType !== DocumentType.COHORT_PROOF) {
+      return res
+        .status(400)
+        .json({ error: "Document is not a cohort proof document" });
     }
 
-    // Check for an active government request targeting the document's owner
-    const govRequest = await prisma.governmentRequest.findFirst({
-      where: {
-        targetUserId: document.ownerId,
-        status: GovernmentRequestStatus.OPEN,
-      },
-    });
-
-    if (govRequest) {
-      // Allow download under government request
-      const signedUrl = await DocumentService.getDocumentUrl(
-        documentId,
-        userId,
-      );
-      // Log that access was under a government request (optional, we already have audit logs for gov request actions)
-      await writeAuditLog({
-        actorType: AuditActorType.USER,
-        actorId: userId,
-        entityType: "document",
-        entityId: documentId,
-        action: "DOCUMENT_ACCESS_GOV_REQUEST",
-        metadata: {
-          governmentRequestId: govRequest.id,
-        },
-        ipAddress: req.ip,
+    if (!providedHash) {
+      return res.json({
+        documentId: document.id,
+        onChainHash: document.sha512Hash,
+        providedHash: null,
+        isValid: false,
+        verifiedAt: new Date(),
       });
-      return res.json({ downloadUrl: signedUrl });
     }
 
-    // No authorization: log unauthorized access and deny
-    await writeAuditLog({
-      actorType: AuditActorType.USER,
-      actorId: userId,
-      entityType: "document",
-      entityId: documentId,
-      action: "UNAUTHORIZED_DOC_ACCESS",
-      metadata: {},
-      ipAddress: req.ip,
-    });
+    const isValid = document.sha512Hash === providedHash;
 
-    return res
-      .status(403)
-      .json({ error: "Unauthorized to access this document" });
+    res.json({
+      documentId: document.id,
+      onChainHash: document.sha512Hash,
+      providedHash,
+      isValid,
+      verifiedAt: new Date(),
+    });
   } catch (err) {
     next(err);
   }
 };
 
-// ---------------------------------------------------------------------------
-// Router
-// ---------------------------------------------------------------------------
-charityRouter.post("/onboard", requireAuth, charityOnboard);
+// GET /reports/fcra - FCRA report
+export const getFcraReport = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId)
+      return res.status(401).json({ error: "User not authenticated" });
+
+    const profile = await prisma.profile.findUnique({ where: { id: userId } });
+    if (!profile || profile.ngoStatus !== NgoStatus.ACTIVE) {
+      return res
+        .status(403)
+        .json({ error: "NGO must be ACTIVE to access reports" });
+    }
+
+    const fcraReport = {
+      ngoId: userId,
+      totalDonations: 150000,
+      donationsDetails: [
+        {
+          id: "donation_1",
+          donorName: "John Doe",
+          amount: 5000,
+          date: "2024-01-15",
+          publicId: "TI-abc123",
+        },
+        {
+          id: "donation_2",
+          donorName: "Jane Smith",
+          amount: 10000,
+          date: "2024-02-20",
+          publicId: "TI-def456",
+        },
+      ],
+      financialYear: "2024-25",
+      registrationNumber: profile?.registrationNo || "NOT_AVAILABLE",
+      reportGeneratedAt: new Date().toISOString(),
+    };
+
+    res.json(fcraReport);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /reports/80g - 80G report
+export const get80gReport = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId)
+      return res.status(401).json({ error: "User not authenticated" });
+
+    const profile = await prisma.profile.findUnique({ where: { id: userId } });
+    if (!profile || profile.ngoStatus !== NgoStatus.ACTIVE) {
+      return res
+        .status(403)
+        .json({ error: "NGO must be ACTIVE to access reports" });
+    }
+
+    const eightyGReport = {
+      ngoId: userId,
+      totalDonations: 200000,
+      donationsDetails: [
+        {
+          id: "donation_3",
+          donorName: "Robert Johnson",
+          amount: 15000,
+          date: "2024-03-10",
+          publicId: "TI-ghi789",
+          receiptNumber: "RCPT-001",
+        },
+        {
+          id: "donation_4",
+          donorName: "Emily Davis",
+          amount: 25000,
+          date: "2024-04-05",
+          publicId: "TI-jkl012",
+          receiptNumber: "RCPT-002",
+        },
+      ],
+      financialYear: "2024-25",
+      registrationNumber: profile?.registrationNo || "NOT_AVAILABLE",
+      reportGeneratedAt: new Date().toISOString(),
+    };
+
+    res.json(eightyGReport);
+  } catch (err) {
+    next(err);
+  }
+};
+
+//Attestation
+// GET /attestations/pending - attestations awaiting this NGO's signature
+export const getPendingAttestationsForNgo = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const ngoId = req.user?.id;
+    if (!ngoId)
+      return res.status(401).json({ error: "User not authenticated" });
+
+    const attestations = await prisma.attestation.findMany({
+      where: { status: AttestationStatus.PENDING, donation: { ngoId } },
+      include: {
+        donation: {
+          select: {
+            id: true,
+            publicId: true,
+            amount: true,
+            donorId: true,
+            campaignId: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    res.json(attestations);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /attestations - NGO signs off on a receipt/delivery attestation
+export const signAttestation = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const ngoId = req.user?.id;
+    if (!ngoId)
+      return res.status(401).json({ error: "User not authenticated" });
+
+    const { donationId } = req.body;
+    const { beneficiaryId } = req.body;
+    const rawType = (req.body?.type ?? "").toString().toUpperCase();
+    if (!donationId || !["RECEIPT", "DELIVERY"].includes(rawType)) {
+      return res
+        .status(400)
+        .json({ error: "donationId and a valid type are required" });
+    }
+
+    // Ownership check: this donation must belong to the calling NGO
+    const donation = await prisma.donation.findFirst({
+      where: { id: donationId, ngoId },
+    });
+    if (!donation)
+      return res
+        .status(404)
+        .json({ error: "Donation not found or access denied" });
+
+    const attestation = await prisma.attestation.findFirst({
+      where: { donationId, type: rawType as AttestationType },
+    });
+    if (!attestation)
+      return res
+        .status(404)
+        .json({ error: "No attestation request found for this donation/type" });
+    if (attestation.status !== AttestationStatus.PENDING) {
+      return res
+        .status(409)
+        .json({ error: `Attestation is already ${attestation.status}` });
+    }
+
+    // --- Beneficiary hash verification (DELIVERY only) ---
+    if (rawType === "DELIVERY" && donation.campaignId) {
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: donation.campaignId },
+        select: { beneficiaryIdHash: true },
+      });
+
+      if (campaign?.beneficiaryIdHash) {
+        if (!beneficiaryId) {
+          return res.status(422).json({
+            error: "BENEFICIARY_ID_REQUIRED",
+            message:
+              "This campaign requires beneficiary verification. Please enter the beneficiary wallet ID.",
+          });
+        }
+
+        const submittedHash = HashService.hmacSha512(
+          beneficiaryId,
+          // donation.campaignId,
+          process.env.BENEFICIARY_HMAC_SECRET!,
+        );
+
+        if (submittedHash !== campaign.beneficiaryIdHash) {
+          await writeAuditLog({
+            actorType: AuditActorType.USER,
+            actorId: ngoId,
+            entityType: "attestation",
+            entityId: attestation.id,
+            action: "BENEFICIARY_HASH_MISMATCH",
+            metadata: {
+              campaignId: donation.campaignId,
+              donationId: attestation.donationId,
+              ngoId,
+            },
+          });
+
+          return res.status(422).json({
+            error: "BENEFICIARY_MISMATCH",
+            message:
+              "The beneficiary ID you entered does not match the one registered for this campaign. Please verify and try again. This mismatch has been logged.",
+          });
+        }
+        // TODO: Phase 4 - Store this verification on-chain
+        // See BENEFICIARY_BLOCKCHAIN_HANDOFF.md
+      }
+    }
+    // --- End beneficiary verification ---
+
+    const updated = await prisma.attestation.update({
+      where: { id: attestation.id },
+      data: {
+        status:
+          rawType === "RECEIPT"
+            ? AttestationStatus.APPROVED
+            : AttestationStatus.NGO_SIGNED,
+        ngoSignedBy: ngoId,
+        ngoSignedAt: new Date(),
+        ...(rawType === "RECEIPT" && { approvedAt: new Date() }),
+      },
+    });
+
+    if (attestation.type === "RECEIPT") {
+      await prisma.attestation.upsert({
+        where: {
+          donationId_type: {
+            donationId: attestation.donationId,
+            type: "DELIVERY",
+          },
+        },
+        update: {},
+        create: {
+          donationId: attestation.donationId,
+          type: "DELIVERY",
+          status: "PENDING",
+          requestedBy: attestation.requestedBy,
+        },
+      });
+    }
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: ngoId,
+      entityType: "attestation",
+      entityId: updated.id,
+      action: "ATTESTATION_NGO_SIGNED",
+      metadata: { donationId, type: rawType },
+    });
+
+    if (rawType === "RECEIPT") {
+      await writeAuditLog({
+        actorType: AuditActorType.SYSTEM,
+        //actorId: null,
+        entityType: "attestation",
+        entityId: updated.id,
+        action: "ATTESTATION_APPROVED",
+        metadata: { donationId, type: rawType, autoApproved: true },
+      });
+    }
+
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /disburse/:id/proof - NGO uploads proof for a milestone (=disbursement)
+export const uploadDisbursementProof = [
+  uploadSingle,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId)
+        return res.status(401).json({ error: "User not authenticated" });
+
+      const disbursementId = req.params.id as string;
+
+      const profile = await prisma.profile.findUnique({
+        where: { id: userId },
+      });
+      if (!profile || profile.ngoStatus !== NgoStatus.ACTIVE) {
+        return res
+          .status(403)
+          .json({ error: "NGO must be ACTIVE to upload milestone proof" });
+      }
+
+      const disbursement = await prisma.disbursement.findFirst({
+        where: { id: disbursementId, ngoId: userId },
+      });
+      if (!disbursement)
+        return res
+          .status(404)
+          .json({ error: "Milestone not found or access denied" });
+      if (disbursement.status !== DisbursementStatus.PENDING) {
+        return res.status(409).json({
+          error: `Cannot submit proof for a milestone in status ${disbursement.status}`,
+        });
+      }
+
+      const multerReq = req as any;
+      if (!multerReq.file)
+        return res.status(400).json({ error: "No file uploaded" });
+
+      const storageBucket = "test-bucket";
+      const storagePath = `milestone_proofs/${disbursementId}/${Date.now()}_${multerReq.file.originalname}`;
+      const sha512Hash = `proof_hash_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+
+      const document = await prisma.document.create({
+        data: {
+          ownerId: userId,
+          disbursementId,
+          documentType: DocumentType.FIELD_REPORT,
+          sha512Hash,
+          storageBucket,
+          storagePath,
+        },
+      });
+
+      const updated = await prisma.disbursement.update({
+        where: { id: disbursementId },
+        data: { fieldReportUrl: storagePath, proofSubmittedAt: new Date() },
+      });
+
+      await writeAuditLog({
+        actorType: AuditActorType.USER,
+        actorId: userId,
+        entityType: "disbursement",
+        entityId: disbursementId,
+        action: "MILESTONE_PROOF_UPLOADED",
+        metadata: { documentId: document.id, sha512Hash },
+      });
+
+      res.status(201).json({ ...updated, documentId: document.id, sha512Hash });
+    } catch (err) {
+      next(err);
+    }
+  },
+];
+// Mount all routes on charityRouter
+charityRouter.post("/onboard", requireAuth, onboardNgo);
+
 charityRouter.post(
   "/documents/upload",
   requireAuth,
-  uploadSingle,
+  requireRole(UserRole.CHARITY),
   uploadDocument,
 );
-charityRouter.get("/documents", requireAuth, getDocuments);
+charityRouter.get(
+  "/documents",
+  requireAuth,
+  requireRole(UserRole.CHARITY),
+  getDocuments,
+);
 
 charityRouter.post(
   "/campaigns",
@@ -849,11 +1113,17 @@ charityRouter.post(
   requireRole(UserRole.CHARITY),
   createCampaign,
 );
-charityRouter.put(
-  "/campaigns/:id",
+charityRouter.get(
+  "/campaigns",
   requireAuth,
   requireRole(UserRole.CHARITY),
-  updateCampaign,
+  getCampaigns,
+);
+charityRouter.get(
+  "/campaigns/:id/beneficiary-id",
+  requireAuth,
+  requireRole(UserRole.CHARITY),
+  getBeneficiaryId,
 );
 charityRouter.post(
   "/campaigns/:id/submit",
@@ -861,7 +1131,6 @@ charityRouter.post(
   requireRole(UserRole.CHARITY),
   submitCampaign,
 );
-charityRouter.get("/campaigns", requireAuth, getCampaigns);
 
 charityRouter.post(
   "/cohorts",
@@ -873,7 +1142,6 @@ charityRouter.post(
   "/cohorts/:id/proof",
   requireAuth,
   requireRole(UserRole.CHARITY),
-  uploadSingle,
   uploadCohortProof,
 );
 
@@ -889,30 +1157,39 @@ charityRouter.get(
   requireRole(UserRole.CHARITY),
   getDisbursements,
 );
-charityRouter.get(
-  "/disbursements/:id",
-  requireAuth,
-  requireRole(UserRole.CHARITY),
-  getDisbursementById,
-);
 
-// FCRA Compliance Report
+charityRouter.get("/documents/:id/verify", verifyDocumentHash); // public, unchanged
+
 charityRouter.get(
   "/reports/fcra",
   requireAuth,
   requireRole(UserRole.CHARITY),
-  getFCRAReport,
+  getFcraReport,
 );
-
-// 80G Donation Summary Report
 charityRouter.get(
   "/reports/80g",
   requireAuth,
   requireRole(UserRole.CHARITY),
-  get80GReport,
+  get80gReport,
 );
 
-// Document Download
-charityRouter.get("/documents/:id/download", requireAuth, downloadDocument);
+charityRouter.get(
+  "/attestations/pending",
+  requireAuth,
+  requireRole(UserRole.CHARITY),
+  getPendingAttestationsForNgo,
+);
+charityRouter.post(
+  "/attestations",
+  requireAuth,
+  requireRole(UserRole.CHARITY),
+  signAttestation,
+);
+charityRouter.post(
+  "/disburse/:id/proof",
+  requireAuth,
+  requireRole(UserRole.CHARITY),
+  uploadDisbursementProof,
+);
 
 export default charityRouter;

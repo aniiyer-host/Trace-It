@@ -15,8 +15,16 @@ pub struct DisbursementRecord {
     /// Amount in paisa
     pub amount_paisa: u64,
 
+    /// Currency code (always "INR")
+    #[max_len(3)]
+    pub currency: String,
+
     /// Unix timestamp
     pub timestamp: i64,
+
+    /// Transaction hash on Solana
+    #[max_len(128)]
+    pub transaction_hash: String,
 
     /// 0=Pending, 1=Approved, 2=Sent, 3=Settled, 4=Failed
     pub status: u8,

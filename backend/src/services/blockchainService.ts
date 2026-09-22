@@ -6,10 +6,11 @@ import {
   Commitment,
 } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
-import { HashService } from './hashService.js';
+import { HashService } from './hashService';
+import path from 'path';
 import fs from 'fs';
 
-// ─── Types ───────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────
 
 export interface RecordDonationParams {
   donationId: string;       // UUID from Postgres
@@ -39,6 +40,32 @@ export interface DonationOnChainData {
   recordHash: string;
 }
 
+export interface NgoOnChainData {
+  ngoId: string;
+  status: number; // 0=Pending, 1=Active, 2=Rejected, 3=Suspended
+  metadataHash: string;
+  registeredAt: number;
+}
+
+export interface CohortOnChainData {
+  cohortId: string;
+  ngoId: string;
+  sha512DocHash: string;
+  beneficiaryCount: number;
+  createdAt: number;
+}
+
+export interface DisbursementOnChainData {
+  disbursementId: string;
+  ngoId: string;
+  cohortId: string;
+  amountPaisa: number;
+  currency: string;
+  timestamp: number;
+  transactionHash: string;
+  status: number; // 0=Pending, 1=Approved, 2=Sent, 3=Settled, 4=Failed
+}
+
 // ─── Status Enum (mirrors on-chain u8 values) ───────────────
 
 export const OnChainStatus = {
@@ -56,7 +83,7 @@ export class BlockchainService {
   private wallet: Keypair;
   private programId: PublicKey;
   private provider: anchor.AnchorProvider;
-  private program: anchor.Program | null = null;
+  private program: anchor.Program | null;
   private hmacSecret: string;
 
   constructor(config: {
@@ -78,13 +105,12 @@ export class BlockchainService {
       this.wallet = Keypair.fromSecretKey(
         Uint8Array.from(config.walletKeypairJson)
       );
-    } else if (config.walletKeypairPath) {
+    } else {
+      // Load from file — in production, use secrets manager
       const keyData = JSON.parse(
-        fs.readFileSync(config.walletKeypairPath, 'utf-8')
+        fs.readFileSync(config.walletKeypairPath!, 'utf-8')
       );
       this.wallet = Keypair.fromSecretKey(Uint8Array.from(keyData));
-    } else {
-      throw new Error('Either walletKeypairPath or walletKeypairJson must be provided');
     }
 
     // Program
@@ -98,29 +124,29 @@ export class BlockchainService {
       walletAdapter,
       { commitment: config.commitment || 'confirmed' }
     );
+
+    // Program will be set after init()
+    this.program = null;
   }
 
   /**
    * Initialize the program instance with the IDL.
    * Call this once after construction.
    */
-  async init(idlPathOrObject: string | anchor.Idl): Promise<void> {
-    let idl: anchor.Idl;
-    if (typeof idlPathOrObject === 'string') {
-      idl = JSON.parse(fs.readFileSync(idlPathOrObject, 'utf-8'));
-    } else {
-      idl = idlPathOrObject;
-    }
+  async init(idlPath: string): Promise<void> {
+    const idl = JSON.parse(fs.readFileSync(idlPath, 'utf-8'));
     this.program = new anchor.Program(idl, this.provider);
   }
 
   /**
    * Record a confirmed donation on-chain.
-   * Idempotent: If the donation already exists on-chain, returns success with existing PDA info.
+   * This is the primary integration point called after Razorpay webhook confirmation.
+   *
+   * Idempotent: If the donation already exists on-chain, returns success with the existing tx.
    */
   async recordDonation(params: RecordDonationParams): Promise<BlockchainResult> {
     if (!this.program) {
-      throw new Error('BlockchainService has not been initialized with IDL. Call init() first.');
+      throw new Error('BlockchainService not initialized. Call init() first.');
     }
 
     try {
@@ -139,16 +165,17 @@ export class BlockchainService {
         `${params.donationId}|${amountPaisa}|${unixTimestamp}|${params.ngoId}|${donorIdHash}`
       );
 
-      // 4. Derive the PDA - remove dashes to match on-chain program
-      const cleanId = params.donationId.replace(/-/g, '');
+      // 4. Derive the PDA (remove dashes from donationId)
+      const cleanDonationId = params.donationId.replace(/-/g, '');
       const [donationPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('donation'), Buffer.from(cleanId)],
+        [Buffer.from('donation'), Buffer.from(cleanDonationId, 'utf8')],
         this.programId
       );
 
       // 5. Check if already exists (idempotency)
       const existingAccount = await this.connection.getAccountInfo(donationPda);
       if (existingAccount) {
+        // Already recorded — return success
         return {
           success: true,
           txHash: `already_recorded:${donationPda.toBase58()}`,
@@ -176,11 +203,10 @@ export class BlockchainService {
 
       return { success: true, txHash: tx };
     } catch (error: any) {
+      // Handle "already in use" as idempotent success
       if (error.message?.includes('already in use')) {
-        // Use cleanId (without dashes) to match on-chain program derivation
-        const cleanId = params.donationId.replace(/-/g, '');
         const [donationPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from('donation'), Buffer.from(cleanId)],
+          [Buffer.from('donation'), Buffer.from(params.donationId)],
           this.programId
         );
         return {
@@ -207,14 +233,14 @@ export class BlockchainService {
     newStatus: number
   ): Promise<BlockchainResult> {
     if (!this.program) {
-      throw new Error('BlockchainService has not been initialized with IDL. Call init() first.');
+      throw new Error('BlockchainService not initialized. Call init() first.');
     }
 
     try {
-      // Remove dashes to match on-chain program PDA derivation
-      const cleanId = donationId.replace(/-/g, '');
+      // 2. Derive the PDA (remove dashes from donationId)
+      const cleanDonationId = donationId.replace(/-/g, '');
       const [donationPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('donation'), Buffer.from(cleanId)],
+        [Buffer.from('donation'), Buffer.from(cleanDonationId, 'utf8')],
         this.programId
       );
 
@@ -242,31 +268,39 @@ export class BlockchainService {
    */
   async getDonationRecord(donationId: string): Promise<DonationOnChainData | null> {
     if (!this.program) {
-      throw new Error('BlockchainService has not been initialized with IDL. Call init() first.');
+      throw new Error('BlockchainService not initialized. Call init() first.');
     }
 
     try {
-      // Remove dashes to match on-chain program PDA derivation
-      const cleanId = donationId.replace(/-/g, '');
+      // Remove dashes from donationId for PDA derivation (must match on-chain program)
+      const cleanDonationId = donationId.replace(/-/g, '');
       const [donationPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('donation'), Buffer.from(cleanId)],
+        [Buffer.from('donation'), Buffer.from(cleanDonationId, 'utf8')],
         this.programId
       );
 
-      const account = await (this.program.account as any)['donationRecord'].fetch(donationPda);
+      // Fetch the account info
+      const accountInfo = await this.connection.getAccountInfo(donationPda);
+      if (!accountInfo) {
+        return null; // Account doesn't exist
+      }
+
+      // Decode the account data using the program's coder
+      const account = this.program.coder.accounts.decode('donationRecord', accountInfo.data);
       return {
-        donationId: account['donationId'] as string,
-        donorIdHash: account['donorIdHash'] as string,
-        ngoId: account['ngoId'] as string,
-        campaignId: account['campaignId'] as string,
-        amountPaisa: (account['amountPaisa'] as any).toNumber(),
-        currency: account['currency'] as string,
-        timestamp: (account['timestamp'] as any).toNumber(),
-        status: account['status'] as number,
-        recordHash: account['recordHash'] as string,
+        donationId: account.donationId,
+        donorIdHash: account.donorIdHash,
+        ngoId: account.ngoId,
+        campaignId: account.campaignId,
+        amountPaisa: (account.amountPaisa as anchor.BN).toNumber(),
+        currency: account.currency,
+        timestamp: (account.timestamp as anchor.BN).toNumber(),
+        status: account.status,
+        recordHash: account.recordHash,
       };
-    } catch {
-      return null;
+    } catch (error) {
+      console.error('[BlockchainService] getDonationRecord failed:', error);
+      return null; // Account doesn't exist or failed to decode
     }
   }
 
@@ -311,6 +345,301 @@ export class BlockchainService {
    */
   async getWalletBalance(): Promise<number> {
     const balance = await this.connection.getBalance(this.wallet.publicKey);
-    return balance / 1e9;
+    return balance / 1e9; // Convert lamports to SOL
   }
+
+  /**
+   * Register an NGO on-chain.
+   * Called after NGO approval in the backend.
+   */
+  async registerNgo(params: RegisterNgoParams): Promise<BlockchainResult> {
+    if (!this.program) {
+      throw new Error('BlockchainService not initialized. Call init() first.');
+    }
+
+    try {
+      // Derive the PDA (remove dashes from ngoId)
+      const cleanNgoId = params.ngoId.replace(/-/g, '');
+      const [ngoPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('ngo'), Buffer.from(cleanNgoId, 'utf8')],
+        this.programId
+      );
+
+      const tx = await this.program.methods
+        .registerNgo(params.ngoId, params.metadataHash)
+        .accounts({
+          ngoRecord: ngoPda,
+          authority: this.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' });
+
+      return { success: true, txHash: tx };
+    } catch (error: any) {
+      // Check if the error is due to account already existing (idempotency case)
+      if (error?.logs?.some((log: string) => log.includes('already in use')) || error?.message?.includes('already in use')) {
+        console.log('[BlockchainService] registerNgo: Account already exists, treating as success (idempotent)');
+        return { success: true, txHash: null };
+      }
+
+      console.error('[BlockchainService] registerNgo failed:', error);
+      return {
+        success: false,
+        txHash: null,
+        error: error.message || 'Unknown blockchain error',
+      };
+    }
+  }
+
+  /**
+   * Register a cohort on-chain.
+   * Called after NGO uploads proof documents.
+   */
+  async registerCohort(params: RegisterCohortParams): Promise<BlockchainResult> {
+    if (!this.program) {
+      throw new Error('BlockchainService not initialized. Call init() first.');
+    }
+
+    try {
+      // Derive the PDA (remove dashes from cohortId)
+      const cleanCohortId = params.cohortId.replace(/-/g, '');
+      const [cohortPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('cohort'), Buffer.from(cleanCohortId, 'utf8')],
+        this.programId
+      );
+
+      const tx = await this.program.methods
+        .registerCohort(params.cohortId, params.ngoId, params.metadataHash)
+        .accounts({
+          cohortRecord: cohortPda,
+          ngoRecord: await this.getNgoPda(params.ngoId), // Derive NGO PDA for constraint checking
+          authority: this.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' });
+
+      return { success: true, txHash: tx };
+    } catch (error: any) {
+      console.error('[BlockchainService] registerCohort failed:', error);
+      return {
+        success: false,
+        txHash: null,
+        error: error.message || 'Unknown blockchain error',
+      };
+    }
+  }
+
+  /**
+   * Record a disbursement on-chain.
+   * Called after platform sends funds to an NGO.
+   */
+  async recordDisbursement(params: RecordDisbursementParams): Promise<BlockchainResult> {
+    if (!this.program) {
+      throw new Error('BlockchainService not initialized. Call init() first.');
+    }
+
+    try {
+      // Derive the PDA (remove dashes from disbursementId)
+      const cleanDisbursementId = params.disbursementId.replace(/-/g, '');
+      const [disbursementPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('disbursement'), Buffer.from(cleanDisbursementId, 'utf8')],
+        this.programId
+      );
+
+      const tx = await this.program.methods
+        .recordDisbursement(
+          params.disbursementId,
+          params.ngoId,
+          params.cohortId,
+          new anchor.BN(params.amountInr * 100), // Convert to paisa
+          params.currency,
+          new anchor.BN(Math.floor(params.timestamp.getTime() / 1000)),
+          params.transactionHash
+        )
+        .accounts({
+          disbursementRecord: disbursementPda,
+          ngoRecord: await this.getNgoPda(params.ngoId), // Derive NGO PDA for constraint checking
+          authority: this.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' });
+
+      return { success: true, txHash: tx };
+    } catch (error: any) {
+      console.error('[BlockchainService] recordDisbursement failed:', error);
+      return {
+        success: false,
+        txHash: null,
+        error: error.message || 'Unknown blockchain error',
+      };
+    }
+  }
+
+  /**
+   * Fetch an NGO record from the chain for verification.
+   */
+  async getNgoRecord(ngoId: string): Promise<NgoOnChainData | null> {
+    if (!this.program) {
+      throw new Error('BlockchainService not initialized. Call init() first.');
+    }
+
+    try {
+      // Remove dashes from ngoId for PDA derivation (must match on-chain program)
+      const cleanNgoId = ngoId.replace(/-/g, '');
+      const [ngoPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('ngo'), Buffer.from(cleanNgoId, 'utf8')],
+        this.programId
+      );
+
+      // Fetch the account info
+      const accountInfo = await this.connection.getAccountInfo(ngoPda);
+      if (!accountInfo) {
+        return null; // Account doesn't exist
+      }
+
+      // Decode the account data using the program's coder
+      const account = this.program.coder.accounts.decode('ngoRecord', accountInfo.data);
+      return {
+        ngoId: account.ngoId,
+        status: account.status,
+        metadataHash: account.metadataHash,
+        registeredAt: account.registeredAt,
+      };
+    } catch (error) {
+      console.error('[BlockchainService] getNgoRecord failed:', error);
+      return null; // Account doesn't exist or failed to decode
+    }
+  }
+
+  /**
+   * Fetch a cohort record from the chain for verification.
+   */
+  async getCohortRecord(cohortId: string): Promise<CohortOnChainData | null> {
+    if (!this.program) {
+      throw new Error('BlockchainService not initialized. Call init() first.');
+    }
+
+    try {
+      // Remove dashes from cohortId for PDA derivation (must match on-chain program)
+      const cleanCohortId = cohortId.replace(/-/g, '');
+      const [cohortPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('cohort'), Buffer.from(cleanCohortId, 'utf8')],
+        this.programId
+      );
+
+      // Fetch the account info
+      const accountInfo = await this.connection.getAccountInfo(cohortPda);
+      if (!accountInfo) {
+        return null; // Account doesn't exist
+      }
+
+      // Decode the account data using the program's coder
+      const account = this.program.coder.accounts.decode('cohortRecord', accountInfo.data);
+      return {
+        cohortId: account.cohortId,
+        ngoId: account.ngoId,
+        sha512DocHash: account.sha512DocHash,
+        beneficiaryCount: account.beneficiaryCount,
+        createdAt: account.createdAt,
+      };
+    } catch (error) {
+      console.error('[BlockchainService] getCohortRecord failed:', error);
+      return null; // Account doesn't exist or failed to decode
+    }
+  }
+
+  /**
+   * Fetch a disbursement record from the chain for verification.
+   */
+  async getDisbursementRecord(disbursementId: string): Promise<DisbursementOnChainData | null> {
+    if (!this.program) {
+      throw new Error('BlockchainService not initialized. Call init() first.');
+    }
+
+    try {
+      // Remove dashes from disbursementId for PDA derivation (must match on-chain program)
+      const cleanDisbursementId = disbursementId.replace(/-/g, '');
+      const [disbursementPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('disbursement'), Buffer.from(cleanDisbursementId, 'utf8')],
+        this.programId
+      );
+
+      // Fetch the account info
+      const accountInfo = await this.connection.getAccountInfo(disbursementPda);
+      if (!accountInfo) {
+        return null; // Account doesn't exist
+      }
+
+      // Decode the account data using the program's coder
+      const account = this.program.coder.accounts.decode('disbursementRecord', accountInfo.data);
+      return {
+        disbursementId: account.disbursementId,
+        ngoId: account.ngoId,
+        cohortId: account.cohortId,
+        amountPaisa: (account.amountPaisa as anchor.BN).toNumber(),
+        currency: account.currency,
+        timestamp: (account.timestamp as anchor.BN).toNumber(),
+        transactionHash: account.transactionHash,
+        status: account.status,
+      };
+    } catch (error) {
+      console.error('[BlockchainService] getDisbursementRecord failed:', error);
+      return null; // Account doesn't exist or failed to decode
+    }
+  }
+
+  /**
+   * Verify a cohort document's hash against the on-chain record.
+   */
+  async verifyCohortDocumentHash(
+    cohortId: string,
+    documentHash: string
+  ): Promise<{ valid: boolean; onChainHash: string | null; providedHash: string }> {
+    const onChainData = await this.getCohortRecord(cohortId);
+    if (!onChainData) {
+      return { valid: false, onChainHash: null, providedHash: documentHash };
+    }
+
+    return {
+      valid: documentHash === onChainData.sha512DocHash,
+      onChainHash: onChainData.sha512DocHash,
+      providedHash: documentHash,
+    };
+  }
+
+  /**
+   * Helper method to derive NGO PDA for constraint checking in transactions.
+   * Not exposed publicly as it's used internally for account derivation.
+   */
+  private async getNgoPda(ngoId: string): Promise<PublicKey> {
+    const cleanNgoId = ngoId.replace(/-/g, '');
+    const [ngoPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from('ngo'), Buffer.from(cleanNgoId, 'utf8')],
+      this.programId
+    );
+    return ngoPda;
+  }
+}
+
+// ─── New Parameter Interfaces ─────────────────────────────────────
+
+export interface RegisterNgoParams {
+  ngoId: string;           // NGO profile ID (UUID format)
+  metadataHash: string;    // SHA-512 hash of NGO verification documents
+}
+
+export interface RegisterCohortParams {
+  cohortId: string;        // Cohort ID (UUID format)
+  ngoId: string;           // Associated NGO ID
+  metadataHash: string;    // SHA-512 hash of cohort proof document bundle
+}
+
+export interface RecordDisbursementParams {
+  disbursementId: string;  // Disbursement ID (UUID format)
+  ngoId: string;           // Recipient NGO ID
+  cohortId: string;        // Associated cohort ID
+  amountInr: number;       // Amount in INR
+  currency: string;        // Currency code (typically "INR")
+  timestamp: Date;         // When disbursement was made
+  transactionHash: string; // Transaction hash of the actual funds transfer
 }

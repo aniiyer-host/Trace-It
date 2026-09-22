@@ -46,11 +46,20 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Living Trust tokens (New)
+        trust: {
+          bg: "hsl(var(--trust-bg))",
+          navy: "hsl(var(--trust-navy))",
+          green: "hsl(var(--trust-green))",
+          text: "hsl(var(--trust-text))",
+          accent: "hsl(var(--trust-accent))",
+          surface: "hsl(var(--trust-surface))",
+          border: "hsl(var(--trust-border))",
+        },
         // TraceIt brand colours
         brand: {
-          sage:  "hsl(155 38% 45%)",
-          amber: "hsl(37 75% 52%)",
-          stone: "hsl(210 18% 92%)",
+          blue: "hsl(210 60% 45%)",
+          teal: "hsl(150 50% 50%)",
         },
       },
       borderRadius: {
@@ -64,8 +73,8 @@ export default {
           to: { opacity: "1", transform: "translateY(0)" },
         },
         "pulse-brand": {
-          "0%, 100%": { boxShadow: "0 0 0 0 hsl(155 38% 45% / 0.35)" },
-          "50%": { boxShadow: "0 0 0 8px hsl(155 38% 45% / 0)" },
+          "0%, 100%": { boxShadow: "0 0 0 0 hsl(210 60% 45% / 0.35)" },
+          "50%": { boxShadow: "0 0 0 8px hsl(210 60% 45% / 0)" },
         },
       },
       animation: {
