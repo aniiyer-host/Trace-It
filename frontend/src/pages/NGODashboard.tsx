@@ -167,6 +167,9 @@ export default function NGODashboard() {
   const [proofOpen, setProofOpen] = useState(false);
   const [disbursementOpen, setDisbursementOpen] = useState(false);
   const [attestationDialogOpen, setAttestationDialogOpen] = useState(false);
+  const [transferredDisbursements, setTransferredDisbursements] = useState<
+    Set<string>
+  >(new Set());
   const [selectedAttestation, setSelectedAttestation] = useState<{
     id: string;
     donationId: string;
@@ -292,6 +295,34 @@ export default function NGODashboard() {
   //     fetchPendingAttestations();
   //   }
   // }, [user, fetchNgoData, fetchPendingAttestations]);
+
+  // Update from Await fund transfer to Success
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    ngoCampaigns.forEach((campaign) => {
+      campaign.milestones.forEach((milestone) => {
+        if (
+          milestone.disbursementStatus === "APPROVED" &&
+          !transferredDisbursements.has(milestone.id)
+        ) {
+          const timer = setTimeout(() => {
+            setTransferredDisbursements((prev) => {
+              const next = new Set(prev);
+              next.add(milestone.id);
+              return next;
+            });
+          }, 10_000);
+
+          timers.push(timer);
+        }
+      });
+    });
+
+    return () => {
+      timers.forEach(clearTimeout);
+    };
+  }, [ngoCampaigns]);
   useEffect(() => {
     if (!user || user.role !== "CHARITY") return;
 
@@ -751,9 +782,23 @@ export default function NGODashboard() {
                             </div>
                           )}
                         {milestone.status === "disbursed" && (
+                          // <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-foreground/5 border border-foreground/10 text-sm font-medium text-foreground/70">
+                          //   <Clock className="h-4 w-4 text-primary animate-pulse" />
+                          //   Awaiting fund transfer
+                          // </div>
+
                           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-foreground/5 border border-foreground/10 text-sm font-medium text-foreground/70">
-                            <Clock className="h-4 w-4 text-primary animate-pulse" />
-                            Awaiting fund transfer
+                            {transferredDisbursements.has(milestone.id) ? (
+                              <>
+                                <CheckCircle className="h-4 w-4 text-emerald-500" />
+                                Funds transferred successfully
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="h-4 w-4 text-primary animate-pulse" />
+                                Awaiting fund transfer
+                              </>
+                            )}
                           </div>
                         )}
                         {milestone.status === "delivered" &&

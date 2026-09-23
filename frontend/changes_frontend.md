@@ -1604,6 +1604,7 @@ FILE: `frontend/src/components/DonationHistoryTable.tsx`
   - Navigation labels identify the task type and donation/disbursement amount for easier recognition.
   - Clicking a task in the left pane now smoothly scrolls to the corresponding task card in the Action Inbox.
   - Each right-side attestation/disbursement card is assigned a unique element ID so the left-side navigation can target the exact item.
+  - Uses a 10 second timer to update status of funds from 'Awaiting fund transfer' to 'Funds transferred successfuly' .
 
 ### API & Types
 
