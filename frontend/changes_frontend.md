@@ -1804,3 +1804,14 @@ FILE: `frontend/src/components/DonationHistoryTable.tsx`
 - **File & Lines:** `frontend/src/pages/DonorDashboard.tsx`, lines 446-470
 - **Problem:** The UI could only render one `<Stepper />` per donation, failing to accurately show progress when a donation was split across multiple disbursements.
 - **Why this fixes it:** Replaced the single Stepper with a dynamic per-disbursement list. Derives unique `disbursementIds` from the selected donation's attestations and renders one titled graph per disbursement, complete with placeholders when no donation or no disbursements are selected.
+
+### Enforce 10MB Combined File Size Limit
+**Change 1 - Frontend Dialog Size Check**
+- **File & Lines:** `frontend/src/components/ProofUploadDialog.tsx`, lines 54-65, 164-185, 214-235, 260-270
+- **Problem:** The upload dialog only checked if the file count exceeded 10, but allowed files of any size to be selected and uploaded, leading to massive memory usage when the backend tried to parse large payloads.
+- **Why this fixes it:** Added a strict combined size calculation that sums `files.size` and `geotagFile.size` in the drag-and-drop handler, browse files handler, geotag handler, and `handleUpload` submission function. If the total exceeds 10MB, it aborts instantly and shows a red toast. Also updated the helper text to specify "up to 10MB combined".
+
+**Change 2 - Backend Upload Route Size Check**
+- **File & Lines:** `backend/src/routes/charity.ts`, lines 1104-1110
+- **Problem:** Multer's `fileSize` limit only applies per-file, meaning a malicious user could bypass the frontend UI and upload ten 9.9MB files in one request, consuming ~100MB of RAM.
+- **Why this fixes it:** Added a post-parsing manual check inside `uploadDisbursementProof` that sums all file sizes. If the total exceeds 10MB, the backend returns a 400 error immediately, preventing the large payload from proceeding.
