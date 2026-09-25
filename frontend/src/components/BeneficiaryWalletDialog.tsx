@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Keypair } from '@solana/web3.js'
 import {
   Dialog,
   DialogContent,
@@ -29,18 +30,10 @@ export function BeneficiaryWalletDialog({
   const handleGenerate = () => {
     if (!reference.trim()) return
 
-    // TODO: Phase 4 - Replace with real Solana wallet generation via Keypair.generate() from @solana/web3.js
+    // Phase 4: Real Solana wallet generation via Keypair.generate() from @solana/web3.js
     // Public key (base58) becomes walletId
-    // Private key delivered via TipLink
-    const bytes = new Uint8Array(32)
-    crypto.getRandomValues(bytes)
-    const generated =
-      'SOL' +
-      Array.from(bytes)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('')
-        .toUpperCase()
-        .substring(0, 40)
+    const keypair = Keypair.generate()
+    const generated = keypair.publicKey.toBase58()
     setWalletId(generated)
     setScreen('result')
   }

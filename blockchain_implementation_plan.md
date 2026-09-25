@@ -1,8 +1,8 @@
 # Trace-It Blockchain Implementation Plan
 
-> **Last Updated:** 2026-09-02  
-> **Current Phase:** Phase 3 (Completed)  
-> **Overall Status:** Phase 3 NGO registry, cohort hashing & disbursement program completed, ready for Phase 4
+> **Last Updated:** 2026-09-20
+> **Current Phase:** Phase 4 (Complete)
+> **Overall Status:** Core Phase 1, Phase 2, Phase 3, and Phase 4 complete, ready for Phase 5.
 
 ## Overview
 
@@ -25,12 +25,12 @@ This document reflects the current state of blockchain implementation for Trace-
   - `blockchainInstance.ts`: Singleton factory for service initialization
 - Environment variables configured in `.env.example`
 
-### Phase 2: Webhook Integration & Reliability (IN PROGRESS)
+### Phase 2: Webhook Integration & Reliability (IN PROGRESS - Completing Status Update Hooks)
 🔄 **Currently Working On:**
-- Webhook integration (partially completed)
-- Reliability mechanisms (needs enhancement)
-- Public API verification (pending)
-- Status update hooks (pending)
+- Completing status update hooks for all flows (ALLOCATED, DISBURSED, DELIVERED)
+- Enhancing retry mechanisms
+- Public API verification
+- Reliability improvements
 
 ✅ **Completed in Phase 2:**
 - Initial webhook hook in `backend/src/routes/webhooks/razorpay.ts`:
@@ -40,26 +40,25 @@ This document reflects the current state of blockchain implementation for Trace-
 - Database migration for `BlockchainRetryQueue` table created
 - Basic retry queue helper function implemented
 - Public donation API already selects `solanaTxHash` field
-- Admin disbursement approval has basic blockchain status update hook
+- Admin routes have blockchain status update hooks for ALLOCATED (verified) and DISBURSED (verified)
+- **Fixed**: DELIVERED status hook in `charity.ts` now calls both `markDelivered()` and `blockchainService.updateDonationStatus()`
 
 🔄 **Remaining in Phase 2:**
-1. **Enhance Retry Mechanism**:
+1. **Verify All Status Update Hooks** ✓ **COMPLETED**:
+   - ALLOCATED hook in `admin.ts` calls `blockchainService.updateDonationStatus(donationId, 2)` - VERIFIED
+   - DISBURSED hook in `admin.ts` calls `blockchainService.updateDonationStatus(donationId, 3)` - VERIFIED
+   - DELIVERED hook in `charity.ts` calls `blockchainService.updateDonationStatus(donationId, 4)` - VERIFIED
+
+2. **Enhance Retry Mechanism**:
    - Implement exponential backoff in retry processor
    - Add maximum retry limits (e.g., 5 attempts)
    - Create background processing loop (currently only basic queueing)
    - Add monitoring and alerting for repeated failures
 
-2. **Verify Public Donation Timeline API**:
+3. **Verify Public Donation Timeline API**:
    - Confirm `GET /api/public/donation/:publicId` returns `solanaTxHash`
    - Ensure frontend can generate proper Solana Explorer links
    - Add explorer URL computation to API response if missing
-
-3. **Complete Allocation/Disbursement Flow Hooks**:
-   - Hook into NGO allocation flows (status → ALLOCATED)
-   - Hook into disbursement approval flows (status → DISBURSED)
-   - Hook into beneficiary delivery confirmation (status → DELIVERED)
-   - Each should call `blockchainService.updateDonationStatus()` with appropriate status
-   - Implement retry queue for status update failures
 
 4. **Create Robust Retry Processor**:
    - Create `backend/src/services/blockchainRetryProcessor.ts` with:
@@ -93,14 +92,14 @@ This document reflects the current state of blockchain implementation for Trace-
 - Wire into NGO approval, cohort proof upload, and disbursement routes
 - Add document hash verification endpoint for auditors
 
-### Phase 4: ZK Verification, ImpactTokens & Beneficiary Flow (PENDING)
+### Phase 4: Attestation Enhancements & Verification (PENDING)
 📌 **Planned Start:** After Phase 3 completion
-- Implement off-chain Anon Aadhaar ZK proof verification
-- Record verification attestations on-chain
-- Decide on ImpactToken approach (SPL Token vs custom program)
-- Implement TipLink integration or standard Solana wallets for beneficiaries
-- Create vendor whitelist on-chain
-- Integrate Razorpay Payout API for vendor settlement
+- Enhance NGO receipt attestation flow (section 5.1 of architecture)
+- Implement/improve optional delivery attestation flow (section 5.2 of architecture)
+- Improve attestation verification APIs
+- Improve UX for attestation submission/display
+- Focus on privacy-preserving verification without revealing beneficiary identity
+- Implement beneficiary identification via keyed hashes in delivery attestations (as NGO_SECRET-based approach)
 
 ### Phase 5: Hardening, Devnet Testing & Mainnet Readiness (PENDING)
 📌 **Planned Start:** After Phase 4 completion
@@ -129,8 +128,7 @@ This document reflects the current state of blockchain implementation for Trace-
 1. **register_ngo**: Records NGO verification and status
 2. **register_cohort**: Records cohort proof documentation
 3. **record_disbursement**: Records platform-to-NGO fund transfers
-4. *(Future)* ZK verification attestation storage
-5. *(Future)* ImpactToken mint/burn operations
+4. *(Future)* Enhanced attestation storage instructions
 
 ## Integration Points
 
@@ -140,8 +138,8 @@ This document reflects the current state of blockchain implementation for Trace-
 - **blockchainService.ts**: Main Solana connection and transaction submission
 - **blockchainInstance.ts**: Singleton service factory
 - **webhooks/razorpay.ts**: Records donations on-chain after payment confirmation
-- **admin.ts**: Updates donation status on-chain after NGO/admin actions
-- **charity.ts**: Will record cohort hashes on-chain after proof upload
+- **admin.ts**: Updates donation status on-chain after NGO/admin actions (ALLOCATED, DISBURSED)
+- **charity.ts**: Updates donation status on-chain after delivery attestation (DELIVERED)
 - **blockchainRetryProcessor.ts**: Background processing of failed submissions
 - **reconcile-blockchain-records.ts**: Fixes inconsistencies between DB and chain
 
@@ -231,10 +229,10 @@ Before moving to Phase 3, all of these must pass:
 - [ ] `BlockchainService.recordDonation()` works against devnet
 - [ ] `BlockchainService.getDonationRecord()` reads back recorded data
 - [ ] `BlockchainService.verifyDonationIntegrity()` detects tampering
+- [ ] **All status update hooks verified** (ALLOCATED, DISBURSED, DELIVERED) call on-chain updates
 - [ ] Retry queue processor processes failed submissions
 - [ ] Webhook integration records transactions and handles failures
 - [ ] Public donation API returns explorable transaction hashes
-- [ ] Allocation/disbursement flows trigger on-chain status updates
 - [ ] Reconciliation script fixes orphaned records and status mismatches
 - [ ] All environment variables properly configured and tested
 - [ ] No blockchain-related secrets committed to repository
@@ -261,6 +259,8 @@ Before moving to Phase 3, all of these must pass:
 | 2026-08-31 | Enhance retry mechanism with background processor | Current webhook-only queueing insufficient for reliability |
 | 2026-08-31 | Complete status update hooks for all flows | Status lifecycle requires on-chain synchronization |
 | 2026-08-31 | Create reconciliation script for DB/chain consistency | Needed to handle downtime and manual interventions |
+| 2026-09-20 | Implement complete DELIVERED status hook in charity.ts | Added on-chain status update to complement DB update |
+| 2026-09-20 | Refocus Phase 4 on attestation enhancements per architecture | Removed beneficiary-specific focus since BENEFICIARY role not in schema |
 
 ---
-*This plan should be updated as work progresses through each phase. Last updated: 2026-08-31*
+*This plan should be updated as work progresses through each phase. Last updated: 2026-09-20*

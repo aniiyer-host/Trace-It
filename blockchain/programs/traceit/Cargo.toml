@@ -21,13 +21,15 @@ custom-panic = []
 
 [dependencies]
 anchor-lang = { workspace = true, features = ["init-if-needed"] }
-
-[dev-dependencies]
-litesvm = "0.10.0"
-solana-message = "3.0.1"
-solana-transaction = "3.0.2"
-solana-signer = "3.0.0"
-
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+zeroize_derive = { workspace = true }
+proc-macro-crate = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+bitflags = { workspace = true }
+borsh = { workspace = true }
+borsh-derive = { workspace = true }
+bytemuck_derive = { workspace = true }
+blake3 = { workspace = true }
+cpufeatures = { workspace = true }

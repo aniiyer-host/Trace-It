@@ -12,6 +12,12 @@ LOG=/tmp/traceit-validator.log
 pkill -f solana-test-validator 2>/dev/null || true
 sleep 1
 
+# Ensure program binary is built
+if [ ! -f "$SO_PATH" ]; then
+  echo "traceit.so not found at $SO_PATH. Building program with anchor build..."
+  (cd "$(dirname "${BASH_SOURCE[0]}")/.." && anchor build)
+fi
+
 # Start validator in background
 solana-test-validator \
   --ledger "$LEDGER" \

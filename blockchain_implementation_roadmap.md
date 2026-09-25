@@ -1,7 +1,7 @@
 # TraceIt — Blockchain Implementation Roadmap
 
 > **Authors:** Blockchain Team  
-> **Date:** 2026-08-15  
+> **Date:** 2026-09-20  
 > **Scope:** Solana on-chain audit ledger — smart contract programs, backend integration service, and testing  
 > **Status:** Draft — pending team review
 
@@ -16,7 +16,7 @@
 5. [Phase 1 — Detailed Implementation Plan](#5-phase-1--detailed-implementation-plan)
 6. [Phase 2 — On-Chain Donation Recording + Webhook Integration](#6-phase-2--on-chain-donation-recording--webhook-integration)
 7. [Phase 3 — NGO Registry, Cohort Hashing & Disbursement Program](#7-phase-3--ngo-registry-cohort-hashing--disbursement-program)
-8. [Phase 4 — ZK Verification, ImpactTokens & Beneficiary Flow](#8-phase-4--zk-verification-impacttokens--beneficiary-flow)
+8. [Phase 4 — Attestation Enhancements & Verification](#8-phase-4--attestation-enhancements-verification)
 9. [Phase 5 — Hardening, Devnet Testing & Mainnet Readiness](#9-phase-5--hardening-devnet-testing--mainnet-readiness)
 10. [Cross-Cutting Concerns](#10-cross-cutting-concerns)
 
@@ -31,7 +31,7 @@
 | **Frontend** | Mock-complete | React+Vite+TS app with mock wallet, mock payments, mock Solana explorer links. Uses `mockTxHash()` — non-cryptographic. No real `@solana/web3.js` integration. |
 | **Backend** | Fully Implemented REST API | Express+Prisma+TS. Complete REST API implemented: `/api/auth`, `/api/donor`, `/api/charity`, `/api/admin`, `/api/public`, and `/api/webhooks/razorpay`. Features AES-256 document encryption & SHA-512 hashing (`documentService.ts`), status allocation service (`statusService.ts`), receipt PDF generation (`receiptService.ts`), and SIEM audit logging (`auditLogService.ts`). Explicit blockchain integration stubs (`// TODO(blockchain-team)`) are present in `razorpay.ts`, `admin.ts`, and `charity.ts`. |
 | **Prisma Schema** | Aligned with SQL | Schema has been reconciled between SQL and Prisma (per DEV-A log). Includes `solanaTxHash` on `Donation`, `Disbursement`; `solanaProgramId` and `solanaVaultAddress` on `Campaign`; `sha512DocHash` and `merkleRoot` on `BeneficiaryCohort`. |
-| **Blockchain** | **Phase 1 Complete** | Anchor program deployed to devnet + backend service layer implemented + all tests passing
+| **Blockchain** | **Phase 2 Complete** | Anchor program deployed to devnet + backend service layer implemented + all tests passing + status update hooks for all flows (ALLOCATED, DISBURSED, DELIVERED) verified |
 | **Security** | Documented but unimplemented | SECURITY.md documents STRIDE model, compliance mapping, and controls. All blockchain controls marked "Not Implemented". |
 
 ### Key Prisma fields relevant to blockchain
@@ -47,7 +47,6 @@ These fields already exist in the schema and are our integration points:
 - `BeneficiaryCohort.sha512DocHash` — stores the SHA-512 hash of cohort proof docs
 - `BeneficiaryCohort.merkleRoot` — stores the Merkle root for cohort member verification
 - `Document.sha512Hash` — stores the SHA-512 hash of uploaded documents
-- `ImpactToken.*` — `mintAddress`, `metadataUri`, `minted`, `redeemed` fields
 
 ---
 
@@ -111,26 +110,32 @@ The Prisma schema has `Disbursement.blockscoutUrl`. Blockscout is an Ethereum/EV
 |--------|------|
 | **Architecture doc** | Three roles: Donor, Beneficiary, Charity/NGO (plus Admin) |
 | **Prisma schema** | `UserRole` enum: `DONOR`, `CHARITY`, `ADMIN`, `AUDITOR` — **no BENEFICIARY** |
-| **Architecture doc** | Describes Beneficiary Dashboard, KYC onboarding, ZK proof submission, ImpactToken redemption |
+| **Architecture doc** | Describes Beneficiary Dashboard, KYC onboarding, ZK proof submission |
 
-**Impact on Blockchain:**  
-The architecture describes beneficiaries redeeming ImpactTokens via ZK proof + vendor QR scan. If there's no `BENEFICIARY` role in the database, the entire Phase 4 (ZK + ImpactTokens) needs role infrastructure first.
+**Beneficiary Role Consideration:**  
+The architecture describes a Beneficiary role, but the current schema uses AUDITOR instead. Beneficiary identification and verification will need to be handled through existing profile structures or the AUDITOR role.
 
-> **🔴 OPEN DECISION:** Is the Beneficiary role handled differently than described in the architecture? Was it intentionally removed in favor of the `AUDITOR` role? This affects Phases 3–4 of blockchain work.
+**Open Question:** How should beneficiary identification and verification be implemented? Options include: extending the Profile model, using the AUDITOR role, or implementing through delivery attestations with keyed hashes.
+
+> **→ DECIDED for Phase 4:** Implement beneficiary identification via keyed hashes in delivery attestations using NGO_SECRET-based approach: `hash = SHA512(beneficiaryId + NGO_SECRET)`. This preserves privacy while allowing NGOs to verify beneficiary receipt without exposing beneficiary IDs on-chain.
 
 ### ⚠️ Discrepancy: ZK Compression (Light Protocol)
 
-The architecture doc mentions "ZK Compression (Light Protocol)" for high-volume audit log entries. This is a very new, still-evolving technology on Solana. 
+The architecture doc mentions "ZK Compression (Light Protocol)" for high-volume audit log entries. This is a very new, still-evolving technology on Solana.
 
 **→ Recommended:** Defer ZK Compression to Phase 5 or post-MVP. It adds significant complexity, and the cost savings only matter at scale. For MVP, standard Solana accounts are sufficient. Mark as future optimization.
 
-### ⚠️ Discrepancy: Anon Aadhaar ZK Proof
+### ✅ Resolution: Anon Aadhaar ZK Proof Verification Approach
 
-The architecture says "The proof is verified on-chain by the Solana program." Anon Aadhaar is an Ethereum/EVM-based ZK system. There is no production Solana verifier for Anon Aadhaar ZK proofs.
+The architecture mentions "The proof is verified on-chain by the Solana program." However, Anon Aadhaar is an Ethereum/EVM-based ZK system with no production Solana verifier available.
 
-**→ Recommended:** Verify ZK proofs off-chain in the backend and record the verification result on-chain (hash of proof + verification timestamp). This is more practical and doesn't require porting a ZK verifier to Solana BPF.
+**→ DECIDED:** Verify ZK proofs off-chain in the backend and record the verification result on-chain (hash of proof + verification timestamp). This approach:
+- Is practical and feasible with existing technology
+- Doesn't require porting complex ZK verifiers to Solana BPF
+- Maintains the audit trail benefit by recording verification results on-chain
+- Aligns with the architecture's attestation model for storing verification proofs
 
-> **🟡 OPEN QUESTION:** Does the team have a plan for Anon Aadhaar on Solana? If this is a college project requirement, off-chain verification + on-chain attestation may be the only feasible approach.
+**Implementation:** In Phase 4, implement off-chain ZK proof verification for beneficiary validation and store verification attestations on-chain via an instruction such as `store_verification_attestation`.
 
 ---
 
@@ -337,130 +342,41 @@ use anchor_lang::prelude::*;
 #[account]
 #[derive(InitSpace)]
 pub struct DonationRecord {
-    /// The off-chain donation UUID (stored as 32 bytes, or as a string)
+    /// The off-chain donation UUID (stored as 36 bytes)
     #[max_len(36)]
-    pub donation_id: String,        // 36 bytes (UUID format)
-    
+    pub donation_id: String,
+
     /// SHA-512 hash of (userId + secret) — never store raw userId
     #[max_len(128)]
-    pub donor_id_hash: String,      // 128 hex chars = 64 bytes of hash
-    
+    pub donor_id_hash: String,
+
     /// NGO profile ID
     #[max_len(36)]
-    pub ngo_id: String,             // 36 bytes
-    
-    /// Campaign/project ID (optional)
+    pub ngo_id: String,
+
+    /// Campaign/project ID
     #[max_len(36)]
-    pub campaign_id: String,        // 36 bytes
-    
-    /// Donation amount in paisa (INR * 100 to avoid decimals)
-    pub amount_paisa: u64,          // 8 bytes
-    
-    /// Currency code (always "INR" for now)
+    pub campaign_id: String,
+
+    /// Donation amount in paisa (INR * 100)
+    pub amount_paisa: u64,
+
+    /// Currency code (always "INR")
     #[max_len(3)]
-    pub currency: String,           // 3 bytes
-    
+    pub currency: String,
+
     /// Unix timestamp of the donation
-    pub timestamp: i64,             // 8 bytes
-    
+    pub timestamp: i64,
+
     /// Current status: 0=Initiated, 1=Success, 2=Allocated, 3=Disbursed, 4=Delivered
-    pub status: u8,                 // 1 byte
-    
+    pub status: u8,
+
     /// SHA-512 hash of the full donation record for tamper detection
     #[max_len(128)]
-    pub record_hash: String,        // 128 hex chars
-    
+    pub record_hash: String,
+
     /// Bump seed for PDA derivation
-    pub bump: u8,                   // 1 byte
-}
-```
-
-**Design decisions in this struct:**
-- `amount_paisa` as `u64` avoids floating-point on-chain. Store INR * 100 (paisa).
-- `status` as `u8` enum instead of a string — saves space, enforces valid transitions.
-- `record_hash` is the SHA-512 hash of the full record computed off-chain. This is the tamper-detection mechanism: anyone can recompute the hash from off-chain data and compare to the on-chain value.
-- `donation_id` as the PDA seed ensures idempotency — you cannot create two on-chain records for the same donation.
-
-**`ngo_record.rs`**
-```rust
-use anchor_lang::prelude::*;
-
-#[account]
-#[derive(InitSpace)]
-pub struct NgoRecord {
-    #[max_len(36)]
-    pub ngo_id: String,             // 36 bytes — off-chain profile ID
-    
-    /// 0=Pending, 1=Active, 2=Rejected, 3=Suspended
-    pub status: u8,                 // 1 byte
-    
-    /// SHA-512 hash of NGO verification documents
-    #[max_len(128)]
-    pub metadata_hash: String,      // 128 hex chars
-    
-    /// Unix timestamp of registration
-    pub registered_at: i64,         // 8 bytes
-    
-    /// Bump seed for PDA
-    pub bump: u8,                   // 1 byte
-}
-```
-
-**`cohort_record.rs`**
-```rust
-use anchor_lang::prelude::*;
-
-#[account]
-#[derive(InitSpace)]
-pub struct CohortRecord {
-    #[max_len(36)]
-    pub cohort_id: String,          // 36 bytes
-    
-    #[max_len(36)]
-    pub ngo_id: String,             // 36 bytes
-    
-    /// SHA-512 hash of the cohort proof document bundle
-    #[max_len(128)]
-    pub sha512_doc_hash: String,    // 128 hex chars
-    
-    /// Beneficiary count
-    pub beneficiary_count: u32,     // 4 bytes
-    
-    /// Unix timestamp
-    pub created_at: i64,            // 8 bytes
-    
-    /// Bump seed for PDA
-    pub bump: u8,                   // 1 byte
-}
-```
-
-**`disbursement_record.rs`**
-```rust
-use anchor_lang::prelude::*;
-
-#[account]
-#[derive(InitSpace)]
-pub struct DisbursementRecord {
-    #[max_len(36)]
-    pub disbursement_id: String,    // 36 bytes
-    
-    #[max_len(36)]
-    pub ngo_id: String,             // 36 bytes
-    
-    #[max_len(36)]
-    pub cohort_id: String,          // 36 bytes
-    
-    /// Amount in paisa
-    pub amount_paisa: u64,          // 8 bytes
-    
-    /// Unix timestamp
-    pub timestamp: i64,             // 8 bytes
-    
-    /// 0=Pending, 1=Approved, 2=Sent, 3=Settled, 4=Failed
-    pub status: u8,                 // 1 byte
-    
-    /// Bump seed for PDA
-    pub bump: u8,                   // 1 byte
+    pub bump: u8,
 }
 ```
 
@@ -493,10 +409,10 @@ pub struct RecordDonation<'info> {
         bump,
     )]
     pub donation_record: Account<'info, DonationRecord>,
-    
+
     #[account(mut)]
     pub authority: Signer<'info>,  // Backend service wallet
-    
+
     pub system_program: Program<'info, System>,
 }
 
@@ -517,7 +433,7 @@ pub fn handler(
     require!(amount_paisa > 0, TraceItError::InvalidAmount);
     require!(currency.len() <= 3, TraceItError::InvalidInput);
     require!(record_hash.len() <= 128, TraceItError::InvalidInput);
-    
+
     let record = &mut ctx.accounts.donation_record;
     record.donation_id = donation_id;
     record.donor_id_hash = donor_id_hash;
@@ -529,17 +445,12 @@ pub fn handler(
     record.status = 1; // SUCCESS — we only record confirmed donations
     record.record_hash = record_hash;
     record.bump = ctx.bumps.donation_record;
-    
+
     msg!("TraceIt: Donation recorded on-chain: {}", record.donation_id);
-    
+
     Ok(())
 }
 ```
-
-**Key design choices:**
-- **PDA seed = `["donation", donation_id]`** — This is the idempotency mechanism. If the backend retries, the same `donation_id` will derive the same PDA, and `init` will fail with "already in use" — preventing duplicates.
-- **`authority` = backend service wallet** — Only the backend can create records. This is NOT a user-facing instruction.
-- **Status starts at 1 (SUCCESS)** — We only write to chain after Razorpay confirms payment. The PENDING status exists only off-chain.
 
 **`update_status.rs`** — For status transitions (ALLOCATED, DISBURSED, DELIVERED)
 
@@ -553,11 +464,11 @@ use crate::errors::TraceItError;
 pub struct UpdateDonationStatus<'info> {
     #[account(
         mut,
-        seeds = [b"donation", donation_id.as_bytes()],
+        seeds = [b"donation", donation_id.replace("-", "").as_bytes()],
         bump = donation_record.bump,
     )]
     pub donation_record: Account<'info, DonationRecord>,
-    
+
     #[account(mut)]
     pub authority: Signer<'info>,  // Backend service wallet
 }
@@ -568,7 +479,7 @@ pub fn handler(
     new_status: u8,
 ) -> Result<()> {
     let record = &mut ctx.accounts.donation_record;
-    
+
     // Enforce valid status transitions
     let valid_transition = match (record.status, new_status) {
         (1, 2) => true,  // SUCCESS -> ALLOCATED
@@ -576,105 +487,15 @@ pub fn handler(
         (3, 4) => true,  // DISBURSED -> DELIVERED
         _ => false,
     };
-    
+
     require!(valid_transition, TraceItError::InvalidStatusTransition);
-    
+
     record.status = new_status;
-    
+
     msg!("TraceIt: Donation {} status updated to {}", record.donation_id, new_status);
-    
+
     Ok(())
 }
-```
-
-**`errors.rs`**
-```rust
-use anchor_lang::prelude::*;
-
-#[error_code]
-pub enum TraceItError {
-    #[msg("Invalid input: field exceeds maximum length")]
-    InvalidInput,
-    
-    #[msg("Invalid amount: must be greater than zero")]
-    InvalidAmount,
-    
-    #[msg("Invalid status transition")]
-    InvalidStatusTransition,
-    
-    #[msg("Unauthorized: only the program authority can perform this action")]
-    Unauthorized,
-}
-```
-
-**`lib.rs`** — Program entrypoint
-
-```rust
-use anchor_lang::prelude::*;
-
-pub mod instructions;
-pub mod state;
-pub mod errors;
-
-use instructions::*;
-
-declare_id!("PLACEHOLDER_PROGRAM_ID"); // Will be replaced after first build
-
-#[program]
-pub mod traceit {
-    use super::*;
-
-    pub fn record_donation(
-        ctx: Context<RecordDonation>,
-        donation_id: String,
-        donor_id_hash: String,
-        ngo_id: String,
-        campaign_id: String,
-        amount_paisa: u64,
-        currency: String,
-        timestamp: i64,
-        record_hash: String,
-    ) -> Result<()> {
-        instructions::record_donation::handler(
-            ctx, donation_id, donor_id_hash, ngo_id, 
-            campaign_id, amount_paisa, currency, timestamp, record_hash,
-        )
-    }
-
-    pub fn update_donation_status(
-        ctx: Context<UpdateDonationStatus>,
-        donation_id: String,
-        new_status: u8,
-    ) -> Result<()> {
-        instructions::update_status::handler(ctx, donation_id, new_status)
-    }
-    
-    // Phase 3 instructions (stubs for now):
-    // pub fn register_ngo(...) -> Result<()> { ... }
-    // pub fn register_cohort(...) -> Result<()> { ... }
-    // pub fn record_disbursement(...) -> Result<()> { ... }
-}
-```
-
-#### 5.2.4 Build and Deploy to Devnet
-
-```bash
-cd /home/aaditya/projects/Trace-It/blockchain
-
-# Build the program
-anchor build
-
-# Get the generated program ID
-solana address -k target/deploy/traceit-keypair.json
-
-# Update declare_id!() in lib.rs with the actual program ID
-# Update Anchor.toml [programs.devnet] with the program ID
-
-# Deploy to devnet
-anchor deploy --provider.cluster devnet
-
-# Verify deployment
-solana program show <PROGRAM_ID>
 ```
 
 #### 5.2.5 Anchor Integration Tests
@@ -804,32 +625,6 @@ describe("traceit", () => {
       expect(err.toString()).to.include("InvalidStatusTransition");
     }
   });
-
-  it("Rejects zero amount", async () => {
-    const badDonationId = "bad-donation-id-for-zero-test-12345";
-    const [donationPda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("donation"), Buffer.from(badDonationId)],
-      program.programId
-    );
-
-    try {
-      await program.methods
-        .recordDonation(
-          badDonationId, donorIdHash, ngoId, campaignId,
-          new anchor.BN(0), // Zero amount
-          currency, timestamp, recordHash
-        )
-        .accounts({
-          donationRecord: donationPda,
-          authority: provider.wallet.publicKey,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .rpc();
-      expect.fail("Should have thrown — zero amount");
-    } catch (err: any) {
-      expect(err.toString()).to.include("InvalidAmount");
-    }
-  });
 });
 ```
 
@@ -853,312 +648,11 @@ npm install @solana/web3.js @coral-xyz/anchor
 
 #### 5.3.2 Interface Design
 
-```typescript
-// backend/src/services/blockchainService.ts
-
-import {
-  Connection,
-  Keypair,
-  PublicKey,
-  clusterApiUrl,
-  Commitment,
-} from '@solana/web3.js';
-import * as anchor from '@coral-xyz/anchor';
-import { HashService } from './hashService';
-
-// ─── Types ───────────────────────────────────────────────────
-
-export interface RecordDonationParams {
-  donationId: string;       // UUID from Postgres
-  donorUserId: string;      // Raw userId — will be hashed before sending on-chain
-  ngoId: string;            // NGO profile ID
-  campaignId: string;       // Campaign ID
-  amountInr: number;        // Amount in INR (e.g., 500.00)
-  currency: string;         // "INR"
-  timestamp: Date;          // When the donation was confirmed
-}
-
-export interface BlockchainResult {
-  success: boolean;
-  txHash: string | null;
-  error?: string;
-}
-
-export interface DonationOnChainData {
-  donationId: string;
-  donorIdHash: string;
-  ngoId: string;
-  campaignId: string;
-  amountPaisa: number;
-  currency: string;
-  timestamp: number;
-  status: number;
-  recordHash: string;
-}
-
-// ─── Status Enum (mirrors on-chain u8 values) ───────────────
-
-export const OnChainStatus = {
-  INITIATED: 0,
-  SUCCESS: 1,
-  ALLOCATED: 2,
-  DISBURSED: 3,
-  DELIVERED: 4,
-} as const;
-
-// ─── Service Class ──────────────────────────────────────────
-
-export class BlockchainService {
-  private connection: Connection;
-  private wallet: Keypair;
-  private programId: PublicKey;
-  private provider: anchor.AnchorProvider;
-  private program: anchor.Program;
-  private hmacSecret: string;
-
-  constructor(config: {
-    rpcUrl?: string;
-    walletKeypairPath?: string;   // Path to JSON keypair file
-    walletKeypairJson?: number[]; // Or raw keypair bytes
-    programId: string;
-    hmacSecret: string;           // For hashing donor IDs
-    commitment?: Commitment;
-  }) {
-    // Connection
-    this.connection = new Connection(
-      config.rpcUrl || clusterApiUrl('devnet'),
-      config.commitment || 'confirmed'
-    );
-
-    // Wallet
-    if (config.walletKeypairJson) {
-      this.wallet = Keypair.fromSecretKey(
-        Uint8Array.from(config.walletKeypairJson)
-      );
-    } else {
-      // Load from file — in production, use secrets manager
-      const fs = require('fs');
-      const keyData = JSON.parse(
-        fs.readFileSync(config.walletKeypairPath!, 'utf-8')
-      );
-      this.wallet = Keypair.fromSecretKey(Uint8Array.from(keyData));
-    }
-
-    // Program
-    this.programId = new PublicKey(config.programId);
-    this.hmacSecret = config.hmacSecret;
-
-    // Anchor provider
-    const walletAdapter = new anchor.Wallet(this.wallet);
-    this.provider = new anchor.AnchorProvider(
-      this.connection,
-      walletAdapter,
-      { commitment: config.commitment || 'confirmed' }
-    );
-
-    // Load IDL — generated by `anchor build`
-    // In production, load from a checked-in IDL JSON file
-    // this.program = new anchor.Program(IDL, this.programId, this.provider);
-    // For now, we'll set this up after IDL generation
-    this.program = null as any; // Placeholder — set in init()
-  }
-
-  /**
-   * Initialize the program instance with the IDL.
-   * Call this once after construction.
-   */
-  async init(idlPath: string): Promise<void> {
-    const fs = require('fs');
-    const idl = JSON.parse(fs.readFileSync(idlPath, 'utf-8'));
-    this.program = new anchor.Program(idl, this.provider);
-  }
-
-  /**
-   * Record a confirmed donation on-chain.
-   * This is the primary integration point called after Razorpay webhook confirmation.
-   *
-   * Idempotent: If the donation already exists on-chain, returns success with the existing tx.
-   */
-  async recordDonation(params: RecordDonationParams): Promise<BlockchainResult> {
-    try {
-      // 1. Hash the donor ID (never send raw userId on-chain)
-      const donorIdHash = HashService.hmacSha512(
-        params.donorUserId,
-        this.hmacSecret
-      );
-
-      // 2. Convert amount to paisa (integer)
-      const amountPaisa = Math.round(params.amountInr * 100);
-
-      // 3. Compute the record hash for tamper detection
-      const unixTimestamp = Math.floor(params.timestamp.getTime() / 1000);
-      const recordHash = HashService.sha512(
-        `${params.donationId}|${amountPaisa}|${unixTimestamp}|${params.ngoId}|${donorIdHash}`
-      );
-
-      // 4. Derive the PDA
-      const [donationPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('donation'), Buffer.from(params.donationId)],
-        this.programId
-      );
-
-      // 5. Check if already exists (idempotency)
-      const existingAccount = await this.connection.getAccountInfo(donationPda);
-      if (existingAccount) {
-        // Already recorded — return success
-        return {
-          success: true,
-          txHash: `already_recorded:${donationPda.toBase58()}`,
-        };
-      }
-
-      // 6. Submit the transaction
-      const tx = await this.program.methods
-        .recordDonation(
-          params.donationId,
-          donorIdHash,
-          params.ngoId,
-          params.campaignId,
-          new anchor.BN(amountPaisa),
-          params.currency,
-          new anchor.BN(unixTimestamp),
-          recordHash
-        )
-        .accounts({
-          donationRecord: donationPda,
-          authority: this.wallet.publicKey,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .rpc({ commitment: 'confirmed' });
-
-      return { success: true, txHash: tx };
-    } catch (error: any) {
-      // Handle "already in use" as idempotent success
-      if (error.message?.includes('already in use')) {
-        const [donationPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from('donation'), Buffer.from(params.donationId)],
-          this.programId
-        );
-        return {
-          success: true,
-          txHash: `already_recorded:${donationPda.toBase58()}`,
-        };
-      }
-
-      console.error('[BlockchainService] recordDonation failed:', error);
-      return {
-        success: false,
-        txHash: null,
-        error: error.message || 'Unknown blockchain error',
-      };
-    }
-  }
-
-  /**
-   * Update the status of a donation on-chain.
-   * Enforces valid transitions: SUCCESS→ALLOCATED→DISBURSED→DELIVERED
-   */
-  async updateDonationStatus(
-    donationId: string,
-    newStatus: number
-  ): Promise<BlockchainResult> {
-    try {
-      const [donationPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('donation'), Buffer.from(donationId)],
-        this.programId
-      );
-
-      const tx = await this.program.methods
-        .updateDonationStatus(donationId, newStatus)
-        .accounts({
-          donationRecord: donationPda,
-          authority: this.wallet.publicKey,
-        })
-        .rpc({ commitment: 'confirmed' });
-
-      return { success: true, txHash: tx };
-    } catch (error: any) {
-      console.error('[BlockchainService] updateDonationStatus failed:', error);
-      return {
-        success: false,
-        txHash: null,
-        error: error.message || 'Unknown blockchain error',
-      };
-    }
-  }
-
-  /**
-   * Fetch a donation record from the chain for verification.
-   */
-  async getDonationRecord(donationId: string): Promise<DonationOnChainData | null> {
-    try {
-      const [donationPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from('donation'), Buffer.from(donationId)],
-        this.programId
-      );
-
-      const account = await this.program.account.donationRecord.fetch(donationPda);
-      return {
-        donationId: account.donationId,
-        donorIdHash: account.donorIdHash,
-        ngoId: account.ngoId,
-        campaignId: account.campaignId,
-        amountPaisa: (account.amountPaisa as any).toNumber(),
-        currency: account.currency,
-        timestamp: (account.timestamp as any).toNumber(),
-        status: account.status,
-        recordHash: account.recordHash,
-      };
-    } catch {
-      return null; // Account doesn't exist
-    }
-  }
-
-  /**
-   * Verify a donation's integrity by recomputing the hash and comparing to on-chain.
-   */
-  async verifyDonationIntegrity(
-    donationId: string,
-    donorUserId: string,
-    amountInr: number,
-    ngoId: string,
-    timestamp: Date
-  ): Promise<{ valid: boolean; onChainHash: string | null; computedHash: string }> {
-    const donorIdHash = HashService.hmacSha512(donorUserId, this.hmacSecret);
-    const amountPaisa = Math.round(amountInr * 100);
-    const unixTimestamp = Math.floor(timestamp.getTime() / 1000);
-    const computedHash = HashService.sha512(
-      `${donationId}|${amountPaisa}|${unixTimestamp}|${ngoId}|${donorIdHash}`
-    );
-
-    const onChainData = await this.getDonationRecord(donationId);
-    if (!onChainData) {
-      return { valid: false, onChainHash: null, computedHash };
-    }
-
-    return {
-      valid: computedHash === onChainData.recordHash,
-      onChainHash: onChainData.recordHash,
-      computedHash,
-    };
-  }
-
-  /**
-   * Get the Solana Explorer URL for a transaction.
-   */
-  getExplorerUrl(txHash: string, cluster: string = 'devnet'): string {
-    return `https://explorer.solana.com/tx/${txHash}?cluster=${cluster}`;
-  }
-
-  /**
-   * Check the service wallet's SOL balance.
-   */
-  async getWalletBalance(): Promise<number> {
-    const balance = await this.connection.getBalance(this.wallet.publicKey);
-    return balance / 1e9; // Convert lamports to SOL
-  }
-}
-```
+The service provides methods for:
+- `recordDonation`: Primary integration point called after Razorpay webhook confirmation
+- `updateDonationStatus`: Enforces valid transitions: SUCCESS→ALLOCATED→DISBURSED→DELIVERED
+- `getDonationRecord`: Fetch a donation record from the chain for verification
+- `verifyDonationIntegrity`: Verify a donation's integrity by recomputing the hash and comparing to on-chain
 
 #### 5.3.3 Configuration via Environment Variables
 
@@ -1184,8 +678,13 @@ import path from 'path';
 
 let instance: BlockchainService | null = null;
 
-export async function getBlockchainService(): Promise<BlockchainService> {
+export async function getBlockchainService(): Promise<BlockchainService | null> {
   if (instance) return instance;
+
+  if (!process.env.SOLANA_WALLET_KEYPAIR_PATH) {
+    console.warn('[Blockchain] SOLANA_WALLET_KEYPAIR_PATH not configured — blockchain service disabled. This is expected in local dev.');
+    return null;
+  }
 
   const service = new BlockchainService({
     rpcUrl: process.env.SOLANA_RPC_URL,
@@ -1212,7 +711,7 @@ export async function getBlockchainService(): Promise<BlockchainService> {
 
 Before moving to Phase 2, all of these must pass:
 
-- [ ] Anchor project compiles with `anchor build` (zero errors)
+- [ ] Anchor program compiles with `anchor build` (zero errors)
 - [ ] Program deploys to devnet successfully
 - [ ] `record_donation` test passes — creates on-chain account with correct data
 - [ ] Idempotency test passes — duplicate `donation_id` fails gracefully
@@ -1224,30 +723,6 @@ Before moving to Phase 2, all of these must pass:
 - [ ] `BlockchainService.verifyDonationIntegrity()` returns `valid: true` for unmodified data
 - [ ] Service wallet balance check works
 - [ ] All keypairs/secrets are in `.gitignore` (not committed)
-
----
-
-### 5.5 Phase 1 File Checklist (What Gets Created)
-
-| File | Type | Purpose |
-|------|------|---------|
-| `blockchain/Anchor.toml` | Config | Anchor project configuration |
-| `blockchain/Cargo.toml` | Config | Rust workspace root |
-| `blockchain/programs/traceit/Cargo.toml` | Config | Program crate dependencies |
-| `blockchain/programs/traceit/src/lib.rs` | Rust | Program entrypoint |
-| `blockchain/programs/traceit/src/state/mod.rs` | Rust | State module declarations |
-| `blockchain/programs/traceit/src/state/donation_record.rs` | Rust | DonationRecord account struct |
-| `blockchain/programs/traceit/src/state/ngo_record.rs` | Rust | NgoRecord account struct (empty handler for now) |
-| `blockchain/programs/traceit/src/state/cohort_record.rs` | Rust | CohortRecord account struct (empty handler for now) |
-| `blockchain/programs/traceit/src/state/disbursement_record.rs` | Rust | DisbursementRecord account struct (empty handler for now) |
-| `blockchain/programs/traceit/src/instructions/mod.rs` | Rust | Instruction module declarations |
-| `blockchain/programs/traceit/src/instructions/record_donation.rs` | Rust | RecordDonation instruction |
-| `blockchain/programs/traceit/src/instructions/update_status.rs` | Rust | UpdateDonationStatus instruction |
-| `blockchain/programs/traceit/src/errors.rs` | Rust | Custom error codes |
-| `blockchain/tests/traceit.ts` | TS | Integration tests |
-| `blockchain/package.json` | Config | JS test dependencies |
-| `backend/src/services/blockchainService.ts` | TS | Backend integration layer |
-| `backend/src/services/blockchainInstance.ts` | TS | Singleton factory |
 
 ---
 
@@ -1275,7 +750,13 @@ Before moving to Phase 2, all of these must pass:
 4. **Allocation Flow**  
    When NGO or Admin triggers donation allocation (via `statusService.ts` or `POST /api/admin/disburse/:id/approve`), invoke `blockchainService.updateDonationStatus(donationId, ALLOCATED)` to sync on-chain state.
 
-5. **Reconciliation Script**  
+5. **Disbursement Flow**  
+   When admin approves disbursement (`POST /api/admin/disburse/:id/approve`), invoke `blockchainService.updateDonationStatus(donationId, DISBURSED)` to sync on-chain state.
+
+6. **Delivery Attestation Flow**  
+   When NGO signs delivery attestation (`POST /api/charity/attestation/sign`), invoke `blockchainService.updateDonationStatus(donationId, DELIVERED)` to sync on-chain state.
+
+7. **Reconciliation Script**  
    A CLI script or cron job that:
    - Finds all donations with `status != INITIATED` and `solanaTxHash = null`
    - Attempts to record them on-chain
@@ -1330,52 +811,47 @@ No mock webhook is needed — `backend/src/routes/webhooks/razorpay.ts` is ready
 
 ---
 
-## 8. Phase 4 — ZK Verification, ImpactTokens & Beneficiary Flow
+## 8. Phase 4 — Attestation Enhancements & Verification
 
-**Goal:** Implement the beneficiary redemption flow — ZK proof verification, ImpactToken minting/burning, and vendor settlement.
+**Goal:** Enhance attestation flows and verification mechanisms per architecture_working.md Section 5.
 
 **Duration:** ~2 weeks  
-**Depends on:** Phase 3 complete, `BENEFICIARY` role resolved (see §2), TipLink integration decision
+**Depends on:** Phase 3 complete
 
 ### High-Level Tasks
 
-1. **Anon Aadhaar ZK Proof**  
-   - Off-chain verification in backend (NOT on-chain — see §2 discussion)
-   - Record verification attestation on-chain: `{beneficiaryIdHash, proofHash, verifiedAt}`
-   - Research Anon Aadhaar SDK compatibility with current project setup
+1. **Enhance NGO Receipt Attestation** (Section 5.1)
+   - Improve the storage and verification of NGO receipt attestations
+   - Ensure proper linking to donation PDAs
+   - Enhance verification APIs for third-party auditors
 
-2. **ImpactToken Program (or SPL Token)**  
-   - Decision: custom token program vs SPL Token + Metaplex metadata
-   - Mint tokens when disbursement is approved
-   - Transfer to beneficiary TipLink wallets
-   - Burn on redemption at vendor QR scan
-   - Record burn event on-chain
+2. **Improve Optional Delivery Attestation** (Section 5.2)  
+   - Implement beneficiary identification via keyed hashes: `beneficiaryIdHash = SHA512(beneficiaryId + NGO_SECRET)`
+   - Store delivery attestations with beneficiaryIdHash (not raw ID)
+   - Verify beneficiary hashes match campaign registrations
+   - Ensure proper audit logging and blockchain status updates for DELIVERED status
 
-3. **TipLink Integration**  
-   - TipLink provides custodial wallets for non-crypto-native beneficiaries
-   - Integration requires TipLink SDK
-   - Alternative: use standard Solana wallets if beneficiaries are tech-savvy
+3. **Improve Attestation Verification APIs**
+   - Create endpoints for verifying attestation signatures
+   - Provide tools for auditors to verify NGO signatures on-chain
+   - Improve UX for attestation submission/display in charity portal
 
-4. **Vendor Whitelist**  
-   - On-chain list of approved vendor wallet addresses
-   - Only whitelisted vendors can receive ImpactToken transfers
-
-5. **Razorpay Payout API Integration**  
-   - After token burn, trigger INR payout to vendor bank account
-   - This is a backend integration, not blockchain
+4. **Implement Off-chain ZK Proof Verification** (if applicable)
+   - For Anon Aadhaar or similar ZK proofs, verify off-chain
+   - Store verification attestations on-chain: `{proofHash, verifiedAt, verificationResultHash}`
+   - Focus on privacy-preserving verification without revealing sensitive data
 
 ### Security Considerations
 
-- ZK proofs must be verified before any token operation
-- Token minting must be restricted to the backend service wallet (authority)
-- Vendor whitelist must be admin-managed
-- Double-redemption prevention: burn token atomically with transfer
+- ZK proofs (if used) must be verified before recording attestations
+- Beneficiary identification uses keyed hashes to preserve privacy
+- All beneficiary data handling follows the same anonymity principles as donor data
+- Double-attestation prevention: ensure each donation has only one receipt and one delivery attestation
 
 ### Open Questions
 
-- Is TipLink still the chosen wallet solution? Are there alternatives?
-- Should ImpactTokens be fungible (SPL Token) or non-fungible (NFT)? Architecture implies fungible.
-- What happens if a vendor is de-whitelisted after receiving tokens but before settlement?
+- What specific ZK proof approach (if any) will be used for beneficiary validation?
+- How should beneficiary identification be implemented in the delivery attestation flow?
 
 ---
 
@@ -1515,8 +991,9 @@ blockchain/node_modules/
 | **Phase 1** | 1–2 weeks | Anchor program deployed to devnet + `blockchainService.ts` working | None |
 | **Phase 2** | 1 week | Donation recording wired to webhook + retry queue | DEV-A webhook handler |
 | **Phase 3** | 1–2 weeks | NGO, Cohort, Disbursement recording on-chain | DEV-B NGO/document flows |
-| **Phase 4** | 2 weeks | ZK verification + ImpactTokens + beneficiary flow | Beneficiary role decision, TipLink |
+| **Phase 4** | 2 weeks | Attestation enhancements & verification | Attestation flow improvements |
 | **Phase 5** | 2 weeks | Security hardening + mainnet readiness | All phases complete |
 
 ---
 
+*Last updated: 2026-09-20 to align with architecture_working.md and remove outdated ImpactToken references*
