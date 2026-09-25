@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useDonationStore } from "@/store/donationStore";
 import { useAdminStore } from "@/store/adminStore";
@@ -37,6 +38,7 @@ function ActionRow({
   const isLoading = loadingId === item.id;
   const anyLoading = loadingId !== null;
   const [proofLoading, setProofLoading] = useState(false);
+  const [proofUrls, setProofUrls] = useState<{name: string, url: string}[] | null>(null);
 
   const handleViewProof = async () => {
     if (!item.fieldReportUrl) return;
@@ -44,13 +46,13 @@ function ActionRow({
     try {
       setProofLoading(true);
 
-      const response = await apiService.admin.getDisbursementProofUrl(
+      const response = await apiService.admin.getDisbursementProofUrls(
         item.entityId,
       );
 
-      window.open(response.url, "_blank", "noopener,noreferrer");
+      setProofUrls(response.urls);
     } catch (error) {
-      console.error("Failed to open proof:", error);
+      console.error("Failed to fetch proof URLs:", error);
     } finally {
       setProofLoading(false);
     }
@@ -62,17 +64,25 @@ function ActionRow({
   };
 
   return (
+    <>
     <tr className="border-b border-border/10 hover:bg-muted/10 transition-colors group">
       <td className="py-4 px-4 font-medium">{item.campaign}</td>
       <td className="py-4 px-4 text-muted-foreground">{item.ngo}</td>
       <td className="py-4 px-4">
-        <span className="flex items-center gap-2 text-sm">
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${item.type === "milestone" ? "bg-primary" : "bg-emerald-500"}`}
-          />
-          {item.type === "milestone"
-            ? "Disbursement Proof"
-            : "Attestation Request"}
+        <span className="flex flex-col gap-1 text-sm">
+          <span className="flex items-center gap-2">
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${item.type === "milestone" ? "bg-primary" : "bg-emerald-500"}`}
+            />
+            {item.type === "milestone"
+              ? "Disbursement Proof"
+              : "Attestation Request"}
+          </span>
+          {item.disbursementType && (
+            <span className="text-xs text-muted-foreground ml-3.5">
+              Type: {item.disbursementType.replace(/_/g, " ")}
+            </span>
+          )}
         </span>
       </td>
       <td className="py-4 px-4 text-right tabular-nums font-semibold">
@@ -152,6 +162,42 @@ function ActionRow({
         )}
       </td>
     </tr>
+
+      {/* Proof URLs Modal */}
+      <Dialog open={proofUrls !== null} onOpenChange={() => setProofUrls(null)}>
+        <DialogContent className="glass border-border/60">
+          <DialogHeader>
+            <DialogTitle>Disbursement Proof Documents</DialogTitle>
+            <DialogDescription>
+              {item.campaign} - {item.ngo}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4">
+            {proofUrls && proofUrls.length > 0 ? (
+              proofUrls.map((proof, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-border/40 bg-foreground/5">
+                  <span className="text-sm font-medium truncate max-w-[200px]" title={proof.name}>
+                    {proof.name}
+                  </span>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => window.open(proof.url, "_blank", "noopener,noreferrer")}
+                  >
+                    View File
+                  </Button>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No documents found.</p>
+            )}
+          </div>
+          <div className="flex justify-end">
+            <Button variant="ghost" onClick={() => setProofUrls(null)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -204,8 +250,11 @@ export default function AdminPanel() {
     rejectAttestation,
     pendingMilestoneApprovals,
     fetchPendingMilestoneApprovals,
+    approvedMilestones,
+    fetchApprovedMilestones,
     approveMilestone,
     rejectMilestone,
+    markDisbursementSettled,
     pendingCampaigns,
     fetchPendingCampaigns,
     approveCampaign,
@@ -242,6 +291,7 @@ export default function AdminPanel() {
       loadCampaigns();
       fetchPendingAttestations();
       fetchPendingMilestoneApprovals();
+      fetchApprovedMilestones();
       fetchPendingCampaigns();
       //   loadAuditLogs();
       void (async () => {
@@ -285,6 +335,7 @@ export default function AdminPanel() {
         ngo: ms.ngo?.organisationName || ms.ngo?.id || "Unknown NGO",
         campaign: ms.campaign?.title || "Unknown Campaign",
         fieldReportUrl: ms.fieldReportUrl,
+        disbursementType: ms.disbursementType as "PROOF_OF_NEED" | "PROOF_OF_WORK" | undefined,
       });
     });
     Object.entries(pendingAttestations).forEach(([key, att]) => {
@@ -339,6 +390,19 @@ export default function AdminPanel() {
       }
     } catch {
       toast({ title: "Approval failed", variant: "destructive" });
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  const handleMarkSettled = async (id: string) => {
+    setLoadingId(id);
+    try {
+      await markDisbursementSettled(id);
+      await fetchApprovedMilestones();
+      toast({ title: "Disbursement marked as settled successfully!" });
+    } catch {
+      toast({ title: "Operation failed", variant: "destructive" });
     } finally {
       setLoadingId(null);
     }
@@ -540,6 +604,59 @@ export default function AdminPanel() {
                     onApprove={handleApprove}
                     onReject={handleReject}
                   />
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ZONE 1.5: Approved Disbursements (Awaiting Transfer) */}
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">
+            Approved Disbursements (Awaiting Transfer)
+          </h2>
+          <p className="text-muted-foreground">
+            Disbursements that have been approved by Admin but have not yet been marked as SETTLED.
+          </p>
+        </div>
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-sm text-left whitespace-nowrap">
+            <thead>
+              <tr className="border-b border-border/20 text-muted-foreground">
+                <th className="py-3 px-4 font-medium">Disbursement Title</th>
+                <th className="py-3 px-4 font-medium text-right">Amount</th>
+                <th className="py-3 px-4 font-medium text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.values(approvedMilestones).length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="py-8 text-center text-muted-foreground">
+                    No approved disbursements awaiting transfer.
+                  </td>
+                </tr>
+              ) : (
+                Object.values(approvedMilestones).map((ms) => (
+                  <tr key={ms.id} className="border-b border-border/10 hover:bg-muted/10 transition-colors">
+                    <td className="py-4 px-4 font-medium">
+                      <div>{ms.cohort?.name || "Manual Disbursement"}</div>
+                      <div className="text-xs text-muted-foreground">{ms.campaign?.title}</div>
+                    </td>
+                    <td className="py-4 px-4 text-right font-medium">
+                      {formatUSD(Number(ms.amountInr))}
+                    </td>
+                    <td className="py-4 px-4 text-right">
+                      <Button 
+                        size="sm" 
+                        onClick={() => handleMarkSettled(ms.id)}
+                        disabled={loadingId === ms.id}
+                      >
+                        {loadingId === ms.id ? "Settling..." : "Mark as Sent & Received"}
+                      </Button>
+                    </td>
+                  </tr>
                 ))
               )}
             </tbody>

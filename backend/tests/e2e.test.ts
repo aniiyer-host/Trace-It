@@ -41,6 +41,7 @@ describe("End-to-End Flow Tests", () => {
     await prisma.governmentRequest.deleteMany({});
     await prisma.auditLog.deleteMany({});
     await prisma.document.deleteMany({});
+    await prisma.donationAllocation.deleteMany({});
     await prisma.disbursement.deleteMany({});
     await prisma.beneficiaryCohort.deleteMany({});
     await prisma.attestation.deleteMany({});
@@ -120,6 +121,7 @@ describe("End-to-End Flow Tests", () => {
     await prisma.governmentRequest.deleteMany({});
     await prisma.auditLog.deleteMany({});
     await prisma.document.deleteMany({});
+    await prisma.donationAllocation.deleteMany({});
     await prisma.disbursement.deleteMany({});
     await prisma.beneficiaryCohort.deleteMany({});
     await prisma.attestation.deleteMany({});

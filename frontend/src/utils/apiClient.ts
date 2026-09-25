@@ -442,6 +442,7 @@ export const apiService = {
         campaignId: d.project.id,
         campaignTitle: d.project.title,
         amount: d.amount,
+        allocatedAmount: d.allocatedAmount,
         paymentMethod: d.paymentMethod as PaymentMethod,
         status: d.status,
         createdAt: d.createdAt,
@@ -511,9 +512,12 @@ export const apiService = {
       post(`/admin/disbursements/${milestoneId}/reject`, { reason }),
     //Cause of LINT error
     //  uploadProof: async (milestoneId: string, proofData: any) => {
-    uploadProof: async (milestoneId: string, proofData: File) => {
+    uploadProof: async (milestoneId: string, proofFiles: File[], geotagFile?: File) => {
       const formData = new FormData();
-      formData.append("file", proofData);
+      proofFiles.forEach((file) => {
+        formData.append("files", file);
+      });
+      if (geotagFile) formData.append("geotagFile", geotagFile);
       const response = await apiClient.post(
         `/charity/disburse/${milestoneId}/proof`,
         formData,
@@ -621,6 +625,8 @@ export const apiService = {
     //Change any to AdminPendingDisbursement to fix LINT error
     getPendingMilestones: () =>
       get<AdminPendingDisbursement[]>("/admin/disbursements/pending"),
+    getApprovedMilestones: () =>
+      get<AdminPendingDisbursement[]>("/admin/disbursements?status=APPROVED"),
 
     approveAttestation: (attestationId: string) =>
       post(`/admin/attestations/${attestationId}/approve`),
@@ -630,6 +636,8 @@ export const apiService = {
       post(`/admin/disbursements/${milestoneId}/approve`),
     rejectMilestone: (milestoneId: string, reason: string) =>
       post(`/admin/disbursements/${milestoneId}/reject`, { reason }),
+    markDisbursementSettled: (milestoneId: string) =>
+      post(`/admin/disbursements/${milestoneId}/mark-settled`),
     getAuditLogs: (params?: {
       page?: number;
       limit?: number;
@@ -648,8 +656,8 @@ export const apiService = {
         pagination: AuditLogPagination;
       }>(`/admin/audit-logs?${query.toString()}`);
     },
-    getDisbursementProofUrl: async (disbursementId: string) => {
-      return get<{ url: string }>(
+    getDisbursementProofUrls: async (disbursementId: string) => {
+      return get<{ urls: { name: string; url: string }[] }>(
         `/admin/disbursements/${disbursementId}/proof-url`,
       );
     },

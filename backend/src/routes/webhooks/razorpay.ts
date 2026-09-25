@@ -209,26 +209,7 @@ export const razorpayWebhookHandler = async (
           });
         });
 
-      // Auto-create RECEIPT attestation for NGO action inbox
-      try {
-        await prisma.attestation.upsert({
-          where: {
-            donationId_type: {
-              donationId: donation.id,
-              type: AttestationType.RECEIPT,
-            },
-          },
-          update: {},
-          create: {
-            donationId: donation.id,
-            type: AttestationType.RECEIPT,
-            status: AttestationStatus.PENDING,
-            requestedBy: donation.donorId,
-          },
-        });
-      } catch (attError) {
-        console.error(`Failed to auto-create attestation for donation ${donation.id}:`, attError);
-      }
+
 
       // BLOCKCHAIN INTEGRATION: Record donation on-chain after successful payment
       try {

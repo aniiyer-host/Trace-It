@@ -118,6 +118,7 @@ describe("Attestation & Milestone API Integration Tests", () => {
       where: { ownerId: { in: [ngoUserId, otherNgoUserId] } },
     });
     await prisma.attestation.deleteMany({ where: { donationId } });
+    await prisma.donationAllocation.deleteMany({ where: { disbursement: { campaignId } } });
     await prisma.disbursement.deleteMany({ where: { campaignId } });
     await prisma.donation.deleteMany({ where: { id: donationId } });
     await prisma.campaign.deleteMany({ where: { id: campaignId } });
@@ -141,6 +142,12 @@ describe("Attestation & Milestone API Integration Tests", () => {
     expect(res.status).toBe(201);
     expect(res.body.status).toBe(AttestationStatus.PENDING);
     attestationId = res.body.id;
+
+    // Simulate modern flow where RECEIPT is created by admin disbursement with allocatedAmount
+    await prisma.attestation.update({
+      where: { id: attestationId },
+      data: { allocatedAmount: 1500 },
+    });
   });
 
   test("POST /api/donor/donations/:id/attestation - duplicate request for same type is rejected", async () => {
@@ -193,6 +200,17 @@ describe("Attestation & Milestone API Integration Tests", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe(AttestationStatus.APPROVED);
+
+    // Verify that a DELIVERY attestation was automatically generated with the correct allocatedAmount
+    const generatedDelivery = await prisma.attestation.findFirst({
+      where: {
+        donationId,
+        type: "DELIVERY",
+      },
+    });
+    expect(generatedDelivery).toBeDefined();
+    expect(generatedDelivery?.allocatedAmount).toBeDefined();
+    expect(Number(generatedDelivery?.allocatedAmount)).toBe(1500);
   });
 
   test("POST /api/charity/attestations - signing again is rejected (already signed)", async () => {
@@ -261,7 +279,7 @@ describe("Attestation & Milestone API Integration Tests", () => {
     const res = await request(app)
       .post(`/api/charity/disburse/${disbursementId}/proof`)
       .set("Authorization", `Bearer ${otherNgoToken}`)
-      .attach("file", Buffer.from("dummy proof"), "proof.pdf");
+      .attach("files", Buffer.from("dummy proof"), "proof.pdf");
 
     expect(res.status).toBe(404);
   });
@@ -270,7 +288,7 @@ describe("Attestation & Milestone API Integration Tests", () => {
     const res = await request(app)
       .post(`/api/charity/disburse/${disbursementId}/proof`)
       .set("Authorization", `Bearer ${ngoToken}`)
-      .attach("file", Buffer.from("dummy proof"), "proof.pdf");
+      .attach("files", Buffer.from("dummy proof"), "proof.pdf");
 
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty("documentId");

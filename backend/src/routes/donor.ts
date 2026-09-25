@@ -58,6 +58,7 @@ export const getDonorDashboard = async (
         razorpayPaymentId: true,
         taxReceiptUrl: true,
         taxReceiptEmailed: true,
+        allocatedAmount: true,
         createdAt: true,
         project: {
           select: {
@@ -77,6 +78,8 @@ export const getDonorDashboard = async (
             type: true,
             status: true,
             createdAt: true,
+            disbursementId: true,
+            allocatedAmount: true,
           },
         },
       },
@@ -511,6 +514,18 @@ export const requestDonationAttestation = async (
       where: { id: donationId, donorId },
     });
     if (!donation) return res.status(404).json({ error: "Donation not found" });
+
+    // Enforce one PENDING attestation of a specific type manually
+    // (since Postgres unique constraints treat NULLs as distinct)
+    const existing = await prisma.attestation.findFirst({
+      where: { donationId, type: rawType as AttestationType, status: "PENDING" }
+    });
+    
+    if (existing) {
+      return res.status(409).json({
+        error: "An attestation of this type has already been requested for this donation",
+      });
+    }
 
     try {
       const attestation = await prisma.attestation.create({

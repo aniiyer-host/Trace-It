@@ -81,6 +81,9 @@ describe("Disbursement Recording on Blockchain", () => {
 
   afterAll(async () => {
     // Clean up test data
+    await prisma.donationAllocation.deleteMany({
+      where: { disbursementId },
+    });
     await prisma.disbursement.deleteMany({
       where: { id: disbursementId },
     });

@@ -15,6 +15,7 @@ import type { Campaign } from "@/types";
 
 interface DisbursementRequestDialogProps {
   campaign: Campaign;
+  cohortId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDisbursementRequested: () => void;
@@ -22,11 +23,16 @@ interface DisbursementRequestDialogProps {
 
 export default function DisbursementRequestDialog({
   campaign,
+  cohortId,
   open,
   onOpenChange,
   onDisbursementRequested,
 }: DisbursementRequestDialogProps) {
   const [amount, setAmount] = useState("");
+  const [type, setType] = useState("PROOF_OF_NEED");
+  const [selectedCohort, setSelectedCohort] = useState(
+    cohortId || (campaign as any).cohortId || (campaign as any).cohorts?.[0]?.id || ""
+  );
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -38,6 +44,8 @@ export default function DisbursementRequestDialog({
         0,
       ),
   );
+
+  const cohorts = (campaign as any).cohorts || [];
 
   const handleRequestDisbursement = async () => {
     const parsedAmount = Number(amount);
@@ -64,8 +72,10 @@ export default function DisbursementRequestDialog({
     try {
       await apiService.charity.createDisbursement({
         campaignId: campaign.id,
+        cohortId: selectedCohort || undefined,
+        disbursementType: type,
         amountInr: parsedAmount,
-      });
+      } as any);
 
       toast({
         title: "Disbursement requested",
@@ -115,6 +125,38 @@ export default function DisbursementRequestDialog({
               </p>
             )}
           </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Disbursement Type</label>
+            <select
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              disabled={loading}
+            >
+              <option value="PROOF_OF_NEED">Proof of Need</option>
+              <option value="PROOF_OF_WORK">Proof of Work</option>
+            </select>
+          </div>
+
+          {cohorts.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Target Cohort</label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={selectedCohort}
+                onChange={(e) => setSelectedCohort(e.target.value)}
+                disabled={loading}
+              >
+                <option value="">None (General Campaign Funds)</option>
+                {cohorts.map((c: any) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="space-y-2">
             <label

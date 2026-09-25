@@ -222,12 +222,9 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
       throw error;
     }
   },
-  uploadMilestoneProof: async (milestoneId, description, cid) => {
+  uploadMilestoneProof: async (milestoneId, _desc, cid) => {
     try {
-      await apiService.milestones.uploadProof(milestoneId, {
-        description,
-        proofHash: cid,
-      } as unknown as File);
+      await apiService.milestones.uploadProof(milestoneId, [] as File[]);
       // Optimistically update the milestone status to 'disbursed' and set proofCid
       const campaigns = get().campaigns.map((c) => ({
         ...c,

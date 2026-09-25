@@ -1633,3 +1633,174 @@ FILE: `frontend/src/components/DonationHistoryTable.tsx`
 
 - Configured the frontend/backend proof-viewing flow to work with a local S3-compatible storage setup using MinIO during development.
 - Proof files remain private in the storage bucket and are accessed by admins through short-lived signed URLs rather than public file URLs.
+
+### Fix 1 — `DisbursementRequestDialog.tsx` & `NGODashboard.tsx`
+- **Changes:** Added optional `cohortId` prop to `DisbursementRequestDialogProps` in `frontend/src/components/DisbursementRequestDialog.tsx` and updated the `createDisbursement` API payload to include `cohortId: cohortId || (campaign as any).cohortId`. Updated `frontend/src/pages/NGODashboard.tsx` to pass `cohortId` down from `selectedCampaignObj`.
+- **Reason:** `createDisbursement` API call previously omitted `cohortId` in the payload. Consequently, the backend allocation check `if (disbursement.cohortId)` in `admin.ts` was never satisfied, resulting in zero donations being marked as `ALLOCATED` and zero attestations being generated. Passing `cohortId` through the prop chain ensures proper donation allocation and attestation generation.
+
+### Phase B — Schema Migrations (`backend/prisma/schema.prisma`)
+- **Changes:**
+  - Added `DisbursementType` enum (`PROOF_OF_NEED`, `PROOF_OF_WORK`).
+  - Added `disbursementType` (default `PROOF_OF_NEED`) and `isFinalDisbursement` (default `false`) fields to `Disbursement`.
+  - Created `DonationAllocation` join table to map partial allocations between `Donation` and `Disbursement`.
+  - Added `allocatedAmount` and `disbursementId` fields to `Attestation`.
+  - Changed `Attestation` constraint from `@@unique([donationId, type])` to `@@unique([donationId, disbursementId, type])`.
+  - Added `allocatedAmount` field to `Donation`.
+- **Reason:** These changes structurally support the new disbursement and attestation plan. The old unique constraint on `Attestation` prevented multi-cycle attestations for a single donor. The addition of `DonationAllocation` allows for partial donation tracking and remainder carry-forward, which were previously impossible.
+
+### Phase C — Backend Logic Rewrite
+- **Changes in `backend/src/routes/admin.ts`:**
+  - Rewrote the donation allocation loop in `approveDisbursement`. Now fetches all donations with statuses `SUCCESS`, `ALLOCATED`, `DISBURSED`, or `DELIVERED` that have remaining unallocated amounts.
+  - Dynamically calculates the `amountToAllocate` per donation up to the disbursement amount.
+  - Creates a `DonationAllocation` join record per partial allocation.
+  - Generates `RECEIPT` `Attestation` records mapped per-donor and per-disbursement with the exact `allocatedAmount`.
+  - Added `isFinalDisbursement` calculation in `approveDisbursement` to auto-close the campaign (`CampaignStatus.COMPLETED`) when total approved disbursements meet or exceed the campaign's raised amount.
+  - Added a new `POST /admin/campaigns/:id/close` force-close endpoint.
+- **Changes in `backend/src/routes/webhooks/razorpay.ts`:**
+  - Removed the auto-creation of `RECEIPT` attestations at payment time (lines 212-231).
+- **Changes in `backend/src/services/refundService.ts`:**
+  - Created a new stub file with a `processRefund` function to serve as the call site for the proactive Razorpay refund feature being built by another teammate.
+- **Reason:** Realizes the multi-cycle, partial allocation disbursement design. By tracking allocations precisely via `DonationAllocation` and moving attestation creation to the point of disbursement approval, the system accurately matches chunks of donor funds to specific NGO disbursements and enforces campaign closing rules.
+
+### Phase D — Frontend Connections & Attestation Workflow
+- **Changes in `backend/src/routes/charity.ts`:**
+  - Fixed `signAttestation` endpoint to use the new `donationId_disbursementId_type` unique constraint when creating the auto-generated `DELIVERY` attestation after a `RECEIPT` is signed, preventing backend crashes.
+- **Changes in `frontend/src/components/DisbursementRequestDialog.tsx`:**
+  - Added a `disbursementType` dropdown (`PROOF_OF_NEED` vs `PROOF_OF_WORK`).
+  - Added a `cohortId` dropdown to optionally tie the disbursement to a specific cohort.
+- **Changes in `frontend/src/components/ProofUploadDialog.tsx`:**
+  - Conditionally added a second file upload input for "Geotagged Image" if `milestone.disbursementType === 'PROOF_OF_WORK'`.
+- **Changes in `frontend/src/utils/apiClient.ts`:**
+  - Updated `uploadProof` API client signature to append `geotagFile` to the `FormData` if provided.
+- **Changes in `frontend/src/pages/DonorDashboard.tsx`:**
+  - Updated the progress tracker variables (`hasMilestones`, `hasProof`) to pull from `campaign.disbursements` first, falling back to `campaign.milestones` if not renamed, reflecting the new backend mapping.
+- **Changes in `frontend/src/pages/AdminPanel.tsx`:**
+  - Updated the `ActionItem` type and `ActionRow` component to render the `disbursementType` badge directly in the admin review queue.
+- **Reason:** Wires up the UI to the backend changes. The logic dictating that NGOs can only sign a `RECEIPT` attestation *after* a disbursement is approved is handled inherently by Phase C's backend changes (since the `PENDING` attestation is no longer created at the Razorpay webhook level, the NGO dashboard's `pendingAttestations` fetch returns empty until the admin approves a disbursement).
+
+### Phase E — Test Updates
+- **Changes in `backend/tests/disbursement.test.ts`:**
+  - Rewrote the `POST /api/admin/disburse/:id/approve` assertions to check for partial allocations using the new FIFO loop (asserting `allocatedAmount` is 5000 for the first donation and 1000 for the second).
+  - Added assertions to ensure `DonationAllocation` records are properly generated.
+  - Added assertions to ensure `RECEIPT` attestations are generated during disbursement approval.
+  - Added new test case for `isFinalDisbursement` which verifies that the Campaign is auto-closed to `COMPLETED` when the last dollar is disbursed.
+  - Added new test case for the `POST /api/admin/campaigns/:id/close` force-close endpoint.
+- **Changes in `backend/tests/simulation.test.ts`:**
+  - Modified the webhook test (`transitions INITIATED donation to SUCCESS`) to explicitly assert that the `RECEIPT` attestation is **no longer** created immediately upon payment success.
+- **Changes in `backend/src/routes/charity.ts` (Test compatibility fix):**
+  - Updated `createDisbursement` to correctly extract `disbursementType` from `req.body` and save it to the database, capturing the newly added frontend field.
+  - Updated `signAttestation` to handle manual donor-requested attestations (where `disbursementId` is null). Replaced Prisma's `upsert` with a combination of `findFirst` and `create` since Postgres/Prisma doesn't allow upserting a compound unique constraint with a nullable field (`Foreign Key Constraint Violation`).
+- **Changes in `backend/src/routes/donor.ts` (Attestation duplicate fix):**
+  - Added a manual constraint check in `requestDonationAttestation` to prevent donors from requesting multiple attestations of the same type. This was previously handled by a Prisma `@@unique` constraint, but since `disbursementId` is now part of the constraint and can be `null` on manual requests, Postgres allows duplicate `null` values by default, which broke the test expecting a 409 Conflict.
+- **Changes in `backend/tests/disbursement.test.ts` & `backend/tests/e2e.test.ts` (Test cleanup fix):**
+  - Added `await prisma.donationAllocation.deleteMany({})` to the test suite cleanup hooks (`afterAll`/`beforeAll`) immediately preceding the `disbursement.deleteMany({})` call. This resolves a cascading `Foreign key constraint violated` Prisma error that caused the entire end-to-end suite to crash on the second run.
+  - Added `await prisma.attestation.deleteMany({ where: { donation: { campaignId } } })` to the cleanup hook in `disbursement.test.ts`. Since the test now automatically generates `RECEIPT` attestations upon disbursement approval, attempting to delete the `Donation` table crashed with an `attestations_donationId_fkey` constraint violation.
+- **Changes in `backend/src/services/donationService.ts`:**
+  - Removed the `try/catch` block that was attempting to auto-create a `RECEIPT` attestation upon payment success. In Phase C, the schema was updated (`donationId_type` is no longer a unique compound key) and the auto-generation logic was moved to disbursement approval. This was throwing a silent `PrismaClientValidationError` in the background during webhook tests.
+- **Changes in `backend/src/services/receiptService.ts`:**
+  - Silenced a `console.log` during the `test` environment to prevent Jest's "Cannot log after tests are done" warning. The receipt generation is a fire-and-forget Promise, which safely resolves slightly after the webhook response, causing Jest to complain about asynchronous logging.
+- **Changes in `frontend/src/components/DonationHistoryTable.tsx`:**
+  - Added a new `Allocated` column to show exactly how much of the donor's money has been allocated (`allocatedAmount`) vs the total deployed (`amount`).
+  - Fixed a UI bug where the attestation status defaulted to "Pending NGO Confirmation" (yellow dot) even for completely unallocated funds that had no attestation generated yet. It now defaults to "Awaiting Allocation" (gray dot) until a `RECEIPT` attestation is actually created by the backend.
+- **Changes in `frontend/src/pages/DonorDashboard.tsx`:**
+  - Redesigned the Trace Trajectory Stepper (`buildJourney`) to perfectly match the new FIFO allocation lifecycle. The generic "Milestone Active" step was replaced with a much more accurate "Funds Allocated" step. The labels are now: "Capital Deployed" ➔ "Funds Allocated" ➔ "NGO Receipt Signed" ➔ "Proof Uploaded" ➔ "Impact Verified". This ensures the donor accurately sees if their funds are still in the unallocated queue.
+- **Changes in `frontend/src/components/ProofUploadDialog.tsx`:**
+  - Added explicit visual badges to the "Upload Disbursement Proof" dialog so the NGO immediately knows whether they are uploading for a **Proof of Need** or **Proof of Work** disbursement. The type is now clearly displayed next to the campaign title and inside the details grid, preventing confusion when switching between different disbursement styles.
+- **Changes in Multiple Files for Multi-File Proof Uploads:**
+  - **Backend (`middleware/multerMiddleware.ts` & `routes/charity.ts`)**: Upgraded the upload mechanism from `uploadSingle` to `uploadMultipleFields` (using `multer.fields`). This allows the backend to accept an array of standard files under the `files` key (up to 10 files) simultaneously with a single `geotagFile` for Proof of Work, storing each file distinctly and generating separate `Document` entries in the DB linked to the same disbursement.
+  - **Frontend (`ProofUploadDialog.tsx` & `apiClient.ts`)**: Migrated state from `selectedFile` to a `selectedFiles` array. Updated the HTML input field with the `multiple` attribute. Modified the `apiClient.uploadProof` method to append each file in the array to the `FormData` under the `files` key, solving the limitation of uploading multiple receipts/images at once for a single disbursement.
+- **Changes in `ProofUploadDialog.tsx` for multi-file usability and security:**
+  - Added actual `onDrop` and `onDragOver` event handlers to the drag-and-drop zone. The browser previously ignored multiple dropped files because the default drag action wasn't explicitly prevented and captured by React. 
+  - Rewrote the upload summary text to actively display a scrollable list of the exact file names that have been successfully staged for upload.
+  - Added front-end validation limits and explicit UI text warning the user about the limits: "Max 10 files (up to 10MB each)", directly addressing zip-bombing and large payload concerns.
+- **Changes in `AdminPanel.tsx` & Backend `admin.ts` for Multi-File Admin Review:**
+  - The previous architecture hardcoded `fieldReportUrl` as a single string, which crashed when Minio was fed a database hash instead of an S3 file path, resulting in the XML `NoSuchKey` error.
+  - Rewrote `GET /admin/disbursements/:id/proof-url` on the backend to dynamically query the `Document` table and generate signed URLs for *all* files attached to a disbursement request.
+  - Rewrote the Admin Panel's `View Proof` button action. Instead of aggressively opening a pop-up window directly (which browsers block when there are multiple pop-ups), it now renders a clean `<Dialog>` modal that lists all files by their original names. The Admin can click "View File" on any of them to inspect the proofs individually.
+- **Changes in `NgoDashboard.tsx` for Attestation AMOUNTS:**
+  - The UI for Receipt Attestations was erroneously displaying the *total donation amount* from the donor instead of the specific partial *allocated amount* designated for the current disbursement request. (For example, Donor 2 gave 2,000 total, but only 1,000 of it was used for the current 6k disbursement, yet the UI asked for an attestation of 2,000).
+  - Backend `admin.ts` `getPendingAttestationsAdmin` and frontend state types were updated to correctly thread through the `allocatedAmount` field.
+  - Replaced `{formatUSD(Number(attestation.donation?.amount))}` with `{formatUSD(Number(attestation.allocatedAmount || attestation.donation?.amount))}` in the NGO Dashboard to accurately reflect FIFO math.
+- **Removed Fake Transfer UI Timers:**
+  - `NgoDashboard.tsx` had a frontend `setTimeout` (10 seconds) that would artificially flip a milestone from "Awaiting fund transfer" to "Funds transferred successfully" immediately after admin approval without consulting the database status.
+  - Removed this entire frontend timer block and `transferredDisbursements` local state.
+  - The UI now looks strictly at `milestone.disbursementStatus` from the database. It will only render "Funds transferred successfully" if the actual backend status is `SENT` or `SETTLED`, keeping the dashboard perfectly in sync with the real state of funds.
+
+## Fix "Request Attestation" fake block for Disbursements
+**Why**: When the Admin clicked "Mark as Sent & Received", the backend updated the `Disbursement` status to `SETTLED`. The frontend was mapping `SETTLED` to `delivered`. This was incorrect, as `delivered` caused the Action Inbox to show a dummy "Request Attestation" UI block that shouldn't exist (the actual attestations are driven by the `/ngo/attestations/pending` endpoint).
+**Changes**:
+1. Changed `frontend/src/pages/NgoDashboard.tsx` to map `SETTLED` to `disbursed` instead of `delivered`.
+2. Removed `m.status === 'disbursed'` and `m.status === 'delivered'` from the `pendingMilestoneActions` filter. This ensures that completed disbursements gracefully disappear from the NGO's Action Inbox rather than lingering indefinitely, leaving the NGO to focus *only* on the actual RECEIPT/DELIVERY attestations (which are populated separately).
+3. Updated the "Completed" stat counter in the right pane to properly increment based on `m.disbursementStatus === 'SETTLED'`.
+
+## Fix Dashboard "0" Allocated Bug and Missing Trace Steps
+**Why**: 
+1. The backend was correctly calculating and saving the `allocatedAmount`, but the frontend `apiClient.ts` was explicitly stripping out the `allocatedAmount` field when parsing the JSON response. 
+2. The `Proof of need uploaded` trace trajectory step was checking if `campaign.milestones` had items. However, the public campaign endpoints in `backend/src/routes/public.ts` were forgetting to map and return the `disbursements` list as `milestones` in the API payload, causing it to always be empty.
+**Changes**:
+1. Added `allocatedAmount: d.allocatedAmount` to the `getByUser` response mapping in `frontend/src/utils/apiClient.ts`.
+2. Updated `backend/src/routes/public.ts` to fetch `disbursements` and explicitly map them to the `milestones` array in both `/public/campaigns` and `/public/campaigns/:id` endpoints.
+3. The Donor Dashboard now successfully displays the precise allocated amount (e.g. ₹5000 and ₹1000) and lights up the "Proof of need uploaded" and "Funds allocated" trajectory steps!
+
+### MilestoneTimeline Fix (2026-09-25)
+**Problem:** The expanded campaign detail view relies on the `MilestoneTimeline` component. The spinner logic at lines 91-97 was checking the condition `ms.status === 'disbursed' && !ms.approvedAt`. Because `approvedAt` is never populated from the backend when fetching NGO data, this evaluated to true permanently for all disbursed tasks. Consequently, even after an admin marked a disbursement as SETTLED, the UI was trapped showing the "Awaiting fund transfer..." spinner animation.
+
+**Solution:** Updated the condition to utilize the `ms.disbursementStatus` field (which contains accurate backend values like 'PENDING', 'APPROVED', or 'SETTLED'), mirroring the fix that was previously applied to the Action Inbox view.
+- `MilestoneTimeline.tsx` lines 91–97: replaced legacy `ms.status+ms.approvedAt` check with `ms.disbursementStatus` field — SETTLED now shows green confirmed state instead of permanent spinner. Action Inbox was already fixed; this was the missed component.
+- Fallback condition kept for older data where `disbursementStatus` might be absent.
+
+### charity.ts Fix (2026-09-25)
+- `charity.ts` signAttestation lines 1025–1033: added `allocatedAmount` to DELIVERY attestation create payload — DELIVERY now inherits the exact allocated amount from the paired RECEIPT instead of falling back to full donation amount.
+
+### NgoDashboard.tsx Fix (2026-09-25)
+- `NgoDashboard.tsx`: Added `disbursementType` to the milestone mapping inside `fetchNgoData`. Previously, this field was dropped when converting the backend API's `DisbursementResponse` into the frontend's `Milestone` type, causing the `ProofUploadDialog` to fail its `PROOF_OF_WORK` check and incorrectly fall back to displaying "Proof of Need" for every proof upload.
+
+### ProofUploadDialog Fix (2026-09-25)
+- `ProofUploadDialog.tsx`: Made the secondary geotagged image upload optional for `PROOF_OF_WORK` disbursements by removing the hard validation block and updating the UI label from "(Required)" to "(Optional)".
+
+### AttestationSignDialog Fix (2026-09-25)
+- `NgoDashboard.tsx`: Fixed the `AttestationSignDialog` properties to pass `allocatedAmount` instead of the static full `donation.amount`. This correctly aligns the cryptographic payload amount with the actual disbursed amount being attested.
+
+### Donor Dashboard - Multi-Donation Trajectory Fixes (2026-09-25)
+
+**Change 1 - Added `selectedDonationId` State**
+- **File & Lines:** `frontend/src/pages/DonorDashboard.tsx`, Lines 90-93
+- **Problem:** The donor dashboard only tracked the currently active campaign (`selectedCampaign`). It lacked the ability to track which specific donation within a campaign a user wanted to inspect.
+- **Why this fixes it:** Introducing the `selectedDonationId` state hook allows the application to track exactly which individual donation the user clicks, independent of the parent campaign.
+
+**Change 2 - Left-Side Campaign List Inline Donations**
+- **File & Lines:** `frontend/src/pages/DonorDashboard.tsx`, Lines 340-418
+- **Problem:** The left-hand navigation list aggregated all donations by campaign and only rendered campaigns as clickable buttons. There was no way for a donor to see or select their multiple individual donations made to the same campaign.
+- **Why this fixes it:** It introduces a sub-list rendering map that displays individual donations subordinately under a campaign when that campaign is active. Clicking a sub-row sets the `selectedDonationId` and styles it as active using the established Living Trust design system styling rules, making individual donation selection intuitive.
+
+**Change 3 - Rewritten `buildJourney` Logic**
+- **File & Lines:** `frontend/src/pages/DonorDashboard.tsx`, Lines 526-545
+- **Problem:** The trajectory logic used `.some()` across *all* donations belonging to a campaign. This meant if *any* donation reached the "Delivered" stage, the entire campaign graph showed "Delivered", confusing donors tracking a newer, unallocated donation to the same campaign.
+- **Why this fixes it:** The function signature and logic were updated to accept and evaluate against a strict, single `Donation` object. It now calculates the milestone statuses (like `isAllocated` and `isReceipted`) directly against the passed donation, isolating the trajectory to that exact donation's lifecycle.
+
+**Change 4 - Graph Call Site Update & Placeholder**
+- **File & Lines:** `frontend/src/pages/DonorDashboard.tsx`, Lines 447-457
+- **Problem:** The UI unconditionally rendered the `<Stepper />` graph by passing all campaign donations into the legacy `buildJourney` logic. 
+- **Why this fixes it:** The call site was replaced with an IIFE (Immediately Invoked Function Expression) that attempts to resolve the `selectedDonationId`. If a donation is selected, it renders the stepper for that exact donation. If no donation is selected (default state when a campaign is clicked), it renders a simple, muted dashed placeholder prompting the user to select an individual donation on the left.
+
+### Multi-Disbursement Trajectory Refactor (2026-09-25)
+
+**Change 1 - Backend Select Fields**
+- **File & Lines:** `backend/src/routes/donor.ts`, lines 75–82
+- **Problem:** `disbursementId` and `allocatedAmount` were never sent to the frontend in the donor dashboard payload, making per-disbursement graph filtering impossible.
+- **Why this fixes it:** Added `disbursementId` and `allocatedAmount` to the attestations Prisma select so the frontend receives the required data to uniquely slice a donation's lifecycle.
+
+**Change 2 - Frontend Type Updates**
+- **File & Lines:** `frontend/src/types/index.ts`, lines 142–150
+- **Problem:** TypeScript didn't know about the new fields.
+- **Why this fixes it:** Added optional `disbursementId` and `allocatedAmount` to the `Attestation` interface, satisfying strict compiler checks and supporting per-disbursement graph filtering on the donor dashboard.
+
+**Change 3 - Graph Trajectory Logic Rewrite**
+- **File & Lines:** `frontend/src/pages/DonorDashboard.tsx`, lines 530-550
+- **Problem:** The `buildJourney` logic previously evaluated all attestations across a single donation, creating an inaccurate view if one donation had multiple ongoing disbursements.
+- **Why this fixes it:** Added a `disbursementId` parameter. Attestations are now filtered to the specific disbursement slice before evaluating each trajectory step, and the funds-allocated step now uses the attestation-level `allocatedAmount` instead of the cumulative `donation.allocatedAmount`.
+
+**Change 4 - Multiple Graph Rendering**
+- **File & Lines:** `frontend/src/pages/DonorDashboard.tsx`, lines 446-470
+- **Problem:** The UI could only render one `<Stepper />` per donation, failing to accurately show progress when a donation was split across multiple disbursements.
+- **Why this fixes it:** Replaced the single Stepper with a dynamic per-disbursement list. Derives unique `disbursementIds` from the selected donation's attestations and renders one titled graph per disbursement, complete with placeholders when no donation or no disbursements are selected.
