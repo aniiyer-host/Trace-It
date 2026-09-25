@@ -1104,6 +1104,12 @@ export const uploadDisbursementProof = [
         return res.status(400).json({ error: "No files uploaded" });
       }
 
+      // Enforce combined size limit of 10 MB on the backend
+      const totalSize = files.reduce((sum, f) => sum + f.size, 0) + (geotagFile?.size || 0);
+      if (totalSize > 10 * 1024 * 1024) {
+        return res.status(400).json({ error: "Combined size of all files exceeds the 10 MB limit" });
+      }
+
       const storageBucket = "test-bucket";
       const storageService = new StorageService(storageBucket);
       

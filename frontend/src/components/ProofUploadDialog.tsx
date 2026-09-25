@@ -54,6 +54,18 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
       return;
     }
 
+    // Strict combined size validation
+    const mainFilesSize = selectedFiles.reduce((sum, f) => sum + f.size, 0);
+    const geotagSize = geotagFile ? geotagFile.size : 0;
+    if (mainFilesSize + geotagSize > 10 * 1024 * 1024) {
+      toast({ 
+        title: "Size limit exceeded", 
+        description: "The combined size of all files (including geotag) must be under 10 MB.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
     setLoading(true);
     setUploadProgress(0);
 
@@ -164,6 +176,14 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
                     toast({ title: "Limit exceeded", description: "Max 10 files allowed.", variant: "destructive" });
                     return;
                   }
+                  
+                  const currentGeotagSize = geotagFile ? geotagFile.size : 0;
+                  const newMainFilesSize = filesArray.reduce((sum, f) => sum + f.size, 0);
+                  if (newMainFilesSize + currentGeotagSize > 10 * 1024 * 1024) {
+                    toast({ title: "Size limit exceeded", description: "Combined size of all files must be under 10 MB.", variant: "destructive" });
+                    return;
+                  }
+
                   setSelectedFiles(filesArray);
                   toast({
                     title: `${filesArray.length} file${filesArray.length === 1 ? '' : 's'} selected`,
@@ -190,7 +210,7 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
                 )}
               </div>
               <p className="text-xs mt-1 opacity-70">
-                PDF, PNG, JPEG supported • Max 10 files (up to 10MB each)
+                PDF, PNG, JPEG supported • Max 10 files (up to 10MB combined)
               </p>
               {/* Optional file input */}
               <label className="mt-4 flex items-center justify-center px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg cursor-pointer max-w-xs mx-auto">
@@ -207,6 +227,14 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
                         toast({ title: "Limit exceeded", description: "Max 10 files allowed.", variant: "destructive" });
                         return;
                       }
+
+                      const currentGeotagSize = geotagFile ? geotagFile.size : 0;
+                      const newMainFilesSize = filesArray.reduce((sum, f) => sum + f.size, 0);
+                      if (newMainFilesSize + currentGeotagSize > 10 * 1024 * 1024) {
+                        toast({ title: "Size limit exceeded", description: "Combined size of all files must be under 10 MB.", variant: "destructive" });
+                        return;
+                      }
+
                       setSelectedFiles(filesArray);
                       toast({
                         title: `${filesArray.length} file${filesArray.length === 1 ? '' : 's'} selected`,
@@ -232,6 +260,13 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
                     onChange={(e) => {
                       if (e.target.files && e.target.files.length > 0) {
                         const file = e.target.files[0];
+                        
+                        const mainFilesSize = selectedFiles.reduce((sum, f) => sum + f.size, 0);
+                        if (mainFilesSize + file.size > 10 * 1024 * 1024) {
+                          toast({ title: "Size limit exceeded", description: "Combined size of all files must be under 10 MB.", variant: "destructive" });
+                          return;
+                        }
+
                         setGeotagFile(file);
                         toast({ title: `Geotag selected: ${file.name}` });
                       }
