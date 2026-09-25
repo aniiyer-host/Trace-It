@@ -1,0 +1,1275 @@
+
+> backend@1.0.0 test
+> cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand
+
+(node:49409) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:49409) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+FAIL tests/attestation.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+    console.log
+      {"durationMs":16,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donations/4481d8eb-9c88-48c6-bd46-539ecd39001f/attestation","requestId":"6065aff9-8aa3-4ef4-b2ca-e6a24c8c15f5","statusCode":201,"timestamp":"2026-09-25T05:36:43.578Z","userId":"f677d340-c4ed-4069-9b40-e233b5d8f307"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"f677d340-c4ed-4069-9b40-e233b5d8f307","actorType":"USER","entityId":"d299d60e-df14-4a5c-b4c6-5519ae67becb","entityType":"attestation","eventType":"ATTESTATION_REQUESTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"donationId":"4481d8eb-9c88-48c6-bd46-539ecd39001f","type":"RECEIPT"},"requestId":null,"timestamp":"2026-09-25T05:36:43.583Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donations/4481d8eb-9c88-48c6-bd46-539ecd39001f/attestation","requestId":"a2f1428f-f6c0-4f1b-97ec-8b07f9f7c9fd","statusCode":409,"timestamp":"2026-09-25T05:36:43.586Z","userId":"f677d340-c4ed-4069-9b40-e233b5d8f307"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/donations/4481d8eb-9c88-48c6-bd46-539ecd39001f/attestation","requestId":"44aeafb3-ba2c-4d3a-babf-7c3d34cc7853","statusCode":200,"timestamp":"2026-09-25T05:36:43.589Z","userId":"f677d340-c4ed-4069-9b40-e233b5d8f307"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/attestations/pending","requestId":"c2845b48-058a-4fdd-8b69-7ac3dbaeb790","statusCode":200,"timestamp":"2026-09-25T05:36:43.597Z","userId":"380c7c98-2676-4efa-81ab-6a483f947496"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/attestations/pending","requestId":"53d95efd-5312-44f8-8896-ea6c67f73871","statusCode":200,"timestamp":"2026-09-25T05:36:43.600Z","userId":"ce2ff51e-0373-4845-abab-3a21e8baf9d1"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/attestations","requestId":"fb8fee65-ff0d-4b25-af87-dc1fd58c3940","statusCode":404,"timestamp":"2026-09-25T05:36:43.603Z","userId":"ce2ff51e-0373-4845-abab-3a21e8baf9d1"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"380c7c98-2676-4efa-81ab-6a483f947496","actorType":"USER","entityId":"d299d60e-df14-4a5c-b4c6-5519ae67becb","entityType":"attestation","eventType":"ATTESTATION_NGO_SIGNED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"donationId":"4481d8eb-9c88-48c6-bd46-539ecd39001f","type":"RECEIPT"},"requestId":null,"timestamp":"2026-09-25T05:36:43.611Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":null,"actorType":"SYSTEM","entityId":"d299d60e-df14-4a5c-b4c6-5519ae67becb","entityType":"attestation","eventType":"ATTESTATION_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"autoApproved":true,"donationId":"4481d8eb-9c88-48c6-bd46-539ecd39001f","type":"RECEIPT"},"requestId":null,"timestamp":"2026-09-25T05:36:43.615Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":11,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/attestations","requestId":"c37f7875-cc2b-4940-abad-16d92ef419c0","statusCode":200,"timestamp":"2026-09-25T05:36:43.615Z","userId":"380c7c98-2676-4efa-81ab-6a483f947496"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/attestations","requestId":"1373e322-dda9-4c77-9e15-4e540fbc7f43","statusCode":409,"timestamp":"2026-09-25T05:36:43.618Z","userId":"380c7c98-2676-4efa-81ab-6a483f947496"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"380c7c98-2676-4efa-81ab-6a483f947496","actorType":"USER","entityId":"598d460b-616e-41f5-a0b4-28d782540755","entityType":"attestation","eventType":"ATTESTATION_NGO_SIGNED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"donationId":"4481d8eb-9c88-48c6-bd46-539ecd39001f","type":"DELIVERY"},"requestId":null,"timestamp":"2026-09-25T05:36:43.623Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/attestations","requestId":"bd9bfbca-f5eb-4e9a-b327-0fe3a46fdfa1","statusCode":200,"timestamp":"2026-09-25T05:36:43.623Z","userId":"380c7c98-2676-4efa-81ab-6a483f947496"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":11,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/attestations/pending","requestId":"a552b0c3-a120-4fb6-91cd-2c87a796079c","statusCode":200,"timestamp":"2026-09-25T05:36:43.636Z","userId":"db34d5f0-03e0-42d5-8834-4c74d42e9c3a"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/attestations/598d460b-616e-41f5-a0b4-28d782540755/approve","requestId":"f6e31928-339d-4510-8ec5-076c32334e00","statusCode":403,"timestamp":"2026-09-25T05:36:43.638Z","userId":"f677d340-c4ed-4069-9b40-e233b5d8f307"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"db34d5f0-03e0-42d5-8834-4c74d42e9c3a","actorType":"ADMIN","entityId":"598d460b-616e-41f5-a0b4-28d782540755","entityType":"attestation","eventType":"ATTESTATION_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-25T05:36:43.645Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/attestations/598d460b-616e-41f5-a0b4-28d782540755/approve","requestId":"d162eeb0-146e-40c5-a263-ba004a0483cf","statusCode":200,"timestamp":"2026-09-25T05:36:43.647Z","userId":"db34d5f0-03e0-42d5-8834-4c74d42e9c3a"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/attestations/598d460b-616e-41f5-a0b4-28d782540755/reject","requestId":"b492cf81-5458-4c08-abad-70842e4eb16e","statusCode":409,"timestamp":"2026-09-25T05:36:43.649Z","userId":"db34d5f0-03e0-42d5-8834-4c74d42e9c3a"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.error
+      MulterError: Unexpected field
+          at wrappedFileFilter (/Users/adison/Programming/Trace-It/backend/node_modules/multer/index.js:41:19)
+          at Multipart.<anonymous> (/Users/adison/Programming/Trace-It/backend/node_modules/multer/lib/make-middleware.js:193:7)
+          at Multipart.emit (node:events:508:20)
+          at HeaderParser.cb (/Users/adison/Programming/Trace-It/backend/node_modules/busboy/lib/types/multipart.js:358:14)
+          at HeaderParser.push (/Users/adison/Programming/Trace-It/backend/node_modules/busboy/lib/types/multipart.js:162:20)
+          at SBMH.ssCb [as _cb] (/Users/adison/Programming/Trace-It/backend/node_modules/busboy/lib/types/multipart.js:394:37)
+          at feed (/Users/adison/Programming/Trace-It/backend/node_modules/streamsearch/lib/sbmh.js:219:14)
+          at SBMH.push (/Users/adison/Programming/Trace-It/backend/node_modules/streamsearch/lib/sbmh.js:104:16)
+          at Multipart._write (/Users/adison/Programming/Trace-It/backend/node_modules/busboy/lib/types/multipart.js:567:19)
+          at writeOrBuffer (node:internal/streams/writable:570:12)
+          at _write (node:internal/streams/writable:499:10)
+          at Multipart.Writable.write (node:internal/streams/writable:508:10)
+          at IncomingMessage.ondata (node:internal/streams/readable:1013:24)
+          at IncomingMessage.emit (node:events:508:20)
+          at IncomingMessage.Readable.read (node:internal/streams/readable:785:10)
+          at flow (node:internal/streams/readable:1290:53)
+          at resume_ (node:internal/streams/readable:1269:3)
+          at processTicksAndRejections (node:internal/process/task_queues:90:21)
+
+      2 |
+      3 | export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
+    > 4 |   console.error(err.stack);
+        |           ^
+      5 |   const statusCode = err.statusCode || 500;
+      6 |   res.status(statusCode).json({
+      7 |     error: {
+
+      at error (src/middleware/errorHandler.ts:4:11)
+      at Layer.handleError (node_modules/router/lib/layer.js:116:17)
+      at trimPrefix (node_modules/router/index.js:340:13)
+      at node_modules/router/index.js:297:9
+      at processParams (node_modules/router/index.js:582:12)
+      at next (node_modules/router/index.js:291:5)
+      at Layer.handleError (node_modules/router/lib/layer.js:111:12)
+      at trimPrefix (node_modules/router/index.js:340:13)
+      at node_modules/router/index.js:297:9
+      at processParams (node_modules/router/index.js:582:12)
+      at Immediate.next (node_modules/router/index.js:291:5)
+      at Immediate._onImmediate (node_modules/router/index.js:688:15)
+
+    console.log
+      {"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/api/charity/disburse/1a21d4f9-3239-4e2a-b23a-46c31f92b790/proof","requestId":"79df5c56-53a4-49a6-8b4e-8e2e039359e9","statusCode":500,"timestamp":"2026-09-25T05:36:43.653Z","userId":"ce2ff51e-0373-4845-abab-3a21e8baf9d1"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.error
+      MulterError: Unexpected field
+          at wrappedFileFilter (/Users/adison/Programming/Trace-It/backend/node_modules/multer/index.js:41:19)
+          at Multipart.<anonymous> (/Users/adison/Programming/Trace-It/backend/node_modules/multer/lib/make-middleware.js:193:7)
+          at Multipart.emit (node:events:508:20)
+          at HeaderParser.cb (/Users/adison/Programming/Trace-It/backend/node_modules/busboy/lib/types/multipart.js:358:14)
+          at HeaderParser.push (/Users/adison/Programming/Trace-It/backend/node_modules/busboy/lib/types/multipart.js:162:20)
+          at SBMH.ssCb [as _cb] (/Users/adison/Programming/Trace-It/backend/node_modules/busboy/lib/types/multipart.js:394:37)
+          at feed (/Users/adison/Programming/Trace-It/backend/node_modules/streamsearch/lib/sbmh.js:219:14)
+          at SBMH.push (/Users/adison/Programming/Trace-It/backend/node_modules/streamsearch/lib/sbmh.js:104:16)
+          at Multipart._write (/Users/adison/Programming/Trace-It/backend/node_modules/busboy/lib/types/multipart.js:567:19)
+          at writeOrBuffer (node:internal/streams/writable:570:12)
+          at _write (node:internal/streams/writable:499:10)
+          at Multipart.Writable.write (node:internal/streams/writable:508:10)
+          at IncomingMessage.ondata (node:internal/streams/readable:1013:24)
+          at IncomingMessage.emit (node:events:508:20)
+          at IncomingMessage.Readable.read (node:internal/streams/readable:785:10)
+          at flow (node:internal/streams/readable:1290:53)
+          at resume_ (node:internal/streams/readable:1269:3)
+          at processTicksAndRejections (node:internal/process/task_queues:90:21)
+
+      2 |
+      3 | export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
+    > 4 |   console.error(err.stack);
+        |           ^
+      5 |   const statusCode = err.statusCode || 500;
+      6 |   res.status(statusCode).json({
+      7 |     error: {
+
+      at error (src/middleware/errorHandler.ts:4:11)
+      at Layer.handleError (node_modules/router/lib/layer.js:116:17)
+      at trimPrefix (node_modules/router/index.js:340:13)
+      at node_modules/router/index.js:297:9
+      at processParams (node_modules/router/index.js:582:12)
+      at next (node_modules/router/index.js:291:5)
+      at Layer.handleError (node_modules/router/lib/layer.js:111:12)
+      at trimPrefix (node_modules/router/index.js:340:13)
+      at node_modules/router/index.js:297:9
+      at processParams (node_modules/router/index.js:582:12)
+      at Immediate.next (node_modules/router/index.js:291:5)
+      at Immediate._onImmediate (node_modules/router/index.js:688:15)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/api/charity/disburse/1a21d4f9-3239-4e2a-b23a-46c31f92b790/proof","requestId":"7ba79daf-cb48-4170-8591-a00d580a7c24","statusCode":500,"timestamp":"2026-09-25T05:36:43.656Z","userId":"380c7c98-2676-4efa-81ab-6a483f947496"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":9,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/disbursements/pending","requestId":"0d1aa3a7-ed31-450c-874e-7a7e9d2e072a","statusCode":200,"timestamp":"2026-09-25T05:36:43.665Z","userId":"db34d5f0-03e0-42d5-8834-4c74d42e9c3a"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disbursements/1a21d4f9-3239-4e2a-b23a-46c31f92b790/reject","requestId":"e2c01ee1-a0d9-4519-ba98-4bc257f7344b","statusCode":403,"timestamp":"2026-09-25T05:36:43.668Z","userId":"380c7c98-2676-4efa-81ab-6a483f947496"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"db34d5f0-03e0-42d5-8834-4c74d42e9c3a","actorType":"ADMIN","entityId":"1a21d4f9-3239-4e2a-b23a-46c31f92b790","entityType":"disbursement","eventType":"DISBURSEMENT_REJECTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"reason":"field report insufficient"},"requestId":null,"timestamp":"2026-09-25T05:36:43.677Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disbursements/1a21d4f9-3239-4e2a-b23a-46c31f92b790/reject","requestId":"f181f0b0-5db4-426f-8fec-c0f57669fce0","statusCode":200,"timestamp":"2026-09-25T05:36:43.678Z","userId":"db34d5f0-03e0-42d5-8834-4c74d42e9c3a"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disbursements/1a21d4f9-3239-4e2a-b23a-46c31f92b790/approve","requestId":"8028d1ca-a976-4603-a602-a6478ff8a1ba","statusCode":400,"timestamp":"2026-09-25T05:36:43.682Z","userId":"db34d5f0-03e0-42d5-8834-4c74d42e9c3a"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+  ● Attestation & Milestone API Integration Tests › POST /api/charity/disburse/:id/proof - an UNRELATED ngo cannot upload proof
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 404
+    Received: 500
+
+      265 |       .attach("file", Buffer.from("dummy proof"), "proof.pdf");
+      266 |
+    > 267 |     expect(res.status).toBe(404);
+          |                        ^
+      268 |   });
+      269 |
+      270 |   test("POST /api/charity/disburse/:id/proof - owning ngo uploads proof", async () => {
+
+      at Object.toBe (tests/attestation.test.ts:267:24)
+
+  ● Attestation & Milestone API Integration Tests › POST /api/charity/disburse/:id/proof - owning ngo uploads proof
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 201
+    Received: 500
+
+      274 |       .attach("file", Buffer.from("dummy proof"), "proof.pdf");
+      275 |
+    > 276 |     expect(res.status).toBe(201);
+          |                        ^
+      277 |     expect(res.body).toHaveProperty("documentId");
+      278 |   });
+      279 |
+
+      at Object.toBe (tests/attestation.test.ts:276:24)
+
+  ● Attestation & Milestone API Integration Tests › GET /api/admin/disbursements/pending - admin sees the milestone with submitted proof
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      284 |
+      285 |     expect(res.status).toBe(200);
+    > 286 |     expect(res.body.some((d: any) => d.id === disbursementId)).toBe(true);
+          |                                                                ^
+      287 |   });
+      288 |
+      289 |   test("POST /api/admin/disbursements/:id/reject - a CHARITY cannot reject (RBAC)", async () => {
+
+      at Object.toBe (tests/attestation.test.ts:286:64)
+
+PASS tests/e2e.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+    console.log
+      {"actorId":"4c818505-547c-42ad-8b16-f2ae74c50df7","actorType":"USER","entityId":"c85e0c9c-a169-4102-9880-10a8306ee71f","entityType":"campaign","eventType":"CAMPAIGN_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"targetAmount":10000,"title":"Test Campaign for E2E"},"requestId":null,"timestamp":"2026-09-25T05:36:44.006Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":9,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"7c4b5f48-de19-4ca7-8933-13ac050f8621","statusCode":201,"timestamp":"2026-09-25T05:36:44.008Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"4c818505-547c-42ad-8b16-f2ae74c50df7","actorType":"USER","entityId":"c85e0c9c-a169-4102-9880-10a8306ee71f","entityType":"campaign","eventType":"CAMPAIGN_SUBMITTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"title":"Test Campaign for E2E"},"requestId":null,"timestamp":"2026-09-25T05:36:44.017Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/c85e0c9c-a169-4102-9880-10a8306ee71f/submit","requestId":"0ad166a3-d0fd-4ed2-8cdd-7315fd1c329b","statusCode":200,"timestamp":"2026-09-25T05:36:44.018Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"cb34ca87-608e-48ea-8c6f-b74668001a9f","actorType":"USER","entityId":"c85e0c9c-a169-4102-9880-10a8306ee71f","entityType":"campaign","eventType":"CAMPAIGN_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-25T05:36:44.022Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/c85e0c9c-a169-4102-9880-10a8306ee71f/approve","requestId":"e7223094-fef8-4607-b6f7-3eac42a581e2","statusCode":200,"timestamp":"2026-09-25T05:36:44.022Z","userId":"cb34ca87-608e-48ea-8c6f-b74668001a9f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"91f2c9f8-351c-4722-ba15-ededffe807ed","statusCode":201,"timestamp":"2026-09-25T05:36:44.029Z","userId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6","actorType":"USER","entityId":"cb87d3ed-8075-4cba-b6da-90a3aa28989d","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":5000,"campaignId":"c85e0c9c-a169-4102-9880-10a8306ee71f","ngoId":"4c818505-547c-42ad-8b16-f2ae74c50df7","paymentMethod":"UPI","razorpayOrderId":"order_a526015d19eb48e4bdb1"},"requestId":null,"timestamp":"2026-09-25T05:36:44.030Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":0,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/","requestId":"d47b05ac-661d-49f8-94cb-5f5efdb6df2a","statusCode":401,"timestamp":"2026-09-25T05:36:44.039Z","userId":null}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":null,"actorType":"WEBHOOK","entityId":null,"entityType":"webhook","eventType":"WEBHOOK_TAMPER_ATTEMPT","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"headers":{"accept-encoding":"gzip, deflate","connection":"close","content-length":"199","content-type":"application/json","host":"127.0.0.1:62515"},"reason":"Missing signature or raw body"},"requestId":null,"timestamp":"2026-09-25T05:36:44.041Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"4c818505-547c-42ad-8b16-f2ae74c50df7","actorType":"USER","entityId":"c6bbec4b-56ca-41c7-ba33-2e2f81c03557","entityType":"campaign","eventType":"CAMPAIGN_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"targetAmount":10000,"title":"Test Campaign for Timeline"},"requestId":null,"timestamp":"2026-09-25T05:36:44.043Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"4f7a2170-26e4-4a97-8405-6aea04ee1915","statusCode":201,"timestamp":"2026-09-25T05:36:44.043Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"4c818505-547c-42ad-8b16-f2ae74c50df7","actorType":"USER","entityId":"c6bbec4b-56ca-41c7-ba33-2e2f81c03557","entityType":"campaign","eventType":"CAMPAIGN_SUBMITTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"title":"Test Campaign for Timeline"},"requestId":null,"timestamp":"2026-09-25T05:36:44.046Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/c6bbec4b-56ca-41c7-ba33-2e2f81c03557/submit","requestId":"24a4bb3e-73b0-4e65-a1a6-e589a18aead9","statusCode":200,"timestamp":"2026-09-25T05:36:44.046Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"cb34ca87-608e-48ea-8c6f-b74668001a9f","actorType":"USER","entityId":"c6bbec4b-56ca-41c7-ba33-2e2f81c03557","entityType":"campaign","eventType":"CAMPAIGN_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-25T05:36:44.048Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/c6bbec4b-56ca-41c7-ba33-2e2f81c03557/approve","requestId":"24b3c4e3-a95f-4b84-b42c-b9c72f4cb604","statusCode":200,"timestamp":"2026-09-25T05:36:44.048Z","userId":"cb34ca87-608e-48ea-8c6f-b74668001a9f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"667b3bf5-658c-4a25-ab95-0480da138714","statusCode":201,"timestamp":"2026-09-25T05:36:44.051Z","userId":"3c32a954-d858-4ccd-834a-c03cd4e5312e"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"3c32a954-d858-4ccd-834a-c03cd4e5312e","actorType":"USER","entityId":"a48eaa1d-b154-432d-b1f0-3a0865a20656","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":5000,"campaignId":"c6bbec4b-56ca-41c7-ba33-2e2f81c03557","ngoId":"4c818505-547c-42ad-8b16-f2ae74c50df7","paymentMethod":"UPI","razorpayOrderId":"order_6c0db428e2e08e51da18"},"requestId":null,"timestamp":"2026-09-25T05:36:44.052Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/donations/a48eaa1d-b154-432d-b1f0-3a0865a20656/timeline","requestId":"63558e47-a022-4d71-976c-d0477789e039","statusCode":200,"timestamp":"2026-09-25T05:36:44.058Z","userId":"3c32a954-d858-4ccd-834a-c03cd4e5312e"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/receipt/cb87d3ed-8075-4cba-b6da-90a3aa28989d","requestId":"16946f8e-4c6a-4b64-a653-be04f865249d","statusCode":400,"timestamp":"2026-09-25T05:36:44.061Z","userId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"b5ee44a3-ae5e-4f60-9ebe-b609bdfc4bb6","actorType":"USER","entityId":"b5ee44a3-ae5e-4f60-9ebe-b609bdfc4bb6","entityType":"profile","eventType":"NGO_ONBOARDED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"organisationName":"Test NGO Org","registrationNo":"TESTREG001"},"requestId":null,"timestamp":"2026-09-25T05:36:44.065Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/onboard","requestId":"a61591d2-7af1-4b6f-a99b-49e18e42b618","statusCode":200,"timestamp":"2026-09-25T05:36:44.065Z","userId":"b5ee44a3-ae5e-4f60-9ebe-b609bdfc4bb6"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"4c818505-547c-42ad-8b16-f2ae74c50df7","actorType":"USER","entityId":"0ca31b0e-4c22-47ac-a83e-536ea818b4ce","entityType":"document","eventType":"DOCUMENT_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentType":"NGO_CERT","sha512HashSnippet":"hash_179"},"requestId":null,"timestamp":"2026-09-25T05:36:44.073Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/documents/upload","requestId":"8a0c897a-13d4-4675-b136-41d7d103a418","statusCode":201,"timestamp":"2026-09-25T05:36:44.073Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"4c818505-547c-42ad-8b16-f2ae74c50df7","actorType":"USER","entityId":"8fc4e945-b910-4ebb-9d96-3d9a7f919fba","entityType":"cohort","eventType":"COHORT_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"campaignId":"c85e0c9c-a169-4102-9880-10a8306ee71f","name":"Test Cohort"},"requestId":null,"timestamp":"2026-09-25T05:36:44.076Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/cohorts","requestId":"8afb6b1c-d29a-4f44-a719-444b3bdfb6dc","statusCode":201,"timestamp":"2026-09-25T05:36:44.077Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"4c818505-547c-42ad-8b16-f2ae74c50df7","actorType":"USER","entityId":"8fc4e945-b910-4ebb-9d96-3d9a7f919fba","entityType":"cohort","eventType":"COHORT_PROOF_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentId":"3fc876dd-e716-4907-87e1-bfea06271d24","sha512DocHash":"proof_hash_1790314604079_gd9y9mtf8i8"},"requestId":null,"timestamp":"2026-09-25T05:36:44.084Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":7,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/cohorts/8fc4e945-b910-4ebb-9d96-3d9a7f919fba/proof","requestId":"c357d166-723d-4a80-85e7-8123dc0d3b58","statusCode":201,"timestamp":"2026-09-25T05:36:44.084Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"4c818505-547c-42ad-8b16-f2ae74c50df7","actorType":"USER","entityId":"35f417f9-f624-4c4c-990a-276640527bf0","entityType":"disbursement","eventType":"DISBURSEMENT_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"amountInr":3000,"campaignId":"c85e0c9c-a169-4102-9880-10a8306ee71f"},"requestId":null,"timestamp":"2026-09-25T05:36:44.092Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disburse","requestId":"2776c681-4936-4382-bcc6-fe6389a07971","statusCode":201,"timestamp":"2026-09-25T05:36:44.092Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/disbursements","requestId":"528b1509-1ce0-4d90-a6f4-3cf496b56de2","statusCode":200,"timestamp":"2026-09-25T05:36:44.095Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"cb34ca87-608e-48ea-8c6f-b74668001a9f","actorType":"USER","entityId":"35f417f9-f624-4c4c-990a-276640527bf0","entityType":"disbursement","eventType":"DISBURSEMENT_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"amountInr":3000,"campaignId":"c85e0c9c-a169-4102-9880-10a8306ee71f"},"requestId":null,"timestamp":"2026-09-25T05:36:44.107Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":12,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disburse/35f417f9-f624-4c4c-990a-276640527bf0/approve","requestId":"a6f08aa4-2afb-465c-a9c2-c5ff497833be","statusCode":200,"timestamp":"2026-09-25T05:36:44.107Z","userId":"cb34ca87-608e-48ea-8c6f-b74668001a9f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/audit-logs","requestId":"15af0f67-a303-4c5e-ab13-f499967790c7","statusCode":200,"timestamp":"2026-09-25T05:36:44.113Z","userId":"cb34ca87-608e-48ea-8c6f-b74668001a9f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"4c818505-547c-42ad-8b16-f2ae74c50df7","actorType":"USER","entityId":"163dd2f1-4f63-4a22-a20c-96d1f4bdfff5","entityType":"campaign","eventType":"CAMPAIGN_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"targetAmount":10000,"title":"Test Campaign for FCRA"},"requestId":null,"timestamp":"2026-09-25T05:36:44.117Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"d596118a-bf29-4ab7-b4fb-5b013e0b1b93","statusCode":201,"timestamp":"2026-09-25T05:36:44.117Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"4c818505-547c-42ad-8b16-f2ae74c50df7","actorType":"USER","entityId":"163dd2f1-4f63-4a22-a20c-96d1f4bdfff5","entityType":"campaign","eventType":"CAMPAIGN_SUBMITTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"title":"Test Campaign for FCRA"},"requestId":null,"timestamp":"2026-09-25T05:36:44.120Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/163dd2f1-4f63-4a22-a20c-96d1f4bdfff5/submit","requestId":"a3ff14c0-b8f9-4ce8-9ead-a45ed02d5529","statusCode":200,"timestamp":"2026-09-25T05:36:44.120Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"cb34ca87-608e-48ea-8c6f-b74668001a9f","actorType":"USER","entityId":"163dd2f1-4f63-4a22-a20c-96d1f4bdfff5","entityType":"campaign","eventType":"CAMPAIGN_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-25T05:36:44.122Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/163dd2f1-4f63-4a22-a20c-96d1f4bdfff5/approve","requestId":"05e684f8-bc90-497e-a2fd-0db43aefa401","statusCode":200,"timestamp":"2026-09-25T05:36:44.123Z","userId":"cb34ca87-608e-48ea-8c6f-b74668001a9f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"c5311df9-70ba-4ddc-9fdd-d555960fdd64","statusCode":201,"timestamp":"2026-09-25T05:36:44.126Z","userId":"e52d540c-23e9-4fe6-a265-a20a4a66aa13"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"e52d540c-23e9-4fe6-a265-a20a4a66aa13","actorType":"USER","entityId":"259f26cc-932e-4105-9d61-6ce9256a4663","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":5000,"campaignId":"163dd2f1-4f63-4a22-a20c-96d1f4bdfff5","ngoId":"4c818505-547c-42ad-8b16-f2ae74c50df7","paymentMethod":"UPI","razorpayOrderId":"order_798e2d01428a06bf9c9b"},"requestId":null,"timestamp":"2026-09-25T05:36:44.127Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/reports/fcra","requestId":"54076420-8b46-41eb-88df-5613d5c3cb1e","statusCode":200,"timestamp":"2026-09-25T05:36:44.129Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"4c818505-547c-42ad-8b16-f2ae74c50df7","actorType":"USER","entityId":"04f0672c-937f-40a2-b756-9a7e29df08c2","entityType":"campaign","eventType":"CAMPAIGN_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"targetAmount":10000,"title":"Test Campaign for 80G"},"requestId":null,"timestamp":"2026-09-25T05:36:44.131Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"3cc8ed9c-c70f-430b-99c6-06efe8da1fc1","statusCode":201,"timestamp":"2026-09-25T05:36:44.131Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"4c818505-547c-42ad-8b16-f2ae74c50df7","actorType":"USER","entityId":"04f0672c-937f-40a2-b756-9a7e29df08c2","entityType":"campaign","eventType":"CAMPAIGN_SUBMITTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"title":"Test Campaign for 80G"},"requestId":null,"timestamp":"2026-09-25T05:36:44.133Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/04f0672c-937f-40a2-b756-9a7e29df08c2/submit","requestId":"f2f6d9e9-60a5-463f-b5ca-772ad8dc1003","statusCode":200,"timestamp":"2026-09-25T05:36:44.133Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"cb34ca87-608e-48ea-8c6f-b74668001a9f","actorType":"USER","entityId":"04f0672c-937f-40a2-b756-9a7e29df08c2","entityType":"campaign","eventType":"CAMPAIGN_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-25T05:36:44.135Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/04f0672c-937f-40a2-b756-9a7e29df08c2/approve","requestId":"0ce7e2c1-c78c-4b8a-b920-3c82622e4419","statusCode":200,"timestamp":"2026-09-25T05:36:44.135Z","userId":"cb34ca87-608e-48ea-8c6f-b74668001a9f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"e3384379-cad2-4c09-9a4f-365b927238dd","statusCode":201,"timestamp":"2026-09-25T05:36:44.138Z","userId":"457f269e-33f6-486a-afb8-c7c43bb5eb68"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"457f269e-33f6-486a-afb8-c7c43bb5eb68","actorType":"USER","entityId":"bdd09adf-6ef2-47dc-97b3-122aed98a625","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":5000,"campaignId":"04f0672c-937f-40a2-b756-9a7e29df08c2","ngoId":"4c818505-547c-42ad-8b16-f2ae74c50df7","paymentMethod":"UPI","razorpayOrderId":"order_924ef7524ba31d416d95"},"requestId":null,"timestamp":"2026-09-25T05:36:44.138Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/reports/80g","requestId":"3396afd7-7f6a-47af-8e80-9722b0bd7cb9","statusCode":200,"timestamp":"2026-09-25T05:36:44.139Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"cb34ca87-608e-48ea-8c6f-b74668001a9f","actorType":"USER","entityId":"32e2733a-3b74-4c74-8cf3-e96f45d90563","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"legalBasis":"FCRA Act 2010","requestingBody":"Ministry of Home Affairs"},"requestId":null,"timestamp":"2026-09-25T05:36:44.141Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests","requestId":"2b17f619-3981-4287-a30b-d6488c5f1e0a","statusCode":201,"timestamp":"2026-09-25T05:36:44.142Z","userId":"cb34ca87-608e-48ea-8c6f-b74668001a9f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"cb34ca87-608e-48ea-8c6f-b74668001a9f","actorType":"USER","entityId":"398f0f3c-75cd-44b9-afbb-f12e6c861b2c","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"legalBasis":"Section 133 of Income Tax Act","requestingBody":"Income Tax Department","targetUserId":"4c818505-547c-42ad-8b16-f2ae74c50df7"},"requestId":null,"timestamp":"2026-09-25T05:36:44.143Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests","requestId":"5bb9decb-29ff-40b6-bf44-7a6bc0e6fad7","statusCode":201,"timestamp":"2026-09-25T05:36:44.144Z","userId":"cb34ca87-608e-48ea-8c6f-b74668001a9f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"cb34ca87-608e-48ea-8c6f-b74668001a9f","actorType":"USER","entityId":"398f0f3c-75cd-44b9-afbb-f12e6c861b2c","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_DOCUMENTS_HELD","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"count":1,"documentIds":["0ca31b0e-4c22-47ac-a83e-536ea818b4ce"]},"requestId":null,"timestamp":"2026-09-25T05:36:44.147Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests/398f0f3c-75cd-44b9-afbb-f12e6c861b2c/hold","requestId":"c40ca80c-2c31-4a3b-8392-31373a9e3258","statusCode":200,"timestamp":"2026-09-25T05:36:44.147Z","userId":"cb34ca87-608e-48ea-8c6f-b74668001a9f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"cb34ca87-608e-48ea-8c6f-b74668001a9f","actorType":"USER","entityId":"e7cd79b5-fa2f-446d-96ef-ee23451f26a6","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"legalBasis":"FEMA 1999","requestingBody":"Enforcement Directorate","targetUserId":"4c818505-547c-42ad-8b16-f2ae74c50df7"},"requestId":null,"timestamp":"2026-09-25T05:36:44.149Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests","requestId":"135caf46-1d1e-4401-94c8-8bfe7a54c1f0","statusCode":201,"timestamp":"2026-09-25T05:36:44.149Z","userId":"cb34ca87-608e-48ea-8c6f-b74668001a9f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"4c818505-547c-42ad-8b16-f2ae74c50df7","actorType":"USER","entityId":"b71c38ca-a725-4802-8acc-3a06a6c9541f","entityType":"document","eventType":"DOCUMENT_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentType":"NGO_CERT","sha512HashSnippet":"hash_179"},"requestId":null,"timestamp":"2026-09-25T05:36:44.151Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/documents/upload","requestId":"f6f4a962-ff76-4c7a-b4c1-a603d43fd708","statusCode":201,"timestamp":"2026-09-25T05:36:44.151Z","userId":"4c818505-547c-42ad-8b16-f2ae74c50df7"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"cb34ca87-608e-48ea-8c6f-b74668001a9f","actorType":"USER","entityId":"e7cd79b5-fa2f-446d-96ef-ee23451f26a6","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_DOCUMENTS_HELD","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"count":1,"documentIds":["b71c38ca-a725-4802-8acc-3a06a6c9541f"]},"requestId":null,"timestamp":"2026-09-25T05:36:44.154Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests/e7cd79b5-fa2f-446d-96ef-ee23451f26a6/hold","requestId":"0c87dc9d-974f-4e8e-8a27-454f36b4db60","statusCode":200,"timestamp":"2026-09-25T05:36:44.154Z","userId":"cb34ca87-608e-48ea-8c6f-b74668001a9f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"cb34ca87-608e-48ea-8c6f-b74668001a9f","actorType":"USER","entityId":"e7cd79b5-fa2f-446d-96ef-ee23451f26a6","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_DOCUMENTS_EXPORTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentCount":2},"requestId":null,"timestamp":"2026-09-25T05:36:44.157Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests/e7cd79b5-fa2f-446d-96ef-ee23451f26a6/export","requestId":"8d209f63-719c-4afb-9216-d87ed9d55885","statusCode":200,"timestamp":"2026-09-25T05:36:44.157Z","userId":"cb34ca87-608e-48ea-8c6f-b74668001a9f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":0,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/campaigns","requestId":"a63335dc-6110-4c2c-bc79-511a325b5b1a","statusCode":403,"timestamp":"2026-09-25T05:36:44.158Z","userId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"2f0348c9-3dab-41cc-abe8-a38e4d1e6fcc","statusCode":402,"timestamp":"2026-09-25T05:36:44.160Z","userId":"d646e33e-f1bf-44e3-92d0-b076c3b5b9de"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"d646e33e-f1bf-44e3-92d0-b076c3b5b9de","actorType":"USER","entityId":"d646e33e-f1bf-44e3-92d0-b076c3b5b9de","entityType":"profile","eventType":"KYC_REQUIRED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":15000,"kycStatus":"NOT_REQUIRED"},"requestId":null,"timestamp":"2026-09-25T05:36:44.160Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":0,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/api/donor/donations/cmugj39iz00004hv0fdf5t6zh'%20OR%20'1'='1","requestId":"05734122-8e79-48b7-98f7-845e93ff827b","statusCode":404,"timestamp":"2026-09-25T05:36:44.161Z","userId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":0,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/health","requestId":"1e0b96ce-749e-421a-a2dd-a8f6cc634c79","statusCode":200,"timestamp":"2026-09-25T05:36:44.162Z","userId":null}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"a85fd268-966e-49e3-962e-1fa2fa2b04b4","statusCode":201,"timestamp":"2026-09-25T05:36:44.166Z","userId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"ae1c7681-9122-4ddc-9e28-7b66e29aa2c8","statusCode":201,"timestamp":"2026-09-25T05:36:44.166Z","userId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6","actorType":"USER","entityId":"ce638024-b331-4ee3-aa49-aa3b76ce90c9","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":1000,"campaignId":"c85e0c9c-a169-4102-9880-10a8306ee71f","ngoId":"4c818505-547c-42ad-8b16-f2ae74c50df7","paymentMethod":"UPI","razorpayOrderId":"order_8e7ede6cedcec580a57b"},"requestId":null,"timestamp":"2026-09-25T05:36:44.166Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6","actorType":"USER","entityId":"308f586c-a5bd-42ee-9ca7-e6b715540d6d","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":1100,"campaignId":"c85e0c9c-a169-4102-9880-10a8306ee71f","ngoId":"4c818505-547c-42ad-8b16-f2ae74c50df7","paymentMethod":"UPI","razorpayOrderId":"order_b95b334425f9c86dfe81"},"requestId":null,"timestamp":"2026-09-25T05:36:44.167Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"f504b94c-cdb3-440a-9211-bd4c9d2f2c62","statusCode":201,"timestamp":"2026-09-25T05:36:44.171Z","userId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"1f25882a-db63-47cc-a104-afbfda720018","statusCode":201,"timestamp":"2026-09-25T05:36:44.171Z","userId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6","actorType":"USER","entityId":"ff270295-4904-4409-81b5-121551d3f759","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":1200,"campaignId":"c85e0c9c-a169-4102-9880-10a8306ee71f","ngoId":"4c818505-547c-42ad-8b16-f2ae74c50df7","paymentMethod":"UPI","razorpayOrderId":"order_eee5fcb6b42549b2baee"},"requestId":null,"timestamp":"2026-09-25T05:36:44.172Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"d7f236bc-907d-4863-a7df-fa392b65f48c","statusCode":201,"timestamp":"2026-09-25T05:36:44.172Z","userId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6","actorType":"USER","entityId":"cecdb207-4584-4b75-bf3b-a2d244aacaa2","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":1300,"campaignId":"c85e0c9c-a169-4102-9880-10a8306ee71f","ngoId":"4c818505-547c-42ad-8b16-f2ae74c50df7","paymentMethod":"UPI","razorpayOrderId":"order_6f218e0ea82ca442de00"},"requestId":null,"timestamp":"2026-09-25T05:36:44.172Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"b0ea65bc-c9e4-43b7-9701-1ea77b3e1ba6","actorType":"USER","entityId":"c7c09a21-d45e-4020-a1b7-5860b94c6782","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":1400,"campaignId":"c85e0c9c-a169-4102-9880-10a8306ee71f","ngoId":"4c818505-547c-42ad-8b16-f2ae74c50df7","paymentMethod":"UPI","razorpayOrderId":"order_77a5e7d474a9f496a335"},"requestId":null,"timestamp":"2026-09-25T05:36:44.173Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/ngos","requestId":"5aaa9cf8-1d25-496a-ad1e-cca56a24dd34","statusCode":200,"timestamp":"2026-09-25T05:36:44.174Z","userId":null}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS tests/beneficiary-id.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ⌘ enable debugging { debug: true }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+    console.log
+      {"actorId":"083436ff-ac71-4c64-a346-f3e7e9a6e961","actorType":"USER","entityId":"92992da9-8024-414d-b5fd-b539ab30f0f6","entityType":"campaign","eventType":"CAMPAIGN_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"targetAmount":1000,"title":"Test Beneficiary"},"requestId":null,"timestamp":"2026-09-25T05:36:44.465Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":15,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"34f5469d-3349-44cb-b6e0-d610e1d6a43b","statusCode":201,"timestamp":"2026-09-25T05:36:44.467Z","userId":"083436ff-ac71-4c64-a346-f3e7e9a6e961"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":39,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"50ac1e92-b45f-4a23-9401-31c6f20fb089","statusCode":409,"timestamp":"2026-09-25T05:36:44.508Z","userId":"083436ff-ac71-4c64-a346-f3e7e9a6e961"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":13,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/campaigns","requestId":"3091dcc3-63de-4670-a4de-4ca3b52165dd","statusCode":200,"timestamp":"2026-09-25T05:36:44.522Z","userId":"083436ff-ac71-4c64-a346-f3e7e9a6e961"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/campaigns/92992da9-8024-414d-b5fd-b539ab30f0f6/beneficiary-id","requestId":"70ccf0a4-5a4b-4c91-b153-ba808b8e6b64","statusCode":200,"timestamp":"2026-09-25T05:36:44.525Z","userId":"083436ff-ac71-4c64-a346-f3e7e9a6e961"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/campaigns/92992da9-8024-414d-b5fd-b539ab30f0f6/beneficiary-id","requestId":"58accbc2-263e-4b4f-b5b5-46a313e408f5","statusCode":404,"timestamp":"2026-09-25T05:36:44.527Z","userId":"3afe5e27-4fdc-462d-9db6-9aeb0bf74bdb"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/campaigns/92992da9-8024-414d-b5fd-b539ab30f0f6/beneficiary-id","requestId":"ed072d6a-8193-4297-85fc-02ad35450b19","statusCode":403,"timestamp":"2026-09-25T05:36:44.528Z","userId":"57b9fe06-75e3-4dce-9ef3-3d621d1f2b3c"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/campaigns/92992da9-8024-414d-b5fd-b539ab30f0f6/beneficiary-id","requestId":"dff14c44-12d9-4837-8365-8fadda483450","statusCode":403,"timestamp":"2026-09-25T05:36:44.530Z","userId":"b71aaf58-86cc-4c97-be4c-2d4f04328182"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS tests/admin.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ⌘ suppress logs { quiet: true }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+    console.log
+      {"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/ngos","requestId":"327f4424-4d38-474f-9349-2ce37554a995","statusCode":200,"timestamp":"2026-09-25T05:36:44.804Z","userId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe","actorType":"USER","entityId":"acf70bfb-52d3-4ff9-aad7-c68bba5a69f9","entityType":"profile","eventType":"NGO_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-25T05:36:44.816Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":9,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/ngos/acf70bfb-52d3-4ff9-aad7-c68bba5a69f9/approve","requestId":"82ffecfb-d349-40c4-8cec-8f4554ea09a0","statusCode":200,"timestamp":"2026-09-25T05:36:44.816Z","userId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe","actorType":"USER","entityId":"76e08e43-c167-47e4-a1aa-27ef1fdfd5ca","entityType":"campaign","eventType":"CAMPAIGN_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-25T05:36:44.821Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/76e08e43-c167-47e4-a1aa-27ef1fdfd5ca/approve","requestId":"12d3cd02-a298-460b-9432-12fefdd7ed52","statusCode":200,"timestamp":"2026-09-25T05:36:44.822Z","userId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/users","requestId":"3ca22059-fc67-405a-8e68-91b84badfec5","statusCode":200,"timestamp":"2026-09-25T05:36:44.831Z","userId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/audit-logs","requestId":"8d864e39-2726-4026-ad27-42a564d6b003","statusCode":200,"timestamp":"2026-09-25T05:36:44.836Z","userId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe","actorType":"USER","entityId":"e2b927c8-0d40-441a-8f7d-f0e9da1ac240","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"legalBasis":"FCRA Act 2010","requestingBody":"Ministry of Home Affairs"},"requestId":null,"timestamp":"2026-09-25T05:36:44.842Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests","requestId":"c195548e-08f3-4048-8cf8-bbbd7ebfdc59","statusCode":201,"timestamp":"2026-09-25T05:36:44.842Z","userId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"c6a2bca6-2458-45f4-be61-8e43fa048fc9","actorType":"USER","entityId":"25b62d79-c5b9-4d9d-b389-b754d058c4c6","entityType":"document","eventType":"DOCUMENT_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentType":"NGO_CERT","sha512HashSnippet":"hash_179"},"requestId":null,"timestamp":"2026-09-25T05:36:44.849Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/documents/upload","requestId":"6f3534a9-dade-47fe-95c4-8c1b319256d8","statusCode":201,"timestamp":"2026-09-25T05:36:44.849Z","userId":"c6a2bca6-2458-45f4-be61-8e43fa048fc9"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe","actorType":"USER","entityId":"ce2c1493-2b9d-41ef-9c77-ac6cf0448826","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"legalBasis":"Section 133 of Income Tax Act","requestingBody":"Income Tax Department","targetUserId":"c6a2bca6-2458-45f4-be61-8e43fa048fc9"},"requestId":null,"timestamp":"2026-09-25T05:36:44.852Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests","requestId":"34134e7c-9ba5-4059-9c3e-0c13ccd9daea","statusCode":201,"timestamp":"2026-09-25T05:36:44.852Z","userId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe","actorType":"USER","entityId":"ce2c1493-2b9d-41ef-9c77-ac6cf0448826","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_DOCUMENTS_HELD","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"count":1,"documentIds":["25b62d79-c5b9-4d9d-b389-b754d058c4c6"]},"requestId":null,"timestamp":"2026-09-25T05:36:44.859Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests/ce2c1493-2b9d-41ef-9c77-ac6cf0448826/hold","requestId":"4b0ca34a-d08e-4be4-8968-af3232ef8670","statusCode":200,"timestamp":"2026-09-25T05:36:44.859Z","userId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe","actorType":"USER","entityId":"9bcc7ebb-d190-40f8-8b40-29753a56349a","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"legalBasis":"FEMA 1999","requestingBody":"Enforcement Directorate","targetUserId":"802378dd-5ff6-4b40-ae7b-a244d1cda641"},"requestId":null,"timestamp":"2026-09-25T05:36:44.868Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests","requestId":"b6221489-46af-4355-869e-9e7d52c2987f","statusCode":201,"timestamp":"2026-09-25T05:36:44.868Z","userId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"802378dd-5ff6-4b40-ae7b-a244d1cda641","actorType":"USER","entityId":"ddc4933f-5df8-4db8-a29f-698f83863383","entityType":"document","eventType":"DOCUMENT_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentType":"NGO_CERT","sha512HashSnippet":"hash_179"},"requestId":null,"timestamp":"2026-09-25T05:36:44.871Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/documents/upload","requestId":"b2aa27ad-2a1c-4b16-b79a-33d508eb261f","statusCode":201,"timestamp":"2026-09-25T05:36:44.871Z","userId":"802378dd-5ff6-4b40-ae7b-a244d1cda641"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe","actorType":"USER","entityId":"9bcc7ebb-d190-40f8-8b40-29753a56349a","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_DOCUMENTS_HELD","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"count":1,"documentIds":["ddc4933f-5df8-4db8-a29f-698f83863383"]},"requestId":null,"timestamp":"2026-09-25T05:36:44.875Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests/9bcc7ebb-d190-40f8-8b40-29753a56349a/hold","requestId":"03e16ebb-7e04-4648-8a0e-f9b80b93845a","statusCode":200,"timestamp":"2026-09-25T05:36:44.875Z","userId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe","actorType":"USER","entityId":"9bcc7ebb-d190-40f8-8b40-29753a56349a","entityType":"government_request","eventType":"GOVERNMENT_REQUEST_DOCUMENTS_EXPORTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentCount":1},"requestId":null,"timestamp":"2026-09-25T05:36:44.879Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/government-requests/9bcc7ebb-d190-40f8-8b40-29753a56349a/export","requestId":"3535dea2-784d-4b9f-9b25-7cd40adebc94","statusCode":200,"timestamp":"2026-09-25T05:36:44.880Z","userId":"39b53dd0-056b-4f7d-95ff-3c7219583dbe"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS tests/charity.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ◈ encrypted .env [www.dotenvx.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+    console.log
+      {"actorId":"43e936df-a2e6-400a-9955-56afd73e8710","actorType":"USER","entityId":"43e936df-a2e6-400a-9955-56afd73e8710","entityType":"profile","eventType":"NGO_ONBOARDED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"organisationName":"Test NGO","registrationNo":"REG123"},"requestId":null,"timestamp":"2026-09-25T05:36:45.156Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":13,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/onboard","requestId":"aac9ce33-3b69-4d91-9f1b-00e384bd6b07","statusCode":200,"timestamp":"2026-09-25T05:36:45.158Z","userId":"43e936df-a2e6-400a-9955-56afd73e8710"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"4412174e-6468-4fff-962c-b91c832d0c21","actorType":"USER","entityId":"4412174e-6468-4fff-962c-b91c832d0c21","entityType":"profile","eventType":"NGO_ONBOARDED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"organisationName":"New NGO","registrationNo":"NEW123"},"requestId":null,"timestamp":"2026-09-25T05:36:45.163Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/onboard","requestId":"8f4f98ae-8c71-461d-9849-ff4bd79bfbc3","statusCode":200,"timestamp":"2026-09-25T05:36:45.164Z","userId":"4412174e-6468-4fff-962c-b91c832d0c21"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"43e936df-a2e6-400a-9955-56afd73e8710","actorType":"USER","entityId":"68ca3491-d763-43ee-8487-c5b5152bed57","entityType":"campaign","eventType":"CAMPAIGN_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"targetAmount":50000,"title":"Save the Turtles"},"requestId":null,"timestamp":"2026-09-25T05:36:45.176Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"d18bf7ba-3bab-4793-bfd9-e8d9173f50a2","statusCode":201,"timestamp":"2026-09-25T05:36:45.176Z","userId":"43e936df-a2e6-400a-9955-56afd73e8710"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"43e936df-a2e6-400a-9955-56afd73e8710","actorType":"USER","entityId":"68ca3491-d763-43ee-8487-c5b5152bed57","entityType":"campaign","eventType":"CAMPAIGN_SUBMITTED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"title":"Save the Turtles"},"requestId":null,"timestamp":"2026-09-25T05:36:45.181Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/68ca3491-d763-43ee-8487-c5b5152bed57/submit","requestId":"3045787a-8758-4189-876f-37b1aececd22","statusCode":200,"timestamp":"2026-09-25T05:36:45.182Z","userId":"43e936df-a2e6-400a-9955-56afd73e8710"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"43e936df-a2e6-400a-9955-56afd73e8710","actorType":"USER","entityId":"f48391ba-621d-4ba1-b509-de3516a37a66","entityType":"cohort","eventType":"COHORT_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"campaignId":"68ca3491-d763-43ee-8487-c5b5152bed57","name":"Turtle Rescuers"},"requestId":null,"timestamp":"2026-09-25T05:36:45.190Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/cohorts","requestId":"c0050448-256f-422e-a06c-ac2de530775d","statusCode":201,"timestamp":"2026-09-25T05:36:45.190Z","userId":"43e936df-a2e6-400a-9955-56afd73e8710"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"43e936df-a2e6-400a-9955-56afd73e8710","actorType":"USER","entityId":"a38c024e-cf6c-4d87-bd8b-697dcb16fffa","entityType":"document","eventType":"DOCUMENT_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentType":"NGO_CERT","sha512HashSnippet":"hash_179"},"requestId":null,"timestamp":"2026-09-25T05:36:45.196Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/documents/upload","requestId":"4ddd26f4-c957-4ca2-89f4-66209d1ca316","statusCode":201,"timestamp":"2026-09-25T05:36:45.196Z","userId":"43e936df-a2e6-400a-9955-56afd73e8710"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"43e936df-a2e6-400a-9955-56afd73e8710","actorType":"USER","entityId":"f48391ba-621d-4ba1-b509-de3516a37a66","entityType":"cohort","eventType":"COHORT_PROOF_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentId":"0252289b-4695-4317-bf6c-a639747892cb","sha512DocHash":"proof_hash_1790314605199_6lsyfjalygo"},"requestId":null,"timestamp":"2026-09-25T05:36:45.201Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":4,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/cohorts/f48391ba-621d-4ba1-b509-de3516a37a66/proof","requestId":"22903f15-510b-418a-8363-bce97d23af7d","statusCode":201,"timestamp":"2026-09-25T05:36:45.201Z","userId":"43e936df-a2e6-400a-9955-56afd73e8710"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/documents","requestId":"63bf7aea-33f1-463c-879b-220f4ebc1bbf","statusCode":200,"timestamp":"2026-09-25T05:36:45.204Z","userId":"43e936df-a2e6-400a-9955-56afd73e8710"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/reports/fcra","requestId":"11eb04bd-d408-4d3c-959d-1346d107231c","statusCode":200,"timestamp":"2026-09-25T05:36:45.206Z","userId":"43e936df-a2e6-400a-9955-56afd73e8710"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/reports/80g","requestId":"4b8d08e5-ecb4-48d5-adc7-fe69cf2c5a46","statusCode":200,"timestamp":"2026-09-25T05:36:45.208Z","userId":"43e936df-a2e6-400a-9955-56afd73e8710"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"aa7ce124-a633-4356-8f8f-17aec7d39cd0","actorType":"USER","entityId":"aa7ce124-a633-4356-8f8f-17aec7d39cd0","entityType":"profile","eventType":"NGO_ONBOARDED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"organisationName":"Aspiring NGO","registrationNo":"ASP123"},"requestId":null,"timestamp":"2026-09-25T05:36:45.215Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/onboard","requestId":"f2afd710-0277-4674-8f57-e67d50c720e3","statusCode":200,"timestamp":"2026-09-25T05:36:45.216Z","userId":"aa7ce124-a633-4356-8f8f-17aec7d39cd0"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":0,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns","requestId":"bd34b966-9ffd-4264-82e2-2501317bcaec","statusCode":403,"timestamp":"2026-09-25T05:36:45.217Z","userId":"f6969259-cbf7-41e0-9ef0-a66b6f80995f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":0,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/documents","requestId":"cd000d06-1232-4a17-b231-abe621550a16","statusCode":403,"timestamp":"2026-09-25T05:36:45.218Z","userId":"f6969259-cbf7-41e0-9ef0-a66b6f80995f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":0,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/reports/fcra","requestId":"128ebd35-8990-45dc-b052-bdd7aacfe4ab","statusCode":403,"timestamp":"2026-09-25T05:36:45.219Z","userId":"f6969259-cbf7-41e0-9ef0-a66b6f80995f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":0,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/documents/upload","requestId":"78f81517-71f1-41c2-9509-3f37475b0971","statusCode":403,"timestamp":"2026-09-25T05:36:45.220Z","userId":"f6969259-cbf7-41e0-9ef0-a66b6f80995f"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":0,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/onboard","requestId":"1c5bea3f-104f-42e6-8b1c-7234d068f00a","statusCode":403,"timestamp":"2026-09-25T05:36:45.221Z","userId":"2b389cde-76c8-4235-82da-00afda9be2b3"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS tests/disbursement.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+    console.log
+      {"actorId":"4fec2e52-ca5e-4cbf-9e27-7e12610150fa","actorType":"USER","entityId":"6e2fb783-83b6-4ce9-85b5-df7e37d21612","entityType":"disbursement","eventType":"DISBURSEMENT_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"amountInr":6000,"campaignId":"b5f3ba2d-2c21-48d3-bad0-c364ecd54ba6"},"requestId":null,"timestamp":"2026-09-25T05:36:45.491Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":10,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disburse","requestId":"62af1ede-0e7b-49a8-b01f-abe1fe212147","statusCode":201,"timestamp":"2026-09-25T05:36:45.493Z","userId":"4fec2e52-ca5e-4cbf-9e27-7e12610150fa"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/disbursements","requestId":"08632e6e-5f91-4231-ab10-1fb4bd72bf50","statusCode":200,"timestamp":"2026-09-25T05:36:45.497Z","userId":"4fec2e52-ca5e-4cbf-9e27-7e12610150fa"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/disbursements","requestId":"fcd61af2-de17-4ba0-8994-5df2c970d155","statusCode":200,"timestamp":"2026-09-25T05:36:45.507Z","userId":"abdc1296-6dc5-4842-a427-e3ba031bd532"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"abdc1296-6dc5-4842-a427-e3ba031bd532","actorType":"USER","entityId":"6e2fb783-83b6-4ce9-85b5-df7e37d21612","entityType":"disbursement","eventType":"DISBURSEMENT_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"amountInr":6000,"campaignId":"b5f3ba2d-2c21-48d3-bad0-c364ecd54ba6"},"requestId":null,"timestamp":"2026-09-25T05:36:45.533Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":26,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disburse/6e2fb783-83b6-4ce9-85b5-df7e37d21612/approve","requestId":"a2c444d7-c369-415a-aac5-a660b3ecd18c","statusCode":200,"timestamp":"2026-09-25T05:36:45.533Z","userId":"abdc1296-6dc5-4842-a427-e3ba031bd532"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"4fec2e52-ca5e-4cbf-9e27-7e12610150fa","actorType":"USER","entityId":"7ca8b5bf-536b-48d2-8532-ab1e95155270","entityType":"disbursement","eventType":"DISBURSEMENT_CREATED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"amountInr":4000,"campaignId":"b5f3ba2d-2c21-48d3-bad0-c364ecd54ba6"},"requestId":null,"timestamp":"2026-09-25T05:36:45.541Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disburse","requestId":"9aa6e3ca-ed1e-4617-b72b-6e5a2aced84a","statusCode":201,"timestamp":"2026-09-25T05:36:45.541Z","userId":"4fec2e52-ca5e-4cbf-9e27-7e12610150fa"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"abdc1296-6dc5-4842-a427-e3ba031bd532","actorType":"USER","entityId":"7ca8b5bf-536b-48d2-8532-ab1e95155270","entityType":"disbursement","eventType":"DISBURSEMENT_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"amountInr":4000,"campaignId":"b5f3ba2d-2c21-48d3-bad0-c364ecd54ba6"},"requestId":null,"timestamp":"2026-09-25T05:36:45.548Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":6,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disburse/7ca8b5bf-536b-48d2-8532-ab1e95155270/approve","requestId":"3b308652-7cfc-47a0-adaf-d8e267c6722b","statusCode":200,"timestamp":"2026-09-25T05:36:45.548Z","userId":"abdc1296-6dc5-4842-a427-e3ba031bd532"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"abdc1296-6dc5-4842-a427-e3ba031bd532","actorType":"USER","entityId":"b5f3ba2d-2c21-48d3-bad0-c364ecd54ba6","entityType":"campaign","eventType":"CAMPAIGN_CLOSED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-25T05:36:45.552Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/campaigns/b5f3ba2d-2c21-48d3-bad0-c364ecd54ba6/close","requestId":"d4044bb2-54a6-4e7b-9833-919e808070fe","statusCode":200,"timestamp":"2026-09-25T05:36:45.553Z","userId":"abdc1296-6dc5-4842-a427-e3ba031bd532"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS tests/simulation.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ⌘ suppress logs { quiet: true }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+    console.log
+      {"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"217b0873-88a3-4879-aa75-2734f179709e","statusCode":201,"timestamp":"2026-09-25T05:36:45.824Z","userId":"ef41cb48-2a1c-4fba-8eb4-ee996d4421e0"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"ef41cb48-2a1c-4fba-8eb4-ee996d4421e0","actorType":"USER","entityId":"8d22d64d-79c4-48b4-b4c9-eb013440ad92","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":250,"campaignId":"ba1d7b90-e92a-4e98-b655-e63d2ce56a40","ngoId":"5f5249c7-6c82-49c1-9d8a-adb47ca12b22","paymentMethod":"UPI","razorpayOrderId":"order_75bf9a15c6c43ed49375"},"requestId":null,"timestamp":"2026-09-25T05:36:45.827Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":5,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/donate","requestId":"932f3e3c-100e-4a72-93d6-3fad66f25a12","statusCode":201,"timestamp":"2026-09-25T05:36:45.839Z","userId":"ef41cb48-2a1c-4fba-8eb4-ee996d4421e0"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"ef41cb48-2a1c-4fba-8eb4-ee996d4421e0","actorType":"USER","entityId":"b4a1272b-90be-45d0-a791-03967cb44d71","entityType":"donation","eventType":"DONATION_INITIATED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":500,"campaignId":"ba1d7b90-e92a-4e98-b655-e63d2ce56a40","ngoId":"5f5249c7-6c82-49c1-9d8a-adb47ca12b22","paymentMethod":"UPI","razorpayOrderId":"order_6b0296f745ad4d4a407b"},"requestId":null,"timestamp":"2026-09-25T05:36:45.841Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":7,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/simulate-success","requestId":"c86bee03-a017-418a-81f4-e6a7b8a9be00","statusCode":200,"timestamp":"2026-09-25T05:36:45.847Z","userId":null}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":null,"actorType":"SYSTEM","entityId":"b4a1272b-90be-45d0-a791-03967cb44d71","entityType":"donation","eventType":"PAYMENT_SUCCESS","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"amount":"500","donorId":"ef41cb48-2a1c-4fba-8eb4-ee996d4421e0","ngoId":"5f5249c7-6c82-49c1-9d8a-adb47ca12b22","razorpayOrderId":"order_6b0296f745ad4d4a407b","razorpayPaymentId":"pay_sim_b4a1272b90be45"},"requestId":null,"timestamp":"2026-09-25T05:36:45.848Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS tests/kyc.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ⌘ override existing { override: true }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+    console.log
+      {"durationMs":8,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/kyc","requestId":"44b9e9cc-30d1-4752-a6aa-e5154eace025","statusCode":200,"timestamp":"2026-09-25T05:36:46.107Z","userId":"7d260a15-266b-496a-9ef9-04c0371bc111"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"7d260a15-266b-496a-9ef9-04c0371bc111","actorType":"USER","entityId":"7d260a15-266b-496a-9ef9-04c0371bc111","entityType":"profile","eventType":"KYC_APPROVED","govRequestId":null,"ip":"::ffff:127.0.0.1","level":"info","message":"Security Event","metadata":{"panHashSnippet":"181414bd60bb239e"},"requestId":null,"timestamp":"2026-09-25T05:36:46.110Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/kyc","requestId":"6c622143-532b-4826-82f9-f82a69910d36","statusCode":400,"timestamp":"2026-09-25T05:36:46.119Z","userId":"7d260a15-266b-496a-9ef9-04c0371bc111"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/kyc","requestId":"09678230-7106-4eab-b538-dfa53dd71ce0","statusCode":400,"timestamp":"2026-09-25T05:36:46.121Z","userId":"7d260a15-266b-496a-9ef9-04c0371bc111"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/kyc","requestId":"463409ee-6300-4884-bea0-93a9dd219908","statusCode":400,"timestamp":"2026-09-25T05:36:46.123Z","userId":"7d260a15-266b-496a-9ef9-04c0371bc111"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/kyc","requestId":"529e0c22-ab6e-4ff1-9cb6-26cbcb3336ac","statusCode":409,"timestamp":"2026-09-25T05:36:46.125Z","userId":"7d260a15-266b-496a-9ef9-04c0371bc111"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":0,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/kyc","requestId":"d5b6f23b-c79f-40ca-a48f-16de3c5bcb55","statusCode":401,"timestamp":"2026-09-25T05:36:46.126Z","userId":null}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS tests/disbursement-recording-blockchain.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+    console.log
+      {"actorId":"e122e22d-b6bb-4d51-a06a-bf4065266087","actorType":"USER","entityId":"55528ef1-fae4-4ae5-93d4-8e3f2fb1d6af","entityType":"disbursement","eventType":"DISBURSEMENT_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"amountInr":1000,"campaignId":"287688eb-c0a9-4a6c-99e9-73b009f4b9ad"},"requestId":null,"timestamp":"2026-09-25T05:36:46.411Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":18,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/disburse/55528ef1-fae4-4ae5-93d4-8e3f2fb1d6af/approve","requestId":"61a96b12-89c9-453c-bf66-858a596698ab","statusCode":200,"timestamp":"2026-09-25T05:36:46.413Z","userId":"e122e22d-b6bb-4d51-a06a-bf4065266087"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS tests/document-verification-blockchain.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ⌁ auth for agents [www.vestauth.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+    console.log
+      {"durationMs":2,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/documents/34d5169b-9c26-4e5a-a5ef-9c750639fd73/verify","requestId":"efca80af-09d5-49d3-8d5f-1516f9764593","statusCode":200,"timestamp":"2026-09-25T05:36:46.695Z","userId":null}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/documents/00000000-0000-0000-0000-000000000000/verify","requestId":"ba0add7f-e34d-4544-87a9-6324cc8aee74","statusCode":404,"timestamp":"2026-09-25T05:36:46.700Z","userId":null}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":1,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"GET","path":"/documents/5154e3e3-1159-4036-8283-00706c809d1e/verify","requestId":"9d74a196-edbf-4a3f-abaa-bf3c107158c7","statusCode":400,"timestamp":"2026-09-25T05:36:46.701Z","userId":null}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS tests/cohort-registration-blockchain.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ⌘ suppress logs { quiet: true }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+    console.log
+      {"actorId":"4981b0e2-4635-40fc-98f7-c550408e17e9","actorType":"USER","entityId":"8caa809a-c378-42bf-b521-99bf0e7eb03f","entityType":"cohort","eventType":"COHORT_PROOF_UPLOADED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{"documentId":"54667345-be13-4455-8835-f2b3b5d9fb4a","sha512DocHash":"proof_hash_1790314606991_lfm7omrbto"},"requestId":null,"timestamp":"2026-09-25T05:36:46.994Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":9,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/cohorts/8caa809a-c378-42bf-b521-99bf0e7eb03f/proof","requestId":"3a8a0005-8aed-42dc-8471-0226962ba5a9","statusCode":201,"timestamp":"2026-09-25T05:36:46.996Z","userId":"4981b0e2-4635-40fc-98f7-c550408e17e9"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS tests/ngo-registration-blockchain.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ⌁ auth for agents [www.vestauth.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+    console.log
+      {"actorId":"8313ee75-968d-4cdb-a63e-d14a88d3607b","actorType":"USER","entityId":"345a7c68-d84d-4e18-b8ed-335600f41932","entityType":"profile","eventType":"NGO_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-25T05:36:47.272Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":12,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/ngos/345a7c68-d84d-4e18-b8ed-335600f41932/approve","requestId":"97a9addd-1d08-4068-84db-cd885d4f0350","statusCode":200,"timestamp":"2026-09-25T05:36:47.274Z","userId":"8313ee75-968d-4cdb-a63e-d14a88d3607b"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"actorId":"8313ee75-968d-4cdb-a63e-d14a88d3607b","actorType":"USER","entityId":"345a7c68-d84d-4e18-b8ed-335600f41932","entityType":"profile","eventType":"NGO_APPROVED","govRequestId":null,"ip":"","level":"info","message":"Security Event","metadata":{},"requestId":null,"timestamp":"2026-09-25T05:36:47.279Z"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+    console.log
+      {"durationMs":3,"ip":"::ffff:127.0.0.1","level":"info","message":"API Request","method":"POST","path":"/ngos/345a7c68-d84d-4e18-b8ed-335600f41932/approve","requestId":"5316dfcc-ec23-41b0-b099-b91be9f03508","statusCode":200,"timestamp":"2026-09-25T05:36:47.279Z","userId":"8313ee75-968d-4cdb-a63e-d14a88d3607b"}
+
+      at Console.log (node_modules/winston/lib/winston/transports/console.js:87:23)
+
+PASS tests/donationServiceSecrets.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ⌁ auth for agents [www.vestauth.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+PASS tests/blockchainRetryProcessor.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ⌘ enable debugging { debug: true }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+PASS tests/blockchainService.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ◈ encrypted .env [www.dotenvx.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+PASS tests/envValidator.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ◈ secrets for agents [www.dotenvx.com]
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+PASS tests/governmentRequestStatus.test.ts
+  ● Console
+
+    console.log
+      ◇ injected env (13) from .env.test // tip: ⌘ enable debugging { debug: true }
+
+      at _log (node_modules/dotenv/lib/main.js:131:11)
+
+
+Test Suites: 1 failed, 16 passed, 17 total
+Tests:       3 failed, 113 passed, 116 total
+Snapshots:   0 total
+Time:        4.588 s, estimated 5 s
+Ran all test suites.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?

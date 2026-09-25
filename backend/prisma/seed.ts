@@ -277,31 +277,49 @@ async function main() {
   // ---------------------------------------------------------------------------
   // Disbursement
   // ---------------------------------------------------------------------------
-  // const disbursement = await prisma.disbursement.upsert({
-  //   where: {
-  //     id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-  //   },
-  //   update: {
-  //     campaignId: campaign1.id,
-  //     ngoId: ngo.id,
-  //     cohortId: cohort.id,
-  //     amountInr: 10000.0,
-  //     amountSol: null,
-  //     status: "PENDING",
-  //     proofSubmittedAt: null,
-  //     rejectionReason: null,
-  //   },
-  //   create: {
-  //     id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-  //     campaignId: campaign1.id,
-  //     ngoId: ngo.id,
-  //     cohortId: cohort.id,
-  //     amountInr: 10000.0,
-  //     status: "PENDING",
-  //   },
-  // });
+  const disbursement = await prisma.disbursement.upsert({
+    where: {
+      id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    },
+    update: {
+      campaignId: campaign1.id,
+      ngoId: ngo.id,
+      cohortId: cohort.id,
+      amountInr: 5000.0,
+      amountSol: null,
+      status: "APPROVED",
+      disbursementType: "PROOF_OF_NEED",
+      proofSubmittedAt: null,
+      rejectionReason: null,
+    },
+    create: {
+      id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      campaignId: campaign1.id,
+      ngoId: ngo.id,
+      cohortId: cohort.id,
+      amountInr: 5000.0,
+      disbursementType: "PROOF_OF_NEED",
+      status: "APPROVED",
+    },
+  });
 
-  // console.log(`Created disbursement: ${disbursement.id}`);
+  console.log(`Created disbursement: ${disbursement.id}`);
+
+  // ---------------------------------------------------------------------------
+  // Donation Allocation
+  // ---------------------------------------------------------------------------
+  const allocation = await prisma.donationAllocation.create({
+    data: {
+      donationId: donation1.id,
+      disbursementId: disbursement.id,
+      amount: 5000.0,
+    },
+  }).catch(() => {
+    // If it already exists, just ignore
+    console.log("Donation allocation already exists.");
+  });
+
+  console.log(`Created donation allocation for disbursement.`);
 
   // ---------------------------------------------------------------------------
   // Donation Attestations
@@ -309,8 +327,9 @@ async function main() {
   // ---------------------------------------------------------------------------
   const receiptAttestation = await prisma.attestation.upsert({
     where: {
-      donationId_type: {
+      donationId_disbursementId_type: {
         donationId: donation1.id,
+        disbursementId: disbursement.id,
         type: "RECEIPT",
       },
     },
@@ -325,6 +344,7 @@ async function main() {
     },
     create: {
       donationId: donation1.id,
+      disbursementId: disbursement.id,
       type: "RECEIPT",
       status: "PENDING",
       requestedBy: donor1.id,
@@ -335,8 +355,9 @@ async function main() {
 
   const deliveryAttestation = await prisma.attestation.upsert({
     where: {
-      donationId_type: {
+      donationId_disbursementId_type: {
         donationId: donation1.id,
+        disbursementId: disbursement.id,
         type: "DELIVERY",
       },
     },
@@ -351,6 +372,7 @@ async function main() {
     },
     create: {
       donationId: donation1.id,
+      disbursementId: disbursement.id,
       type: "DELIVERY",
       status: "PENDING",
       requestedBy: donor1.id,

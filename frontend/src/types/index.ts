@@ -86,6 +86,7 @@ export interface Milestone {
   proofSubmittedAt?: string;
   rejectionReason?: string;
   disbursementStatus?: DisbursementStatus;
+  disbursementType?: "PROOF_OF_NEED" | "PROOF_OF_WORK";
 }
 
 export interface Donation {
@@ -94,6 +95,7 @@ export interface Donation {
   campaignId: string;
   campaignTitle?: string;
   amount: number; // in INR
+  allocatedAmount?: number | string; // amount allocated to disbursements
   paymentMethod: PaymentMethod;
   orderId?: string; // Razorpay order ID (mock) or SOL tx hash
   razorpayOrderId?: string;
@@ -145,6 +147,8 @@ export interface Attestation {
   statement: string;
   status: string;
   createdAt: string;
+  disbursementId?: string | null;
+  allocatedAmount?: number | string | null;
 }
 
 //-----------------------------------------------
@@ -157,6 +161,7 @@ export interface DonorDashboardDonation {
   currencyCode: string;
   paymentMethod: string;
   status: DonationStatus;
+  allocatedAmount?: number | string;
   razorpayOrderId?: string;
   razorpayPaymentId?: string;
   taxReceiptUrl?: string | null;
@@ -203,6 +208,7 @@ export interface ActionItem {
   ngo: string;
   campaign: string;
   fieldReportUrl?: string | null;
+  disbursementType?: "PROOF_OF_NEED" | "PROOF_OF_WORK";
 }
 export interface PendingCampaign {
   id: string;
@@ -252,6 +258,7 @@ export interface DisbursementResponse {
   ngoId?: string;
   amountInr: number | string;
   status: DisbursementStatus;
+  disbursementType?: string;
   cohortId?: string | null;
 
   cohort?: {
@@ -307,6 +314,7 @@ export interface AdminPendingAttestation {
   attestedAt: string | null;
   statement: string;
   status: string;
+  allocatedAmount?: number | string;
   createdAt: string;
   donation: {
     id: string;

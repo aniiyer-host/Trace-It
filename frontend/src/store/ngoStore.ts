@@ -9,6 +9,7 @@ interface PendingAttestation {
   donationId: string;
   type: "RECEIPT" | "DELIVERY";
   createdAt: string;
+  allocatedAmount?: number | string;
   donation?: {
     amount: number;
     donorId: string;
@@ -182,13 +183,10 @@ export const useNGOStore = create<NGOStore>((set, get) => ({
       throw error;
     }
   },
-  uploadMilestoneProof: async (milestoneId, description, cid) => {
+  uploadMilestoneProof: async (milestoneId, _desc, cid) => {
     try {
       // The real API takes (milestoneId, proofData) where proofData contains description and proofHash (cid)
-      await apiService.milestones.uploadProof(milestoneId, {
-        description,
-        proofHash: cid,
-      } as unknown as File); // Type assertion to satisfy the API's expected type
+      await apiService.milestones.uploadProof(milestoneId, [] as File[]);
       // Optimistically update the milestone status to 'disbursed' and set proofCid
       const campaigns = get().campaigns.map((c) => ({
         ...c,

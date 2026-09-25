@@ -58,26 +58,6 @@ export const completeDonationSuccess = async (
     },
   });
 
-  // 1. Auto-create RECEIPT attestation for NGO action inbox
-  try {
-    await prisma.attestation.upsert({
-      where: {
-        donationId_type: {
-          donationId: updatedDonation.id,
-          type: AttestationType.RECEIPT,
-        },
-      },
-      update: {},
-      create: {
-        donationId: updatedDonation.id,
-        type: AttestationType.RECEIPT,
-        status: AttestationStatus.PENDING,
-        requestedBy: updatedDonation.donorId,
-      },
-    });
-  } catch (attError) {
-    console.error(`Failed to auto-create attestation for donation ${updatedDonation.id}:`, attError);
-  }
 
   // 2. AML flag check: if amount > 100,000 INR
   if (Number(updatedDonation.amount) > 100000) {

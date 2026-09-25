@@ -28,7 +28,8 @@ interface Props {
 
 export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
   const [description, setDescription] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [geotagFile, setGeotagFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
@@ -44,14 +45,15 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
       toast({ title: "Add a proof description", variant: "destructive" });
       return;
     }
-    if (!selectedFile) {
+    if (selectedFiles.length === 0) {
       toast({
-        title: "Select a proof file",
-        description: "Upload a PDF, PNG, or JPEG field report.",
+        title: "Select proof files",
+        description: "Upload one or more PDF, PNG, or JPEG field reports.",
         variant: "destructive",
       });
       return;
     }
+
     setLoading(true);
     setUploadProgress(0);
 
@@ -67,7 +69,7 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
         clearInterval(progressInterval);
       }, 500);
 
-      await apiService.milestones.uploadProof(milestone.id, selectedFile);
+      await apiService.milestones.uploadProof(milestone.id, selectedFiles, geotagFile || undefined);
 
       // Proof submission does not mean the disbursement was approved or
       // the beneficiary received the funds. Keep it actionable until Admin review.
@@ -83,7 +85,7 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
         description: "The disbursement is now awaiting admin review.",
       });
       setDescription("");
-      setSelectedFile(null);
+      setSelectedFiles([]);
       onClose();
     } catch (error) {
       console.error(error);
@@ -101,8 +103,11 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
           <DialogTitle className="gradient-text text-xl">
             Upload Disbursement Proof
           </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            {milestone?.title} • {campaign?.ngo || campaign?.ngoName}
+          <DialogDescription className="text-muted-foreground flex items-center gap-2">
+            <span>{milestone?.title} • {campaign?.ngo || campaign?.ngoName}</span>
+            <span className="px-2 py-0.5 rounded-full bg-foreground/10 text-xs font-semibold">
+              {milestone?.disbursementType === "PROOF_OF_WORK" ? "Proof of Work" : "Proof of Need"}
+            </span>
           </DialogDescription>
         </DialogHeader>
 
@@ -136,8 +141,10 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
                   <span className="ml-2 capitalize">{milestone?.status}</span>
                 </div>
                 <div>
-                  <span className="font-medium">Disbursement #:</span>
-                  <span className="ml-2">{milestone?.id}</span>
+                  <span className="font-medium">Type:</span>
+                  <span className="ml-2 font-bold text-foreground">
+                    {milestone?.disbursementType === "PROOF_OF_WORK" ? "Proof of Work" : "Proof of Need"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -146,38 +153,93 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
           {/* Upload Section */}
           <div className="space-y-4">
             {/* File drop zone (enhanced visual) */}
-            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center text-muted-foreground hover:border-primary/50 transition-colors relative overflow-hidden">
+            <div 
+              className="border-2 border-dashed border-border rounded-lg p-8 text-center text-muted-foreground hover:border-primary/50 transition-colors relative overflow-hidden"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                  const filesArray = Array.from(e.dataTransfer.files);
+                  if (filesArray.length > 10) {
+                    toast({ title: "Limit exceeded", description: "Max 10 files allowed.", variant: "destructive" });
+                    return;
+                  }
+                  setSelectedFiles(filesArray);
+                  toast({
+                    title: `${filesArray.length} file${filesArray.length === 1 ? '' : 's'} selected`,
+                  });
+                }
+              }}
+            >
               <div className="absolute inset-0 -z-10">
                 <div className="w-full h-full bg-gradient-to-r from-primary/5 to-teal/5" />
               </div>
               <Upload className="h-10 w-10 mx-auto mb-4 opacity-60" />
-              <p className="text-sm font-medium">
-                {selectedFile
-                  ? `Selected: ${selectedFile.name}`
-                  : "Drag & drop files here or click to browse"}
-              </p>
+              <div className="text-sm font-medium mb-2">
+                {selectedFiles.length > 0 ? (
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="text-primary font-semibold">Selected {selectedFiles.length} file{selectedFiles.length === 1 ? '' : 's'}:</span>
+                    <ul className="text-xs text-muted-foreground max-h-24 overflow-y-auto space-y-1">
+                      {selectedFiles.map((f, i) => (
+                        <li key={i} className="truncate max-w-[300px] bg-foreground/5 px-2 py-1 rounded">{f.name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  "Drag & drop files here or click to browse"
+                )}
+              </div>
               <p className="text-xs mt-1 opacity-70">
-                PDF, PNG, and JPEG files supported (max 10 MB)
+                PDF, PNG, JPEG supported • Max 10 files (up to 10MB each)
               </p>
               {/* Optional file input */}
-              <label className="mt-3 flex items-center justify-center px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg cursor-pointer">
-                {selectedFile ? "Change File" : "Browse Files"}
+              <label className="mt-4 flex items-center justify-center px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg cursor-pointer max-w-xs mx-auto">
+                {selectedFiles.length > 0 ? "Add/Change Files" : "Browse Files"}
                 <input
                   type="file"
+                  multiple
                   accept=".png,.jpg,.jpeg,.pdf"
                   className="hidden"
                   onChange={(e) => {
                     if (e.target.files && e.target.files.length > 0) {
-                      const file = e.target.files[0];
-                      setSelectedFile(file);
+                      const filesArray = Array.from(e.target.files);
+                      if (filesArray.length > 10) {
+                        toast({ title: "Limit exceeded", description: "Max 10 files allowed.", variant: "destructive" });
+                        return;
+                      }
+                      setSelectedFiles(filesArray);
                       toast({
-                        title: `File selected: ${file.name}`,
+                        title: `${filesArray.length} file${filesArray.length === 1 ? '' : 's'} selected`,
                       });
                     }
                   }}
                 />
               </label>
             </div>
+            {milestone.disbursementType === "PROOF_OF_WORK" && (
+              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center text-muted-foreground hover:border-primary/50 transition-colors relative overflow-hidden mt-4">
+                <p className="text-sm font-medium">
+                  {geotagFile
+                    ? `Geotag Selected: ${geotagFile.name}`
+                    : "Secondary Proof: Geotagged Image (Optional)"}
+                </p>
+                <label className="mt-3 flex items-center justify-center px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg cursor-pointer">
+                  {geotagFile ? "Change Image" : "Browse Images"}
+                  <input
+                    type="file"
+                    accept=".png,.jpg,.jpeg"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        const file = e.target.files[0];
+                        setGeotagFile(file);
+                        toast({ title: `Geotag selected: ${file.name}` });
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+            )}
 
             {/* Upload Progress */}
             {uploadProgress > 0 && uploadProgress < 100 && (

@@ -90,6 +90,7 @@ export default function DonorDashboard() {
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(
     null,
   );
+  const [selectedDonationId, setSelectedDonationId] = useState<string | null>(null);
   // const [attestationModalData, setAttestationModalData] = useState<{
   //   donationId: string
   //   attestationStatus: 'pending' | 'receipt_confirmed' | 'delivery_confirmed'
@@ -281,11 +282,7 @@ export default function DonorDashboard() {
           </div>
           <div className="md:col-span-4 flex flex-col gap-8 md:border-l md:border-foreground/10 md:pl-8">
             <SmallStatBlock value={summary.uniqueNGOs} label="NGOs Backed" />
-            <SmallStatBlock
-              value={summary.successRate}
-              label="Impact Verified"
-              suffix="%"
-            />
+
           </div>
         </div>
       </div>
@@ -341,39 +338,81 @@ export default function DonorDashboard() {
                       : "bg-yellow-500";
 
                   return (
-                    <button
-                      key={camp.id}
-                      onClick={() => setSelectedCampaign(camp)}
-                      tabIndex={0}
-                      className={cn(
-                        "snap-start shrink-0 w-[85vw] sm:w-[300px] lg:w-full text-left p-5 transition-all outline-none focus-visible:ring-2 ring-primary border-l-2 rounded-r-lg",
-                        isSelected
-                          ? "border-primary bg-foreground/[0.02]"
-                          : "border-transparent hover:bg-foreground/[0.01]",
+                    <div key={camp.id} className="snap-start shrink-0 w-[85vw] sm:w-[300px] lg:w-full flex flex-col">
+                      <button
+                        onClick={() => {
+                          if (selectedCampaign?.id !== camp.id) {
+                            setSelectedCampaign(camp);
+                            setSelectedDonationId(null);
+                          }
+                        }}
+                        tabIndex={0}
+                        className={cn(
+                          "text-left p-5 transition-all outline-none focus-visible:ring-2 ring-primary border-l-2 rounded-r-lg",
+                          isSelected
+                            ? "border-primary bg-foreground/[0.02]"
+                            : "border-transparent hover:bg-foreground/[0.01]"
+                        )}
+                      >
+                        <div className="flex justify-between items-start gap-4 mb-2">
+                          <div className="font-semibold text-lg line-clamp-1">
+                            {camp.title}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 mt-1.5">
+                            <span
+                              className={cn(
+                                "w-2.5 h-2.5 rounded-full",
+                                statusColor
+                              )}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-end">
+                          <div className="text-sm text-foreground/50">
+                            {camp.ngo}
+                          </div>
+                          <div className="font-bold tabular-nums">
+                            ₹{total.toLocaleString()}
+                          </div>
+                        </div>
+                      </button>
+
+                      {isSelected && (
+                        <div className="flex flex-col mt-2 pl-4 space-y-1">
+                          {campDonations.map((d) => {
+                            const isDonationSelected = selectedDonationId === d.id;
+                            return (
+                              <button
+                                key={d.id}
+                                onClick={() => setSelectedDonationId(d.id)}
+                                className={cn(
+                                  "text-left px-4 py-2.5 transition-all outline-none focus-visible:ring-2 ring-primary border-l-2 rounded-r-lg flex items-center justify-between group",
+                                  isDonationSelected
+                                    ? "border-primary bg-foreground/[0.04]"
+                                    : "border-transparent hover:bg-foreground/[0.02]"
+                                )}
+                              >
+                                <div className="flex flex-col gap-1">
+                                  <div className="text-sm font-semibold text-foreground/90 tabular-nums">
+                                    ₹{Number(d.amount).toLocaleString()}
+                                  </div>
+                                  <div className="text-[11px] text-foreground/40 font-medium tracking-wide">
+                                    {new Date(d.createdAt).toLocaleDateString("en-IN", {
+                                      day: "numeric",
+                                      month: "short",
+                                      year: "numeric",
+                                    })}
+                                  </div>
+                                </div>
+                                <div className="text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded bg-foreground/5 text-foreground/50">
+                                  {d.status}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
                       )}
-                    >
-                      <div className="flex justify-between items-start gap-4 mb-2">
-                        <div className="font-semibold text-lg line-clamp-1">
-                          {camp.title}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0 mt-1.5">
-                          <span
-                            className={cn(
-                              "w-2.5 h-2.5 rounded-full",
-                              statusColor,
-                            )}
-                          />
-                        </div>
-                      </div>
-                      <div className="flex justify-between items-end">
-                        <div className="text-sm text-foreground/50">
-                          {camp.ngo}
-                        </div>
-                        <div className="font-bold tabular-nums">
-                          ₹{total.toLocaleString()}
-                        </div>
-                      </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -405,9 +444,44 @@ export default function DonorDashboard() {
                   </div>
 
                   {/* The Stepper */}
-                  <Stepper
-                    journey={buildJourney(selectedCampaign, donations)}
-                  />
+                  {(() => {
+                    const selectedDonation = donations.find(d => d.id === selectedDonationId);
+                    
+                    if (!selectedDonation) {
+                      return (
+                        <div className="py-12 mt-8 flex items-center justify-center text-foreground/40 border border-dashed border-foreground/10 rounded-xl text-sm font-medium">
+                          Select a donation on the left to view its trace trajectory
+                        </div>
+                      );
+                    }
+
+                    const disbursementIds = [...new Set(
+                      (selectedDonation.attestations || [])
+                        .filter((a: any) => a.disbursementId)
+                        .map((a: any) => a.disbursementId as string)
+                    )];
+
+                    if (disbursementIds.length === 0) {
+                      return (
+                        <div className="py-12 mt-8 flex items-center justify-center text-foreground/40 border border-dashed border-foreground/10 rounded-xl text-sm font-medium">
+                          No disbursements have been made against this donation yet
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-12">
+                        {disbursementIds.map((disbursementId, index) => (
+                          <div key={disbursementId} className={index > 0 ? "pt-6 border-t border-foreground/10" : ""}>
+                            <h4 className="text-sm font-bold uppercase tracking-wider text-foreground/50 mb-2">
+                              Disbursement {index + 1}
+                            </h4>
+                            <Stepper journey={buildJourney(selectedCampaign, selectedDonation, disbursementId)} />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </motion.div>
               ) : (
                 <div className="h-full flex items-center justify-center text-foreground/30">
@@ -483,50 +557,61 @@ export default function DonorDashboard() {
   );
 }
 
-// Helper to build 5-stage status
-function buildJourney(campaign: Campaign, allDonations: Donation[]) {
-  const campDonations = allDonations.filter(
-    (d) => d.campaignId === campaign.id,
+// Helper to build 5-stage status tailored to the donor's actual allocations
+function buildJourney(campaign: Campaign, donation: Donation, disbursementId: string) {
+  // 1. Capital Deployed (Donated)
+  const isFunded = true; // By definition, the donation exists
+  
+  // 2. Proof of need uploaded
+  const disbursements = (campaign as any).disbursements || campaign.milestones || [];
+  // Consider proof uploaded if a disbursement exists or was requested for this campaign
+  const hasProof = disbursements.length > 0;
+
+  const atts = Array.isArray(donation.attestations)
+    ? donation.attestations.filter((a: any) => a.disbursementId === disbursementId)
+    : [];
+
+  // 3. Funds Allocated (FIFO picked up this donation)
+  const isAllocated = atts.some(
+    (a: any) => a.type === "RECEIPT" && Number(a.allocatedAmount || 0) > 0
   );
-  const hasDonation = campDonations.length > 0;
-  const milestones = campaign.milestones || [];
-  const hasMilestones = milestones.length > 0;
-  const hasProof = milestones.some((m) => !!m.proofCid);
-  const isDisbursed = campDonations.some(
-    (d) => d.status === "disbursed" || d.status === "delivered",
-  );
-  const isDelivered = campDonations.some((d) => d.status === "delivered");
+  
+  // 4. NGO Receipt Signed (Attestation)
+  const isReceipted = atts.some((a: any) => a.type === "RECEIPT" && a.status === "APPROVED");
+
+  // 5. Delivery Attestation Signed (Impact Verified)
+  const isDelivered = atts.some((a: any) => a.type === "DELIVERY" && a.status === "APPROVED");
 
   return [
     {
       id: "capital",
       label: "Capital Deployed",
-      status: hasDonation ? "completed" : "pending",
-      isAttestation: false,
-    },
-    {
-      id: "milestone",
-      label: "Milestone Active",
-      status: hasMilestones ? "completed" : "pending",
+      status: isFunded ? "completed" : "pending",
       isAttestation: false,
     },
     {
       id: "proof",
-      label: "Proof Uploaded",
+      label: "Proof of need uploaded",
       status: hasProof ? "completed" : "pending",
       isAttestation: false,
     },
     {
-      id: "attestation",
-      label: "Attestation Signed",
-      status: isDisbursed ? "completed" : "pending",
+      id: "allocated",
+      label: "Funds allocated",
+      status: isAllocated ? "completed" : "pending",
+      isAttestation: false,
+    },
+    {
+      id: "receipt",
+      label: "NGO receipt signed",
+      status: isReceipted ? "completed" : "pending",
       isAttestation: true,
     },
     {
-      id: "impact",
-      label: "Impact Verified",
+      id: "delivery",
+      label: "Delivery attestation signed",
       status: isDelivered ? "completed" : "pending",
-      isAttestation: false,
+      isAttestation: true,
     },
   ] as const;
 }

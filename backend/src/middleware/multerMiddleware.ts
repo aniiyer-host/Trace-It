@@ -27,3 +27,9 @@ const upload = multer({
 
 // Export a single file upload middleware named 'file'
 export const uploadSingle = upload.single('file');
+
+// Export multiple file upload for proofs
+export const uploadMultipleFields = upload.fields([
+  { name: 'files', maxCount: 10 },
+  { name: 'geotagFile', maxCount: 1 }
+]);

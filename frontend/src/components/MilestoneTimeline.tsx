@@ -1,5 +1,5 @@
 // MilestoneTimeline – Enhanced vertical progress tracker with better visualizations
-import { ExternalLink, Loader2 } from 'lucide-react'
+import { ExternalLink, Loader2, CheckCircle } from 'lucide-react'
 import { StatusBadge } from '@/components/StatusBadge'
 import { formatUSD, shortenHash } from '@/lib/utils'
 import type { Milestone } from '@/types'
@@ -88,10 +88,17 @@ export function MilestoneTimeline({ milestones, className }: Props) {
                                         </div>
                                     )}
 
-                                    {ms.status === 'disbursed' && !ms.approvedAt && (
+                                    {(ms.disbursementStatus === 'PENDING' || ms.disbursementStatus === 'APPROVED' || (!ms.disbursementStatus && ms.status === 'disbursed' && !ms.approvedAt)) && (
                                         <div className="flex items-center gap-2 mt-2">
                                             <Loader2 className="h-3 w-3 animate-spin text-primary" />
                                             <span className="text-sm text-primary">Awaiting fund transfer...</span>
+                                        </div>
+                                    )}
+
+                                    {ms.disbursementStatus === 'SETTLED' && (
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <CheckCircle className="h-4 w-4 text-emerald-500" />
+                                            <span className="text-sm text-emerald-500 font-medium">Funds transferred successfully</span>
                                         </div>
                                     )}
                                 </div>

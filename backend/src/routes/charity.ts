@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction, Router } from "express";
 import { prisma } from "../db/prisma.js";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { uploadSingle } from "../middleware/multerMiddleware.js";
+import { uploadSingle, uploadMultipleFields } from "../middleware/multerMiddleware.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { StorageService } from "../services/storageService.js";
@@ -618,7 +618,7 @@ export const createDisbursement = async (
         .json({ error: "NGO must be ACTIVE to request disbursements" });
     }
 
-    const { campaignId, cohortId, amountInr, fieldReportUrl } = req.body;
+    const { campaignId, cohortId, amountInr, fieldReportUrl, disbursementType } = req.body;
 
     let targetCampaignId = campaignId;
     if (!targetCampaignId && cohortId) {
@@ -688,6 +688,7 @@ export const createDisbursement = async (
         amountInr: new Prisma.Decimal(requestedAmount.toString()),
         fieldReportUrl: fieldReportUrl || null,
         status: DisbursementStatus.PENDING,
+        disbursementType: disbursementType || "PROOF_OF_NEED",
       },
     });
 
@@ -1012,21 +1013,26 @@ export const signAttestation = async (
     });
 
     if (attestation.type === "RECEIPT") {
-      await prisma.attestation.upsert({
+      const existingDelivery = await prisma.attestation.findFirst({
         where: {
-          donationId_type: {
-            donationId: attestation.donationId,
-            type: "DELIVERY",
-          },
-        },
-        update: {},
-        create: {
           donationId: attestation.donationId,
+          disbursementId: attestation.disbursementId,
           type: "DELIVERY",
-          status: "PENDING",
-          requestedBy: attestation.requestedBy,
         },
       });
+
+      if (!existingDelivery) {
+        await prisma.attestation.create({
+          data: {
+            donationId: attestation.donationId,
+            disbursementId: attestation.disbursementId,
+            type: "DELIVERY",
+            status: "PENDING",
+            requestedBy: attestation.requestedBy,
+            allocatedAmount: attestation.allocatedAmount,
+          },
+        });
+      }
     }
     await writeAuditLog({
       actorType: AuditActorType.USER,
@@ -1056,7 +1062,7 @@ export const signAttestation = async (
 
 // POST /disburse/:id/proof - NGO uploads proof for a milestone (=disbursement)
 export const uploadDisbursementProof = [
-  uploadSingle,
+  uploadMultipleFields,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.id;
@@ -1091,38 +1097,58 @@ export const uploadDisbursementProof = [
       }
 
       const multerReq = req as any;
-      if (!multerReq.file)
-        return res.status(400).json({ error: "No file uploaded" });
+      const files: Express.Multer.File[] = multerReq.files?.files || [];
+      const geotagFile: Express.Multer.File | undefined = multerReq.files?.geotagFile?.[0];
+
+      if (files.length === 0) {
+        return res.status(400).json({ error: "No files uploaded" });
+      }
 
       const storageBucket = "test-bucket";
-      const storagePath = `milestone_proofs/${disbursementId}/${Date.now()}_${multerReq.file.originalname}`;
-      const sha512Hash = `proof_hash_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-
       const storageService = new StorageService(storageBucket);
+      
+      const allFilesToProcess = [...files];
+      if (geotagFile) allFilesToProcess.push(geotagFile);
 
-      await storageService.uploadFile(
-        multerReq.file.buffer,
-        storagePath,
-        multerReq.file.mimetype,
-      );
+      // We will record a single proof_hash on the disbursement for simplicity (just using the first file's hash, or a combined hash),
+      // but we will store all documents independently.
+      let primaryHash = "";
+      let firstDocumentId = "";
+      let first = true;
 
-      const document = await prisma.document.create({
-        data: {
-          ownerId: userId,
-          disbursementId,
-          documentType: DocumentType.FIELD_REPORT,
-          sha512Hash,
-          storageBucket,
-          storagePath,
-        },
-      });
+      for (const file of allFilesToProcess) {
+        const storagePath = `milestone_proofs/${disbursementId}/${Date.now()}_${file.originalname}`;
+        const sha512Hash = `proof_hash_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+        
+        if (first) {
+          primaryHash = sha512Hash;
+        }
+
+        await storageService.uploadFile(file.buffer, storagePath, file.mimetype);
+
+        const doc = await prisma.document.create({
+          data: {
+            ownerId: userId,
+            disbursementId,
+            documentType: DocumentType.FIELD_REPORT,
+            sha512Hash,
+            storageBucket,
+            storagePath,
+          },
+        });
+
+        if (first) {
+          firstDocumentId = doc.id;
+          first = false;
+        }
+      }
 
       const wasRejected = disbursement.status === DisbursementStatus.REJECTED;
 
       const updated = await prisma.disbursement.update({
         where: { id: disbursementId },
         data: {
-          fieldReportUrl: storagePath,
+          fieldReportUrl: primaryHash, // Reuse as field report reference
           proofSubmittedAt: new Date(),
           status: DisbursementStatus.PENDING,
           rejectionReason: null,
@@ -1137,10 +1163,10 @@ export const uploadDisbursementProof = [
         action: wasRejected
           ? "DISBURSEMENT_PROOF_RESUBMITTED"
           : "MILESTONE_PROOF_UPLOADED",
-        metadata: { documentId: document.id, sha512Hash },
+        metadata: { documentId: firstDocumentId, sha512Hash: primaryHash },
       });
 
-      res.status(201).json({ ...updated, documentId: document.id, sha512Hash });
+      res.status(201).json({ ...updated, documentId: firstDocumentId, sha512Hash: primaryHash });
     } catch (err) {
       next(err);
     }

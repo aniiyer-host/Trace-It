@@ -167,9 +167,7 @@ export default function NGODashboard() {
   const [proofOpen, setProofOpen] = useState(false);
   const [disbursementOpen, setDisbursementOpen] = useState(false);
   const [attestationDialogOpen, setAttestationDialogOpen] = useState(false);
-  const [transferredDisbursements, setTransferredDisbursements] = useState<
-    Set<string>
-  >(new Set());
+
   const [selectedAttestation, setSelectedAttestation] = useState<{
     id: string;
     donationId: string;
@@ -241,10 +239,8 @@ export default function NGODashboard() {
                     : `Disbursement request for ₹${Number(d.amountInr).toLocaleString()} (${d.status})`,
                   targetAmount: Number(d.amountInr),
                   status:
-                    d.status === "SETTLED"
-                      ? "delivered"
-                      : d.status === "SENT" || d.status === "APPROVED"
-                        ? "disbursed"
+                    d.status === "SENT" || d.status === "SETTLED" || d.status === "APPROVED"
+                      ? "disbursed"
                         : d.status === "REJECTED"
                           ? "rejected"
                           : d.status === "FAILED"
@@ -253,6 +249,7 @@ export default function NGODashboard() {
 
                   // NEW: preserve the real backend status
                   disbursementStatus: d.status,
+                  disbursementType: d.disbursementType as "PROOF_OF_NEED" | "PROOF_OF_WORK",
 
                   proofSubmittedAt: d.proofSubmittedAt ?? undefined,
                   rejectionReason: d.rejectionReason ?? undefined,
@@ -297,32 +294,7 @@ export default function NGODashboard() {
   // }, [user, fetchNgoData, fetchPendingAttestations]);
 
   // Update from Await fund transfer to Success
-  useEffect(() => {
-    const timers: ReturnType<typeof setTimeout>[] = [];
-
-    ngoCampaigns.forEach((campaign) => {
-      campaign.milestones.forEach((milestone) => {
-        if (
-          milestone.disbursementStatus === "APPROVED" &&
-          !transferredDisbursements.has(milestone.id)
-        ) {
-          const timer = setTimeout(() => {
-            setTransferredDisbursements((prev) => {
-              const next = new Set(prev);
-              next.add(milestone.id);
-              return next;
-            });
-          }, 10_000);
-
-          timers.push(timer);
-        }
-      });
-    });
-
-    return () => {
-      timers.forEach(clearTimeout);
-    };
-  }, [ngoCampaigns]);
+  // The fake timer for transferredDisbursements was removed to keep UI in sync with DB status
   useEffect(() => {
     if (!user || user.role !== "CHARITY") return;
 
@@ -396,8 +368,6 @@ export default function NGODashboard() {
       .filter(
         (m) =>
           m.status === "allocated" ||
-          m.status === "disbursed" ||
-          m.status === "delivered" ||
           m.status === "rejected",
       )
       .map((m) => ({ campaign: camp, milestone: m }));
@@ -411,8 +381,8 @@ export default function NGODashboard() {
       campaignId: attestation.donation?.campaignId,
       label:
         attestation.type === "DELIVERY"
-          ? `Delivery · ₹${Number(attestation.donation?.amount || 0).toLocaleString()}`
-          : `Receipt · ₹${Number(attestation.donation?.amount || 0).toLocaleString()}`,
+          ? `Delivery · ₹${Number((attestation as any).allocatedAmount || attestation.donation?.amount || 0).toLocaleString()}`
+          : `Receipt · ₹${Number((attestation as any).allocatedAmount || attestation.donation?.amount || 0).toLocaleString()}`,
     })),
 
     ...pendingMilestoneActions
@@ -673,7 +643,7 @@ export default function NGODashboard() {
                               : "Confirm you received the funds"}
                           </div>
                           <div className="text-2xl font-bold tracking-tighter tabular-nums pt-1">
-                            {formatUSD(Number(attestation.donation?.amount))}
+                            {formatUSD(Number(attestation.allocatedAmount || attestation.donation?.amount))}
                           </div>
                           <div className="text-foreground/70">
                             {attestation.donation?.donorId
@@ -788,7 +758,7 @@ export default function NGODashboard() {
                           // </div>
 
                           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-foreground/5 border border-foreground/10 text-sm font-medium text-foreground/70">
-                            {transferredDisbursements.has(milestone.id) ? (
+                            {["SENT", "SETTLED"].includes(milestone.disbursementStatus || "") ? (
                               <>
                                 <CheckCircle className="h-4 w-4 text-emerald-500" />
                                 Funds transferred successfully
@@ -939,7 +909,9 @@ export default function NGODashboard() {
                   label="Completed"
                   value={
                     selectedCampaignObj.milestones.filter(
-                      (m) => m.status === "delivered",
+                      (m) =>
+                        m.disbursementStatus === "SETTLED" ||
+                        m.status === "delivered",
                     ).length
                   }
                 />
@@ -973,6 +945,10 @@ export default function NGODashboard() {
       {selectedCampaignObj && (
         <DisbursementRequestDialog
           campaign={selectedCampaignObj}
+          cohortId={
+            (selectedCampaignObj as any).cohortId ||
+            (selectedCampaignObj as any).cohorts?.[0]?.id
+          }
           open={disbursementOpen}
           onOpenChange={setDisbursementOpen}
           onDisbursementRequested={() => void handleDisbursementRequested()}
@@ -1024,7 +1000,7 @@ export default function NGODashboard() {
           donation={{
             id: selectedAttestation.donationId,
             campaignId: selectedAttestation.donation?.campaignId || "",
-            amount: Number(selectedAttestation.donation?.amount),
+            amount: Number((selectedAttestation as any).allocatedAmount || selectedAttestation.donation?.amount),
             campaignTitle: `Campaign ${selectedAttestation.donationId?.substring(0, 8)}`,
             paymentMethod: "upi",
             orderId: `order_${selectedAttestation.donationId}`,

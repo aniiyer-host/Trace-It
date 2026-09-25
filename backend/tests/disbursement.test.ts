@@ -20,6 +20,9 @@ describe("Disbursement API Integration Tests", () => {
   let ngoToken: string;
   let ngoUserId: string;
 
+  let donorToken: string;
+  let donorUserId: string;
+
   let campaignId: string;
   let cohortId: string;
   let disbursementId: string;
@@ -34,6 +37,18 @@ describe("Disbursement API Integration Tests", () => {
     });
     adminUserId = adminUser.id;
     adminToken = jwt.sign({ userId: adminUserId }, JWT_ACCESS_SECRET, {
+      expiresIn: "1h",
+    });
+
+    // 1b. Create a mock donor
+    const donorUser = await prisma.profile.create({
+      data: {
+        email: `donor-${crypto.randomUUID()}@example.com`,
+        role: UserRole.DONOR,
+      },
+    });
+    donorUserId = donorUser.id;
+    donorToken = jwt.sign({ userId: donorUserId }, JWT_ACCESS_SECRET, {
       expiresIn: "1h",
     });
 
@@ -78,7 +93,7 @@ describe("Disbursement API Integration Tests", () => {
     // 5. Create some SUCCESS donations
     await prisma.donation.create({
       data: {
-        donorId: adminUserId, // doesn't matter who the donor is
+        donorId: donorUserId,
         ngoId: ngoUserId,
         campaignId,
         amount: 5000,
@@ -89,7 +104,7 @@ describe("Disbursement API Integration Tests", () => {
 
     await prisma.donation.create({
       data: {
-        donorId: adminUserId,
+        donorId: donorUserId,
         ngoId: ngoUserId,
         campaignId,
         amount: 5000,
@@ -101,12 +116,15 @@ describe("Disbursement API Integration Tests", () => {
 
   afterAll(async () => {
     // Clean up
+    await prisma.donationAllocation.deleteMany({ where: { disbursement: { campaignId } } });
+    await prisma.attestation.deleteMany({ where: { donation: { campaignId } } });
     await prisma.disbursement.deleteMany({ where: { campaignId } });
     await prisma.donation.deleteMany({ where: { campaignId } });
     await prisma.beneficiaryCohort.deleteMany({ where: { campaignId } });
     await prisma.campaign.deleteMany({ where: { id: campaignId } });
 
     await prisma.profile.delete({ where: { id: adminUserId } });
+    await prisma.profile.delete({ where: { id: donorUserId } });
     await prisma.profile.delete({ where: { id: ngoUserId } });
   });
 
@@ -159,15 +177,98 @@ describe("Disbursement API Integration Tests", () => {
     expect(res.body.status).toBe(DisbursementStatus.APPROVED);
     expect(res.body.approvedBy).toBe(adminUserId);
 
-    // Verify that donations were allocated
+    // Verify that donations were allocated via partial tracking
     const donations = await prisma.donation.findMany({
       where: { campaignId },
+      orderBy: { createdAt: "asc" }
     });
 
     // 6000 was disbursed.
-    // First donation (5000) should be ALLOCATED
-    // Second donation (5000) should be ALLOCATED (since 1000 spilled over)
-    const allocated = donations.filter((d) => d.status === "ALLOCATED");
-    expect(allocated.length).toBe(2);
+    // First donation (5000) should be ALLOCATED with 5000 allocatedAmount
+    // Second donation (5000) should be ALLOCATED with 1000 allocatedAmount
+    const firstDonation = donations[0];
+    const secondDonation = donations[1];
+    
+    expect(firstDonation.status).toBe("ALLOCATED");
+    expect(Number(firstDonation.allocatedAmount)).toBe(5000);
+    
+    expect(secondDonation.status).toBe("ALLOCATED");
+    expect(Number(secondDonation.allocatedAmount)).toBe(1000);
+
+    // Verify DonationAllocation records
+    const allocations = await prisma.donationAllocation.findMany({
+      where: { disbursementId }
+    });
+    expect(allocations.length).toBe(2);
+
+    // Verify RECEIPT Attestations were created
+    const attestations = await prisma.attestation.findMany({
+      where: { disbursementId, type: "RECEIPT" }
+    });
+    expect(attestations.length).toBe(2);
+
+    // Verify Campaign is NOT closed (6000 < 10000)
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+    expect(campaign?.status).not.toBe(CampaignStatus.COMPLETED);
+  });
+
+  test("POST /api/admin/disburse/:id/approve - approve final disbursement auto-closes campaign", async () => {
+    // Create another disbursement for the remaining 4000
+    const disRes = await request(app)
+      .post("/api/charity/disburse")
+      .set("Authorization", `Bearer ${ngoToken}`)
+      .send({
+        campaignId,
+        amountInr: 4000,
+      });
+    const finalDisbursementId = disRes.body.id;
+
+    // Approve it
+    const res = await request(app)
+      .post(`/api/admin/disburse/${finalDisbursementId}/approve`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    
+    expect(res.status).toBe(200);
+    expect(res.body.isFinalDisbursement).toBe(true);
+
+    // Verify Campaign is closed
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+    expect(campaign?.status).toBe(CampaignStatus.COMPLETED);
+  });
+
+  test("POST /api/admin/campaigns/:id/close - force close endpoint", async () => {
+    // Re-open campaign for testing
+    await prisma.campaign.update({
+      where: { id: campaignId },
+      data: { status: CampaignStatus.ACTIVE }
+    });
+
+    const res = await request(app)
+      .post(`/api/admin/campaigns/${campaignId}/close`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe(CampaignStatus.COMPLETED);
+  });
+
+  test("GET /api/donor/dashboard - donor sees attestations with disbursementId and allocatedAmount", async () => {
+    const res = await request(app)
+      .get("/api/donor/dashboard")
+      .set("Authorization", `Bearer ${donorToken}`);
+      
+    expect(res.status).toBe(200);
+    expect(res.body.donations).toBeDefined();
+    
+    // Find a donation that has attestations
+    const donation = res.body.donations.find((d: any) => d.attestations && d.attestations.length > 0);
+    expect(donation).toBeDefined();
+    
+    // Verify the structure of the attestation
+    const attestation = donation.attestations[0];
+    expect(attestation.type).toBe("RECEIPT");
+    expect(attestation).toHaveProperty("disbursementId");
+    expect(attestation.disbursementId).toBeTruthy(); // Should not be null
+    expect(attestation).toHaveProperty("allocatedAmount");
+    expect(Number(attestation.allocatedAmount)).toBeGreaterThan(0);
   });
 });

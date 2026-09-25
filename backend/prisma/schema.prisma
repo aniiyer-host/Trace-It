@@ -72,6 +72,11 @@ enum DocumentStatus {
   LEGAL_HOLD
 }
 
+enum DisbursementType {
+  PROOF_OF_NEED
+  PROOF_OF_WORK
+}
+
 enum DisbursementStatus {
   PENDING
   APPROVED
@@ -218,6 +223,7 @@ model Donation {
   ngoId              String
   campaignId         String?
   amount             Decimal   @db.Decimal(14, 2)
+  allocatedAmount    Decimal   @default(0) @db.Decimal(14, 2)
   currencyCode       String    @default("INR")
   paymentMethod      PaymentMethod
   status             DonationStatus @default(INITIATED)
@@ -237,6 +243,7 @@ model Donation {
   project     Campaign? @relation(fields: [campaignId], references: [id])
   govRequests GovernmentRequest[] @relation("GovRequestTargetDonation")
   impactTokens ImpactToken[] @relation("donationImpactTokens")
+  donationAllocations DonationAllocation[]
 
   @@index([donorId])
   @@index([ngoId])
@@ -244,6 +251,23 @@ model Donation {
   @@index([status])
   @@index([razorpayOrderId])
   @@map("donations")
+}
+
+// Donation Allocations
+model DonationAllocation {
+  id             String   @id @default(uuid())
+  donationId     String
+  disbursementId String
+  amount         Decimal  @db.Decimal(14, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  donation     Donation     @relation(fields: [donationId], references: [id])
+  disbursement Disbursement @relation(fields: [disbursementId], references: [id])
+
+  @@index([donationId])
+  @@index([disbursementId])
+  @@map("donation_allocations")
 }
 
 // Beneficiary Cohorts
@@ -274,6 +298,8 @@ model Disbursement {
   campaignId         String
   ngoId              String
   cohortId           String?
+  disbursementType   DisbursementType @default(PROOF_OF_NEED)
+  isFinalDisbursement Boolean @default(false)
   amountInr          Decimal   @db.Decimal(14, 2)
   amountSol          Decimal?  @db.Decimal(18, 8)
   fieldReportUrl     String?
@@ -292,6 +318,8 @@ model Disbursement {
   ngo    Profile   @relation("disbursementsAsNgo", fields: [ngoId], references: [id])
   cohort BeneficiaryCohort? @relation("disbursementsAsCohort", fields: [cohortId], references: [id])
   documents Document[] @relation("disbursementDocuments")
+  donationAllocations DonationAllocation[]
+  attestations        Attestation[]
 
   @@index([campaignId])
   @@index([ngoId])
@@ -424,7 +452,9 @@ model BlockchainRetryQueue {
 model Attestation {
   id              String            @id @default(uuid())
   donationId      String
+  disbursementId  String?
   type            AttestationType
+  allocatedAmount Decimal?          @db.Decimal(14, 2)
   status          AttestationStatus @default(PENDING)
   requestedBy     String            // donor's profile id
   ngoSignedBy     String?           // ngo's profile id, set on NGO sign-off
@@ -436,9 +466,11 @@ model Attestation {
   updatedAt       DateTime          @updatedAt
 
   donation Donation @relation(fields: [donationId], references: [id])
+  disbursement Disbursement? @relation(fields: [disbursementId], references: [id])
 
-  @@unique([donationId, type])   // one RECEIPT + one DELIVERY attestation per donation, not duplicates
+  @@unique([donationId, disbursementId, type])   // one RECEIPT + one DELIVERY attestation per donation per disbursement
   @@index([donationId])
+  @@index([disbursementId])
   @@index([status])
   @@map("attestations")
 }

@@ -81,7 +81,7 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
     expect(donation?.status).toBe("INITIATED");
   });
 
-  it("POST /api/webhooks/simulate-success transitions INITIATED donation to SUCCESS and auto-creates RECEIPT attestation", async () => {
+  it("POST /api/webhooks/simulate-success transitions INITIATED donation to SUCCESS but DOES NOT auto-create RECEIPT attestation", async () => {
     // 1. Create a donation
     const donateRes = await request(app)
       .post("/api/donor/donate")
@@ -109,23 +109,8 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
       include: { attestations: true },
     });
     expect(updated?.status).toBe("SUCCESS");
-    expect(updated?.attestations.length).toBeGreaterThanOrEqual(1);
-
-    const receiptAtt = updated?.attestations.find(
-      (a) => a.type === AttestationType.RECEIPT
-    );
-    expect(receiptAtt).toBeDefined();
-    expect(receiptAtt?.status).toBe(AttestationStatus.PENDING);
-    expect(receiptAtt?.requestedBy).toBe(donorUserId);
-
-    // 4. Verify NGO can fetch it from their pending inbox
-    const inboxRes = await request(app)
-      .get("/api/charity/attestations/pending")
-      .set("Authorization", `Bearer ${ngoToken}`);
-
-    expect(inboxRes.status).toBe(200);
-    const item = inboxRes.body.find((a: any) => a.id === receiptAtt?.id);
-    expect(item).toBeDefined();
-    expect(Number(item.donation?.amount)).toBe(500);
+    
+    // Attestations are now generated at disbursement approval, not here
+    expect(updated?.attestations.length).toBe(0);
   });
 });
