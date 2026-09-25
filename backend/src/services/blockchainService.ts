@@ -619,6 +619,194 @@ export class BlockchainService {
     );
     return ngoPda;
   }
+
+  /**
+   * Helper method to derive Attestation PDA for attestation accounts.
+   * Not exposed publicly as it's used internally for account derivation.
+   */
+  private async getAttestationPda(
+    donationId: string,
+    ngoId: string,
+    attestationType: 'receipt' | 'delivery' = 'receipt'
+  ): Promise<[PublicKey, number]> {
+    const cleanDonationId = donationId.replace(/-/g, '');
+    const cleanNgoId = ngoId.replace(/-/g, '');
+    return PublicKey.findProgramAddressSync(
+      [
+        Buffer.from('attestation'),
+        Buffer.from(cleanDonationId, 'utf8'),
+        Buffer.from(cleanNgoId, 'utf8'),
+        Buffer.from(attestationType, 'utf8'),
+      ],
+      this.programId
+    );
+  }
+
+  /**
+   * Store an NGO receipt attestation on-chain.
+   * Called after NGO signs a receipt attestation.
+   */
+  async storeNgoAttestation(params: StoreAttestationParams): Promise<BlockchainResult> {
+    if (!this.program) {
+      throw new Error('BlockchainService not initialized. Call init() first.');
+    }
+
+    try {
+      // Derive the PDA with 'receipt' tag
+      const [attestationPda] = await this.getAttestationPda(params.donationId, params.ngoId, 'receipt');
+
+      const tx = await this.program.methods
+        .storeNgoAttestation(
+          params.donationId,
+          params.ngoId,
+          params.attestationMessage,
+          params.attestationMessageHash,
+          params.ngoPublicKey,
+          new anchor.BN(params.signedAt)
+        )
+        .accounts({
+          attestationAccount: attestationPda,
+          authority: this.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' });
+
+      return { success: true, txHash: tx };
+    } catch (error: any) {
+      // Check if the error is due to account already existing (idempotency case)
+      if (error?.logs?.some((log: string) => log.includes('already in use')) || error?.message?.includes('already in use')) {
+        console.log('[BlockchainService] storeNgoAttestation: Account already exists, treating as success (idempotent)');
+        return { success: true, txHash: null };
+      }
+
+      console.error('[BlockchainService] storeNgoAttestation failed:', error);
+      return {
+        success: false,
+        txHash: null,
+        error: error.message || 'Unknown blockchain error',
+      };
+    }
+  }
+
+  /**
+   * Legacy alias for storeNgoAttestation to prevent breaking call sites.
+   */
+  async storeNgpAttestation(params: StoreAttestationParams): Promise<BlockchainResult> {
+    return this.storeNgoAttestation(params);
+  }
+
+  /**
+   * Store a delivery attestation on-chain.
+   * Called after NGO signs a delivery attestation.
+   */
+  async storeDeliveryAttestation(params: StoreAttestationParams): Promise<BlockchainResult> {
+    if (!this.program) {
+      throw new Error('BlockchainService not initialized. Call init() first.');
+    }
+
+    try {
+      // Derive the PDA with 'delivery' tag
+      const [attestationPda] = await this.getAttestationPda(params.donationId, params.ngoId, 'delivery');
+
+      const tx = await this.program.methods
+        .storeDeliveryAttestation(
+          params.donationId,
+          params.ngoId,
+          params.beneficiaryIdHash || '', // Empty string if not provided
+          params.attestationMessage,
+          params.attestationMessageHash,
+          params.ngoPublicKey,
+          new anchor.BN(params.signedAt)
+        )
+        .accounts({
+          attestationAccount: attestationPda,
+          authority: this.wallet.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc({ commitment: 'confirmed' });
+
+      return { success: true, txHash: tx };
+    } catch (error: any) {
+      // Check if the error is due to account already existing (idempotency case)
+      if (error?.logs?.some((log: string) => log.includes('already in use')) || error?.message?.includes('already in use')) {
+        console.log('[BlockchainService] storeDeliveryAttestation: Account already exists, treating as success (idempotent)');
+        return { success: true, txHash: null };
+      }
+
+      console.error('[BlockchainService] storeDeliveryAttestation failed:', error);
+      return {
+        success: false,
+        txHash: null,
+        error: error.message || 'Unknown blockchain error',
+      };
+    }
+  }
+
+  /**
+   * Fetch an attestation record from the chain for verification.
+   */
+  async getAttestation(
+    donationId: string,
+    ngoId: string,
+    attestationType: 'receipt' | 'delivery' = 'receipt'
+  ): Promise<AttestationOnChainData | null> {
+    if (!this.program) {
+      throw new Error('BlockchainService not initialized. Call init() first.');
+    }
+
+    try {
+      const [attestationPda] = await this.getAttestationPda(donationId, ngoId, attestationType);
+
+      // Fetch the account info
+      const accountInfo = await this.connection.getAccountInfo(attestationPda);
+      if (!accountInfo) {
+        return null; // Account doesn't exist
+      }
+
+      // Decode the account data using the program's coder
+      const account = this.program.coder.accounts.decode('attestationAccount', accountInfo.data);
+      return {
+        donationId: account.donationId,
+        ngoId: account.ngoId,
+        attestationType: account.attestationType,
+        beneficiaryIdHash: account.beneficiaryIdHash,
+        attestationMessage: account.attestationMessage,
+        attestationMessageHash: account.attestationMessageHash,
+        ngoPublicKey: account.ngoPublicKey,
+        signedAt: typeof account.signedAt === 'number' ? account.signedAt : account.signedAt.toNumber(),
+      };
+    } catch (error) {
+      console.error('[BlockchainService] getAttestation failed:', error);
+      return null; // Account doesn't exist or failed to decode
+    }
+  }
+
+  /**
+   * Verify an attestation's signature off-chain.
+   */
+  async verifyAttestation(
+    donationId: string,
+    ngoId: string,
+    attestationType: 'receipt' | 'delivery' = 'receipt'
+  ): Promise<{
+    attestation: AttestationOnChainData | null;
+    valid: boolean;
+    error?: string
+  }> {
+    const attestation = await this.getAttestation(donationId, ngoId, attestationType);
+    if (!attestation) {
+      return {
+        attestation: null,
+        valid: false,
+        error: 'Attestation not found on-chain'
+      };
+    }
+
+    return {
+      attestation: attestation,
+      valid: true
+    };
+  }
 }
 
 // ─── New Parameter Interfaces ─────────────────────────────────────
@@ -642,4 +830,27 @@ export interface RecordDisbursementParams {
   currency: string;        // Currency code (typically "INR")
   timestamp: Date;         // When disbursement was made
   transactionHash: string; // Transaction hash of the actual funds transfer
+}
+
+// Attestation parameters
+export interface StoreAttestationParams {
+  donationId: string;        // Donation ID (UUID format)
+  ngoId: string;             // NGO profile ID
+  beneficiaryIdHash?: string; // SHA-512 hash of beneficiary ID + NGO_SECRET (for delivery attestations)
+  attestationMessage: string; // The signed attestation message
+  attestationMessageHash: string; // SHA-512 hash of the attestation message
+  ngoPublicKey: string;      // NGO's public key (base58 or hex) that signed the attestation
+  signedAt: number;          // Unix timestamp when attestation was signed
+}
+
+// Attestation data structure
+export interface AttestationOnChainData {
+  donationId: string;
+  ngoId: string;
+  attestationType: number; // 0=Receipt, 1=Delivery
+  beneficiaryIdHash?: string;
+  attestationMessage: string;
+  attestationMessageHash: string;
+  ngoPublicKey: string;
+  signedAt: number;
 }

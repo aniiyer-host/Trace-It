@@ -16,7 +16,7 @@ import {
 import { writeAuditLog } from "../services/auditLogService.js";
 import { getBlockchainService } from "../services/blockchainInstance.js";
 import { addToBlockchainRetryQueue } from "../services/blockchainRetryQueue.js";
-import { allocateDonation } from "../services/statusService.js";
+import { allocateDonation, markDelivered } from "../services/statusService.js";
 import { HashService } from "../services/hashService.js";
 import {
   AttestationType,
@@ -1027,6 +1027,134 @@ export const signAttestation = async (
           requestedBy: attestation.requestedBy,
         },
       });
+    }
+
+    // Store the attestation on-chain and update donation status if delivery
+    try {
+      const blockchainService = await getBlockchainService();
+      if (blockchainService) {
+        // Prepare attestation data
+        const attestationMessage = `I, ${donation.ngoId}, confirm ${rawType.toLowerCase()} of INR ${donation.amount} for donation ${attestation.donationId} from platform Trace-It on ${new Date().toISOString()}`;
+        const attestationMessageHash = HashService.sha512(attestationMessage);
+
+        // For delivery attestations, also compute beneficiary hash if beneficiaryId is provided
+        let beneficiaryIdHash = undefined;
+        if (rawType === "DELIVERY" && beneficiaryId) {
+          beneficiaryIdHash = HashService.hmacSha512(
+            beneficiaryId,
+            process.env.BENEFICIARY_HMAC_SECRET!
+          );
+        }
+
+        // Store attestation on-chain
+        let storeResult: { success: boolean; txHash: string | null; error?: string } | undefined;
+        if (rawType === "RECEIPT") {
+          storeResult = await blockchainService.storeNgoAttestation({
+            donationId: attestation.donationId,
+            ngoId,
+            attestationMessage,
+            attestationMessageHash,
+            ngoPublicKey: "", // TODO: Get from NGO's wallet/public key
+            signedAt: Math.floor(Date.now() / 1000),
+          });
+        } else if (rawType === "DELIVERY") {
+          storeResult = await blockchainService.storeDeliveryAttestation({
+            donationId: attestation.donationId,
+            ngoId,
+            beneficiaryIdHash: beneficiaryIdHash || "",
+            attestationMessage,
+            attestationMessageHash,
+            ngoPublicKey: "", // TODO: Get from NGO's wallet/public key
+            signedAt: Math.floor(Date.now() / 1000),
+          });
+        }
+
+        if (storeResult && storeResult.success) {
+          await writeAuditLog({
+            actorType: AuditActorType.USER,
+            actorId: ngoId,
+            entityType: "attestation",
+            entityId: attestation.id,
+            action: `BLOCKCHAIN_${rawType}_ATTESTATION_STORED`,
+            metadata: {
+              attestationId: attestation.id,
+              transactionHash: storeResult.txHash,
+            },
+          });
+          console.info(`Blockchain ${rawType} attestation stored: ${storeResult.txHash}`);
+        } else if (storeResult) {
+          console.error(`Failed to store ${rawType} attestation on-chain:`, storeResult.error);
+          // Add to retry queue for later processing
+          await addToBlockchainRetryQueue({
+            donationId: attestation.donationId,
+            operationType: "UPDATE_STATUS",
+            error: storeResult.error || "Unknown blockchain error",
+            retryCount: 0,
+          });
+
+          await writeAuditLog({
+            actorType: AuditActorType.USER,
+            actorId: ngoId,
+            entityType: "attestation",
+            entityId: attestation.id,
+            action: `BLOCKCHAIN_${rawType}_ATTESTATION_FAILED`,
+            metadata: {
+              attestationId: attestation.id,
+              error: storeResult.error,
+            },
+          });
+        }
+
+        // Update donation status to DELIVERED on-chain if this is a delivery attestation
+        if (rawType === "DELIVERY") {
+          await markDelivered(attestation.donationId);
+          const statusResult = await blockchainService.updateDonationStatus(
+            attestation.donationId,
+            4, // DELIVERED status
+          );
+          if (statusResult.success) {
+            await writeAuditLog({
+              actorType: AuditActorType.USER,
+              actorId: ngoId,
+              entityType: "donation",
+              entityId: attestation.donationId,
+              action: "BLOCKCHAIN_STATUS_UPDATE",
+              metadata: {
+                donationId: attestation.donationId,
+                transactionHash: statusResult.txHash,
+                newStatus: "DELIVERED",
+              },
+            });
+          } else {
+            console.error(`Failed to update donation ${attestation.donationId} status to DELIVERED on-chain:`, statusResult.error);
+            // Add to retry queue for later processing
+            await addToBlockchainRetryQueue({
+              donationId: attestation.donationId,
+              operationType: "UPDATE_STATUS",
+              newStatus: 4,
+              error: statusResult.error || "Unknown error",
+            });
+          }
+        }
+      }
+      await writeAuditLog({
+        actorType: AuditActorType.USER,
+        actorId: ngoId,
+        entityType: "donation",
+        entityId: attestation.donationId,
+        action: "DONATION_DELIVERED",
+        metadata: {
+          donationId: attestation.donationId,
+          amount: donation.amount,
+          ngoId: donation.ngoId,
+          donorId: donation.donorId,
+        },
+        ipAddress: req.ip,
+      });
+    } catch (error) {
+      console.error(`Failed to store attestation or update donation status:`, error);
+      // We don't throw here because the attestation was successfully signed
+      // but we log the error for investigation
     }
     await writeAuditLog({
       actorType: AuditActorType.USER,

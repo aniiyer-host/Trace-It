@@ -149,6 +149,87 @@ export const approveDisbursement = async (
       recordDisbursementOnChain();
     }
 
+    // BLOCKCHAIN INTEGRATION: Update donation status to DISBURSED on-chain (non-blocking)
+    // We don't await this to avoid slowing down the disbursement approval process
+    // Only run in non-test environments to avoid initialization errors during testing
+    if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
+      const updateDonationStatusToDisbursedOnChain = async () => {
+        try {
+          const blockchainService = await getBlockchainService();
+          if (!blockchainService) {
+            console.warn(
+              "[Blockchain] Service not available — skipping on-chain recording",
+            );
+            return;
+          }
+
+          // Find associated donations for this disbursement
+          const donations = await prisma.donation.findMany({
+            where: {
+              campaignId: disbursement.campaignId,
+              status: "SUCCESS", // Only update donations that were successful
+            },
+            include: {
+              ngo: true,
+            },
+          });
+
+          // Update each donation in the campaign to DISBURSED status
+          for (const donation of donations) {
+            if (donation.solanaTxHash) {
+              // Only update if already recorded on-chain
+              const result = await blockchainService.updateDonationStatus(
+                donation.id,
+                3, // DISBURSED status
+              );
+
+              if (result.success) {
+                await writeAuditLog({
+                  actorType: AuditActorType.USER,
+                  actorId: adminId,
+                  entityType: "donation",
+                  entityId: donation.id,
+                  action: "BLOCKCHAIN_STATUS_UPDATE",
+                  metadata: {
+                    donationId: donation.id,
+                    transactionHash: result.txHash,
+                    newStatus: "DISBURSED",
+                  },
+                });
+              } else {
+                console.error(
+                  `Failed to update donation ${donation.id} status to DISBURSED on-chain: ${result.error}`,
+                );
+
+                // Add to retry queue for status updates
+                await addToBlockchainRetryQueue({
+                  donationId: donation.id,
+                  error: result.error ?? "Unknown blockchain error",
+                  retryCount: 0,
+                  type: "STATUS_UPDATE",
+                  targetStatus: 3,
+                });
+              }
+            } else {
+              console.warn(
+                `Donation ${donation.id} not yet recorded on-chain, skipping status update to DISBURSED`,
+              );
+            }
+          }
+        } catch (error) {
+          console.error(
+            "Error in blockchain DISBURSED status update integration:",
+            error,
+          );
+          // Don't fail the disbursement approval if blockchain integration fails
+        }
+      };
+      // Fire and forget
+      updateDonationStatusToDisbursedOnChain();
+    }
+
+    // Allocate donations up to the disbursed amount
+
     // BLOCKCHAIN INTEGRATION: Update donation status to ALLOCATED on-chain (non-blocking)
     // We don't await this to avoid slowing down the disbursement approval process
     // Only run in non-test environments to avoid initialization errors during testing
