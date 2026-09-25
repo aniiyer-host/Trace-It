@@ -16,6 +16,7 @@ import {
 import { writeAuditLog } from "../services/auditLogService.js";
 import { allocateDonation } from "../services/statusService.js";
 import { getBlockchainService } from "../services/blockchainInstance.js";
+import { StorageService } from "../services/storageService.js";
 
 const adminRouter = Router();
 
@@ -36,6 +37,7 @@ export const approveDisbursement = async (
 
     const disbursement = await prisma.disbursement.findUnique({
       where: { id: disbursementId },
+      include: { campaign: true },
     });
     if (!disbursement) {
       return res.status(404).json({ error: "Disbursement not found" });
@@ -45,6 +47,19 @@ export const approveDisbursement = async (
       return res.status(400).json({ error: "Disbursement is not PENDING" });
     }
 
+    // Calculate if this is the final disbursement
+    const approvedDisbursements = await prisma.disbursement.aggregate({
+      where: { 
+        campaignId: disbursement.campaignId,
+        status: { in: ["APPROVED", "SENT", "SETTLED"] }
+      },
+      _sum: { amountInr: true }
+    });
+    
+    const totalDisbursed = Number(approvedDisbursements._sum.amountInr || 0) + Number(disbursement.amountInr);
+    const raised = Number(disbursement.campaign.raisedAmount);
+    const isFinalDisbursement = totalDisbursed >= raised;
+
     // Update disbursement
     const updated = await prisma.disbursement.update({
       where: { id: disbursementId },
@@ -52,8 +67,16 @@ export const approveDisbursement = async (
         status: DisbursementStatus.APPROVED,
         approvedBy: adminId,
         approvedAt: new Date(),
+        isFinalDisbursement: isFinalDisbursement
       },
     });
+
+    if (isFinalDisbursement) {
+      await prisma.campaign.update({
+        where: { id: disbursement.campaignId },
+        data: { status: "COMPLETED" }
+      });
+    }
 
     // BLOCKCHAIN INTEGRATION: Record disbursement on-chain after approval (non-blocking)
     // We don't await this to avoid slowing down the approval process
@@ -228,29 +251,62 @@ export const approveDisbursement = async (
     }
 
     // Allocate donations up to the disbursed amount
-    // First, find all SUCCESS donations for this campaign
-    const donationAllocations = await prisma.donation.findMany({
+    const donations = await prisma.donation.findMany({
       where: {
         campaignId: disbursement.campaignId,
-        status: "SUCCESS",
+        status: { in: ["SUCCESS", "ALLOCATED", "DISBURSED", "DELIVERED"] }
       },
       orderBy: { createdAt: "asc" },
     });
 
     let remainingToAllocate = Number(disbursement.amountInr);
 
-    for (const donation of donationAllocations) {
+    for (const donation of donations) {
       if (remainingToAllocate <= 0) break;
 
-      const donationAmount = Number(donation.amount);
+      const availableInDonation = Number(donation.amount) - Number(donation.allocatedAmount);
+      if (availableInDonation <= 0) continue;
 
-      // Call allocateDonation for each applicable donation
-      if (disbursement.cohortId) {
-        await allocateDonation(donation.id, disbursement.cohortId);
+      const amountToAllocate = Math.min(availableInDonation, remainingToAllocate);
+
+      // Create DonationAllocation record
+      await prisma.donationAllocation.create({
+        data: {
+          donationId: donation.id,
+          disbursementId: disbursement.id,
+          amount: amountToAllocate,
+        }
+      });
+
+      // Update donation allocatedAmount and status
+      const newAllocatedAmount = Number(donation.allocatedAmount) + amountToAllocate;
+      let newStatus = donation.status;
+      
+      if (donation.status === "SUCCESS") {
+        newStatus = "ALLOCATED";
       }
 
-      // Deduct the donation amount from what's remaining to allocate
-      remainingToAllocate -= donationAmount;
+      await prisma.donation.update({
+        where: { id: donation.id },
+        data: { 
+          allocatedAmount: newAllocatedAmount,
+          status: newStatus 
+        }
+      });
+
+      // Create Attestation for this donor/disbursement
+      await prisma.attestation.create({
+        data: {
+          donationId: donation.id,
+          disbursementId: disbursement.id,
+          type: "RECEIPT",
+          allocatedAmount: amountToAllocate,
+          requestedBy: donation.donorId,
+          status: "PENDING",
+        }
+      });
+
+      remainingToAllocate -= amountToAllocate;
     }
 
     // Write audit log
@@ -603,6 +659,49 @@ export const approveCampaign = async (
       entityType: "campaign",
       entityId: campaignId,
       action: "CAMPAIGN_APPROVED",
+      metadata: {},
+    });
+    const {
+      beneficiaryIdHash: _h,
+      beneficiaryIdEncrypted: _e,
+      ...safe
+    } = updated as any;
+    res.json(safe);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/admin/campaigns/:id/close → status: COMPLETED
+export const closeCampaign = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const adminId = req.user?.id;
+    const campaignId = req.params.id as string;
+    if (!adminId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+    });
+    if (!campaign) {
+      return res.status(404).json({ error: "Campaign not found" });
+    }
+    const updated = await prisma.campaign.update({
+      where: { id: campaignId },
+      data: {
+        status: CampaignStatus.COMPLETED,
+      },
+    });
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: adminId,
+      entityType: "campaign",
+      entityId: campaignId,
+      action: "CAMPAIGN_CLOSED",
       metadata: {},
     });
     const {
@@ -1047,7 +1146,7 @@ export const getPendingAttestationsAdmin = async (
 
     const mapped = attestations.map((att) => ({
       ...att,
-      amount: (att.donation as any)?.amount,
+      amount: att.allocatedAmount || (att.donation as any)?.amount,
       ngoName:
         (att.donation as any)?.ngo?.organisationName || att.donation?.ngoId,
       campaignTitle:
@@ -1165,11 +1264,69 @@ export const getPendingDisbursements = async (
         status: DisbursementStatus.PENDING,
         proofSubmittedAt: { not: null },
       },
+      include: {
+        campaign: { select: { id: true, title: true } },
+        ngo: { select: { id: true, organisationName: true } },
+        cohort: { select: { id: true, name: true } },
+      },
       orderBy: { proofSubmittedAt: "asc" },
     });
     res.json(milestones);
   } catch (err) {
     next(err);
+  }
+};
+// TODO: RAZORPAY PAYOUTS
+// This function is a manual override meant to be used by the Admin Panel to mark an APPROVED disbursement
+// as SENT/SETTLED before the Razorpay Payouts system is actually implemented.
+// Once Razorpay Payouts are implemented, the webhook handler from Razorpay should handle this transition,
+// and this manual override button/route should be deleted.
+export const markDisbursementSettled = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const adminId = req.user?.id;
+    const disbursementId = req.params.id as string;
+
+    if (!adminId)
+      return res.status(401).json({ error: "User not authenticated" });
+
+    const disbursement = await prisma.disbursement.findUnique({
+      where: { id: disbursementId },
+    });
+    if (!disbursement) {
+      return res.status(404).json({ error: "Disbursement not found" });
+    }
+
+    if (disbursement.status !== DisbursementStatus.APPROVED) {
+      return res.status(400).json({ error: "Disbursement is not APPROVED" });
+    }
+
+    const updated = await prisma.disbursement.update({
+      where: { id: disbursementId },
+      data: {
+        status: DisbursementStatus.SETTLED,
+      },
+    });
+
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: adminId,
+      entityType: "disbursement",
+      entityId: disbursement.id,
+      action: "DISBURSEMENT_SETTLED_MANUAL_OVERRIDE",
+      metadata: { note: "Manual override triggered to settle disbursement before Razorpay integration." },
+    });
+
+    return res.status(200).json({
+      message: "Disbursement marked as settled successfully",
+      disbursement: updated,
+    });
+  } catch (error) {
+    console.error("Error settling disbursement:", error);
+    next(error);
   }
 };
 
@@ -1255,6 +1412,65 @@ async function addToBlockchainRetryQueue(data: {
   }
 }
 
+// GET /disbursements/:id/proof-url - generate a short-lived signed URL for the proof file
+// Reason: fieldReportUrl stored in the DB is a raw S3 storage path (e.g.
+// "milestone_proofs/id/timestamp_file.png"), not a viewable URL. Opening it directly
+// in a browser shows a blank page or XML error. This endpoint generates a proper
+// 15-minute pre-signed URL that the admin can open to preview the proof image/PDF.
+export const getDisbursementProofUrl = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const disbursementId = req.params.id as string;
+
+    const disbursement = await prisma.disbursement.findUnique({
+      where: { id: disbursementId },
+    });
+
+    if (!disbursement) {
+      return res.status(404).json({ error: "Disbursement not found" });
+    }
+
+    if (!disbursement.fieldReportUrl) {
+      return res
+        .status(404)
+        .json({ error: "No proof file uploaded for this disbursement" });
+    }
+
+    const documents = await prisma.document.findMany({
+      where: { disbursementId },
+    });
+
+    const storageService = new StorageService("test-bucket");
+    const urls: { name: string; url: string }[] = [];
+
+    if (documents.length > 0) {
+      for (const doc of documents) {
+        const signedUrl = await storageService.getSignedUrl(doc.storagePath, 900);
+        // Extract filename from storagePath (e.g. milestone_proofs/id/12345_filename.pdf -> filename.pdf)
+        const parts = doc.storagePath.split('_');
+        const name = parts.length > 1 ? parts.slice(1).join('_') : doc.storagePath;
+        urls.push({ name, url: signedUrl });
+      }
+    } else if (disbursement.fieldReportUrl) {
+      // Fallback for older data where document might not exist but fieldReportUrl is a storage path
+      // Wait, if it's a hash, this will fail. Let's just try to sign it.
+      const signedUrl = await storageService.getSignedUrl(disbursement.fieldReportUrl, 900);
+      urls.push({ name: "Proof Document", url: signedUrl });
+    }
+
+    if (urls.length === 0) {
+      return res.status(404).json({ error: "No proof files found for this disbursement" });
+    }
+
+    return res.json({ urls });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ---------------------------------------------------------------------------
 // Router — all route registrations grouped together, by resource
 // ---------------------------------------------------------------------------
@@ -1286,6 +1502,12 @@ adminRouter.post(
   requireAuth,
   requireRole(UserRole.ADMIN),
   approveCampaign,
+);
+adminRouter.post(
+  "/campaigns/:id/close",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  closeCampaign,
 );
 
 // Users
@@ -1384,6 +1606,22 @@ adminRouter.post(
   requireAuth,
   requireRole(UserRole.ADMIN),
   rejectDisbursement,
+);
+
+adminRouter.post(
+  "/disbursements/:id/mark-settled",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  markDisbursementSettled,
+);
+
+// Route to fetch a short-lived signed URL for viewing the proof file uploaded by the NGO.
+// Needed because fieldReportUrl is a raw storage path, not a publicly accessible URL.
+adminRouter.get(
+  "/disbursements/:id/proof-url",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getDisbursementProofUrl,
 );
 
 export default adminRouter;

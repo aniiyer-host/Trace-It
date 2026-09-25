@@ -14,14 +14,29 @@ export class StorageService {
     this.bucketName = bucketName;
 
     // Backblaze B2 specific config
-    const endpoint = process.env.B2_ENDPOINT;
-    const accessKeyId = process.env.B2_KEY_ID;
-    const secretAccessKey = process.env.B2_APPLICATION_KEY;
-    const region = process.env.B2_REGION || "us-west-002";
+    // const endpoint = process.env.B2_ENDPOINT;
+    // const accessKeyId = process.env.B2_KEY_ID;
+    // const secretAccessKey = process.env.B2_APPLICATION_KEY;
+    // const region = process.env.B2_REGION || "us-west-002";
 
+    // For local development with MinIO
+    const endpoint = process.env.MINIO_ENDPOINT;
+    const accessKeyId = process.env.MINIO_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.MINIO_SECRET_ACCESS_KEY;
+    const region = process.env.MINIO_REGION || "us-east-1";
+
+    //FOR BACKBLAZE B2
+    // if (!endpoint || !accessKeyId || !secretAccessKey) {
+    //   console.warn(
+    //     "Storage credentials missing. Ensure B2_ENDPOINT, B2_KEY_ID, and B2_APPLICATION_KEY are set.",
+    //   );
+    // }
+
+    // For local development with MinIO
     if (!endpoint || !accessKeyId || !secretAccessKey) {
       console.warn(
-        "Storage credentials missing. Ensure B2_ENDPOINT, B2_KEY_ID, and B2_APPLICATION_KEY are set.",
+        "MinIO credentials missing. Ensure MINIO_ENDPOINT, " +
+          "MINIO_ACCESS_KEY_ID, and MINIO_SECRET_ACCESS_KEY are set.",
       );
     }
 

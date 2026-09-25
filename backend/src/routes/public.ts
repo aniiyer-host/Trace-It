@@ -54,6 +54,9 @@ export const getPublicCampaigns = async (
         startDate: true,
         endDate: true,
         sdgTags: true,
+        disbursements: {
+          select: { id: true, fieldReportUrl: true },
+        },
         ngo: {
           select: {
             organisationName: true,
@@ -87,6 +90,7 @@ export const getPublicCampaigns = async (
         startDate: c.startDate,
         endDate: c.endDate,
         sdgTags: c.sdgTags,
+        milestones: c.disbursements,
         ngoId: (c as unknown as { ngo?: { id: string } }).ngo?.id ?? null,
         ngoName: (c as unknown as { ngo?: { organisationName: string | null } }).ngo?.organisationName ?? null,
         successDonationCount: (c as unknown as { _count?: { donations: number } })._count?.donations ?? 0,
@@ -132,6 +136,9 @@ export const getPublicCampaignById = async (
         startDate: true,
         endDate: true,
         sdgTags: true,
+        disbursements: {
+          select: { id: true, fieldReportUrl: true },
+        },
         ngo: {
           select: {
             organisationName: true,
@@ -170,6 +177,7 @@ export const getPublicCampaignById = async (
       startDate: typedCampaign.startDate,
       endDate: typedCampaign.endDate,
       sdgTags: typedCampaign.sdgTags,
+      milestones: typedCampaign.disbursements,
       ngoName: typedCampaign.ngo?.organisationName ?? null,
       successDonationCount: typedCampaign._count?.donations ?? 0,
     });

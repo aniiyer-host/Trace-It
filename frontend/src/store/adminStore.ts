@@ -53,8 +53,11 @@ interface AdminStore {
   // ── Milestone Management ─────────────────────────
   pendingMilestoneApprovals: Record<string, AdminPendingDisbursement>;
   fetchPendingMilestoneApprovals: () => Promise<void>;
+  approvedMilestones: Record<string, AdminPendingDisbursement>;
+  fetchApprovedMilestones: () => Promise<void>;
   approveMilestone: (milestoneId: string) => Promise<void>;
   rejectMilestone: (milestoneId: string, reason: string) => Promise<void>;
+  markDisbursementSettled: (milestoneId: string) => Promise<void>;
 
   // ── Demo helpers ──────────────────────────────────
   resetStore: () => void;
@@ -69,6 +72,7 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
   pendingAttestations: {},
   attestationStatus: {},
   pendingMilestoneApprovals: {},
+  approvedMilestones: {},
 
   fetchPendingCampaigns: async () => {
     set({ pendingCampaignsLoading: true });
@@ -201,6 +205,22 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
     }
   },
 
+  fetchApprovedMilestones: async () => {
+    try {
+      const milestones = await apiService.admin.getApprovedMilestones();
+      const approvedMap = milestones.reduce(
+        (acc, curr) => {
+          acc[curr.id] = curr;
+          return acc;
+        },
+        {} as Record<string, AdminPendingDisbursement>,
+      );
+      set({ approvedMilestones: approvedMap });
+    } catch (error) {
+      console.error("Failed to fetch approved milestones:", error);
+    }
+  },
+
   approveMilestone: async (milestoneId: string) => {
     try {
       await apiService.admin.approveMilestone(milestoneId);
@@ -230,6 +250,14 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
     }
   },
 
+  markDisbursementSettled: async (milestoneId: string) => {
+    try {
+      await apiService.admin.markDisbursementSettled(milestoneId);
+    } catch (error) {
+      console.error("Failed to mark disbursement settled:", error);
+      throw error;
+    }
+  },
   resetStore: () => {
     set({
       campaigns: [],
@@ -237,6 +265,7 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
       pendingAttestations: {},
       attestationStatus: {},
       pendingMilestoneApprovals: {},
+      approvedMilestones: {},
     });
   },
   simulateAdminWorkflow: async () => {

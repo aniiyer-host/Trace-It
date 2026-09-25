@@ -163,7 +163,9 @@ export const generateAndStoreReceipt = async (donationId: string): Promise<strin
       },
     });
 
-    console.log(`[ReceiptService] Receipt generated for donation ${donationId}: ${storagePath}`);
+    if (process.env.NODE_ENV !== "test") {
+      console.log(`[ReceiptService] Receipt generated for donation ${donationId}: ${storagePath}`);
+    }
 
     return signedUrl;
   } catch (err) {

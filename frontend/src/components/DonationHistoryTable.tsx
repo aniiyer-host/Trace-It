@@ -1,6 +1,6 @@
 import { DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Donation, Attestation } from "@/types";
+import type { Donation } from "@/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/hooks/use-toast";
 
@@ -68,7 +68,8 @@ export default function DonationHistoryTable({
           <thead>
             <tr>
               <th className="text-left">Campaign</th>
-              <th className="text-center">Amount</th>
+              <th className="text-center">Total Amount</th>
+              <th className="text-center">Allocated</th>
               <th className="text-center">Status</th>
               <th className="text-center">Attestation</th>
               <th className="text-center">Date</th>
@@ -77,48 +78,47 @@ export default function DonationHistoryTable({
           </thead>
           <tbody>
             {donations.map((donation) => {
-              const hasReceiptConfirmed =
-                donation.attestations && Array.isArray(donation.attestations)
-                  ? donation.attestations.some(
-                      (a: Attestation) =>
-                        a.type === "RECEIPT" && a.status === "APPROVED",
-                    )
-                  : false;
+              const attestations = Array.isArray(donation.attestations) ? donation.attestations : [];
+              
+              const hasReceiptConfirmed = attestations.some(a => a.type === "RECEIPT" && a.status === "APPROVED");
+              const hasDeliveryConfirmed = attestations.some(a => a.type === "DELIVERY" && a.status === "APPROVED");
+              const hasPendingReceipt = attestations.some(a => a.type === "RECEIPT" && a.status === "PENDING");
 
-              const hasDeliveryConfirmed =
-                donation.attestations && Array.isArray(donation.attestations)
-                  ? donation.attestations.some(
-                      (a: Attestation) =>
-                        a.type === "DELIVERY" && a.status === "APPROVED",
-                    )
-                  : false;
+              let displayStatus = "Awaiting Allocation";
+              let statusColor = "bg-foreground/20"; // Gray/Neutral
+
+              if (hasDeliveryConfirmed) {
+                displayStatus = "Delivery Confirmed";
+                statusColor = "bg-green-500";
+              } else if (hasReceiptConfirmed) {
+                displayStatus = "Receipt Confirmed";
+                statusColor = "bg-blue-500";
+              } else if (hasPendingReceipt) {
+                displayStatus = "Pending NGO Signature";
+                statusColor = "bg-yellow-500";
+              }
 
               const attestationStatus = hasDeliveryConfirmed
                 ? "delivery_confirmed"
                 : hasReceiptConfirmed
                   ? "receipt_confirmed"
                   : "pending";
-              const confirmedAtt = donation.attestations?.find(
-                (a: Attestation) =>
-                  a.type === (hasDeliveryConfirmed ? "DELIVERY" : "RECEIPT") &&
-                  a.status === "APPROVED",
+
+              const confirmedAtt = attestations.find(
+                (a) => a.type === (hasDeliveryConfirmed ? "DELIVERY" : "RECEIPT") && a.status === "APPROVED"
               );
 
               const attestationData = {
                 donationId: donation.id,
-                attestationStatus: attestationStatus as
-                  | "pending"
-                  | "receipt_confirmed"
-                  | "delivery_confirmed",
+                attestationStatus: attestationStatus as "pending" | "receipt_confirmed" | "delivery_confirmed",
                 amount: Number(donation.amount),
-                campaignTitle:
-                  donation.campaignTitle ||
-                  `Campaign ${donation.campaignId?.substring(0, 8)}`,
-                confirmedAt: confirmedAtt
-                  ? new Date(confirmedAtt.createdAt).toISOString()
-                  : undefined,
+                campaignTitle: donation.campaignTitle || `Campaign ${donation.campaignId?.substring(0, 8)}`,
+                confirmedAt: confirmedAtt ? new Date(confirmedAtt.createdAt).toISOString() : undefined,
                 donationDate: donation.createdAt,
               };
+
+              const allocated = Number(donation.allocatedAmount || 0);
+              const total = Number(donation.amount);
 
               return (
                 <tr key={donation.id} className="border-t">
@@ -127,7 +127,10 @@ export default function DonationHistoryTable({
                       `Campaign ${donation.campaignId?.substring(0, 8)}`}
                   </td>
                   <td className="text-center font-medium py-4">
-                    ₹{Number(donation.amount).toLocaleString()}
+                    ₹{total.toLocaleString()}
+                  </td>
+                  <td className="text-center font-medium py-4 text-primary">
+                    ₹{allocated.toLocaleString()}
                   </td>
                   <td className="text-center py-4">
                     <StatusBadge status={donation.status} size="sm" />
@@ -137,21 +140,8 @@ export default function DonationHistoryTable({
                       onClick={() => onViewAttestation(attestationData)}
                       className="flex items-center justify-center gap-2 text-xs font-medium w-full hover:opacity-80"
                     >
-                      <span
-                        className={cn(
-                          "w-2 h-2 rounded-full inline-block",
-                          hasDeliveryConfirmed
-                            ? "bg-green-500"
-                            : hasReceiptConfirmed
-                              ? "bg-blue-500"
-                              : "bg-yellow-500",
-                        )}
-                      />
-                      {hasDeliveryConfirmed
-                        ? "Delivery Confirmed"
-                        : hasReceiptConfirmed
-                          ? "Receipt Confirmed"
-                          : "Pending NGO Confirmation"}
+                      <span className={cn("w-2 h-2 rounded-full inline-block", statusColor)} />
+                      {displayStatus}
                     </button>
                   </td>
                   <td className="text-center text-xs py-4">

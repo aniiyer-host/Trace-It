@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction, Router } from "express";
 import { prisma } from "../db/prisma.js";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { uploadSingle } from "../middleware/multerMiddleware.js";
+import { uploadSingle, uploadMultipleFields } from "../middleware/multerMiddleware.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { requireRole } from "../middleware/requireRole.js";
+import { StorageService } from "../services/storageService.js";
 import {
   UserRole,
   NgoStatus,
@@ -617,7 +618,7 @@ export const createDisbursement = async (
         .json({ error: "NGO must be ACTIVE to request disbursements" });
     }
 
-    const { campaignId, cohortId, amountInr, fieldReportUrl } = req.body;
+    const { campaignId, cohortId, amountInr, fieldReportUrl, disbursementType } = req.body;
 
     let targetCampaignId = campaignId;
     if (!targetCampaignId && cohortId) {
@@ -645,14 +646,49 @@ export const createDisbursement = async (
         .json({ error: "Campaign not found or access denied" });
     }
 
+    if (campaign.status !== CampaignStatus.ACTIVE) {
+      return res.status(409).json({
+        error: "Disbursements can only be requested for ACTIVE campaigns",
+      });
+    }
+
+    const requestedAmount = Number(amountInr);
+    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+      return res
+        .status(400)
+        .json({ error: "amountInr must be a positive number" });
+    }
+
+    if (requestedAmount > Number(campaign.raisedAmount)) {
+      return res.status(400).json({
+        error: "amountInr cannot exceed the campaign amount raised",
+      });
+    }
+
+    if (cohortId) {
+      const cohort = await prisma.beneficiaryCohort.findFirst({
+        where: {
+          id: cohortId,
+          campaignId: targetCampaignId,
+          ngoId: userId,
+        },
+      });
+      if (!cohort) {
+        return res
+          .status(404)
+          .json({ error: "Cohort not found or access denied" });
+      }
+    }
+
     const disbursement = await prisma.disbursement.create({
       data: {
         campaignId: targetCampaignId,
         ngoId: userId,
         cohortId: cohortId || null,
-        amountInr: new Prisma.Decimal(amountInr.toString()),
+        amountInr: new Prisma.Decimal(requestedAmount.toString()),
         fieldReportUrl: fieldReportUrl || null,
         status: DisbursementStatus.PENDING,
+        disbursementType: disbursementType || "PROOF_OF_NEED",
       },
     });
 
@@ -662,7 +698,7 @@ export const createDisbursement = async (
       entityType: "disbursement",
       entityId: disbursement.id,
       action: "DISBURSEMENT_CREATED",
-      metadata: { campaignId, amountInr: Number(amountInr) },
+      metadata: { campaignId: targetCampaignId, amountInr: requestedAmount },
     });
 
     res.status(201).json(disbursement);
@@ -977,21 +1013,26 @@ export const signAttestation = async (
     });
 
     if (attestation.type === "RECEIPT") {
-      await prisma.attestation.upsert({
+      const existingDelivery = await prisma.attestation.findFirst({
         where: {
-          donationId_type: {
-            donationId: attestation.donationId,
-            type: "DELIVERY",
-          },
-        },
-        update: {},
-        create: {
           donationId: attestation.donationId,
+          disbursementId: attestation.disbursementId,
           type: "DELIVERY",
-          status: "PENDING",
-          requestedBy: attestation.requestedBy,
         },
       });
+
+      if (!existingDelivery) {
+        await prisma.attestation.create({
+          data: {
+            donationId: attestation.donationId,
+            disbursementId: attestation.disbursementId,
+            type: "DELIVERY",
+            status: "PENDING",
+            requestedBy: attestation.requestedBy,
+            allocatedAmount: attestation.allocatedAmount,
+          },
+        });
+      }
     }
     await writeAuditLog({
       actorType: AuditActorType.USER,
@@ -1021,7 +1062,7 @@ export const signAttestation = async (
 
 // POST /disburse/:id/proof - NGO uploads proof for a milestone (=disbursement)
 export const uploadDisbursementProof = [
-  uploadSingle,
+  uploadMultipleFields,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.id;
@@ -1046,34 +1087,78 @@ export const uploadDisbursementProof = [
         return res
           .status(404)
           .json({ error: "Milestone not found or access denied" });
-      if (disbursement.status !== DisbursementStatus.PENDING) {
+      if (
+        disbursement.status !== DisbursementStatus.PENDING &&
+        disbursement.status !== DisbursementStatus.REJECTED
+      ) {
         return res.status(409).json({
-          error: `Cannot submit proof for a milestone in status ${disbursement.status}`,
+          error: `Cannot submit proof for a disbursement in status ${disbursement.status}`,
         });
       }
 
       const multerReq = req as any;
-      if (!multerReq.file)
-        return res.status(400).json({ error: "No file uploaded" });
+      const files: Express.Multer.File[] = multerReq.files?.files || [];
+      const geotagFile: Express.Multer.File | undefined = multerReq.files?.geotagFile?.[0];
+
+      if (files.length === 0) {
+        return res.status(400).json({ error: "No files uploaded" });
+      }
+
+      // Enforce combined size limit of 10 MB on the backend
+      const totalSize = files.reduce((sum, f) => sum + f.size, 0) + (geotagFile?.size || 0);
+      if (totalSize > 10 * 1024 * 1024) {
+        return res.status(400).json({ error: "Combined size of all files exceeds the 10 MB limit" });
+      }
 
       const storageBucket = "test-bucket";
-      const storagePath = `milestone_proofs/${disbursementId}/${Date.now()}_${multerReq.file.originalname}`;
-      const sha512Hash = `proof_hash_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      const storageService = new StorageService(storageBucket);
+      
+      const allFilesToProcess = [...files];
+      if (geotagFile) allFilesToProcess.push(geotagFile);
 
-      const document = await prisma.document.create({
-        data: {
-          ownerId: userId,
-          disbursementId,
-          documentType: DocumentType.FIELD_REPORT,
-          sha512Hash,
-          storageBucket,
-          storagePath,
-        },
-      });
+      // We will record a single proof_hash on the disbursement for simplicity (just using the first file's hash, or a combined hash),
+      // but we will store all documents independently.
+      let primaryHash = "";
+      let firstDocumentId = "";
+      let first = true;
+
+      for (const file of allFilesToProcess) {
+        const storagePath = `milestone_proofs/${disbursementId}/${Date.now()}_${file.originalname}`;
+        const sha512Hash = `proof_hash_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+        
+        if (first) {
+          primaryHash = sha512Hash;
+        }
+
+        await storageService.uploadFile(file.buffer, storagePath, file.mimetype);
+
+        const doc = await prisma.document.create({
+          data: {
+            ownerId: userId,
+            disbursementId,
+            documentType: DocumentType.FIELD_REPORT,
+            sha512Hash,
+            storageBucket,
+            storagePath,
+          },
+        });
+
+        if (first) {
+          firstDocumentId = doc.id;
+          first = false;
+        }
+      }
+
+      const wasRejected = disbursement.status === DisbursementStatus.REJECTED;
 
       const updated = await prisma.disbursement.update({
         where: { id: disbursementId },
-        data: { fieldReportUrl: storagePath, proofSubmittedAt: new Date() },
+        data: {
+          fieldReportUrl: primaryHash, // Reuse as field report reference
+          proofSubmittedAt: new Date(),
+          status: DisbursementStatus.PENDING,
+          rejectionReason: null,
+        },
       });
 
       await writeAuditLog({
@@ -1081,11 +1166,13 @@ export const uploadDisbursementProof = [
         actorId: userId,
         entityType: "disbursement",
         entityId: disbursementId,
-        action: "MILESTONE_PROOF_UPLOADED",
-        metadata: { documentId: document.id, sha512Hash },
+        action: wasRejected
+          ? "DISBURSEMENT_PROOF_RESUBMITTED"
+          : "MILESTONE_PROOF_UPLOADED",
+        metadata: { documentId: firstDocumentId, sha512Hash: primaryHash },
       });
 
-      res.status(201).json({ ...updated, documentId: document.id, sha512Hash });
+      res.status(201).json({ ...updated, documentId: firstDocumentId, sha512Hash: primaryHash });
     } catch (err) {
       next(err);
     }

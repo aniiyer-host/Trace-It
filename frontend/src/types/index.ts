@@ -13,7 +13,9 @@ export type LegacyDonationStatus =
   | "pending"
   | "allocated"
   | "disbursed"
-  | "delivered";
+  | "delivered"
+  | "rejected"
+  | "failed";
 
 export type DonationStatus = BackendDonationStatus | LegacyDonationStatus;
 export type ExtendedStatus =
@@ -83,6 +85,8 @@ export interface Milestone {
   disbursedAt?: string; // ISO timestamp
   proofSubmittedAt?: string;
   rejectionReason?: string;
+  disbursementStatus?: DisbursementStatus;
+  disbursementType?: "PROOF_OF_NEED" | "PROOF_OF_WORK";
 }
 
 export interface Donation {
@@ -91,6 +95,7 @@ export interface Donation {
   campaignId: string;
   campaignTitle?: string;
   amount: number; // in INR
+  allocatedAmount?: number | string; // amount allocated to disbursements
   paymentMethod: PaymentMethod;
   orderId?: string; // Razorpay order ID (mock) or SOL tx hash
   razorpayOrderId?: string;
@@ -142,6 +147,8 @@ export interface Attestation {
   statement: string;
   status: string;
   createdAt: string;
+  disbursementId?: string | null;
+  allocatedAmount?: number | string | null;
 }
 
 //-----------------------------------------------
@@ -154,6 +161,7 @@ export interface DonorDashboardDonation {
   currencyCode: string;
   paymentMethod: string;
   status: DonationStatus;
+  allocatedAmount?: number | string;
   razorpayOrderId?: string;
   razorpayPaymentId?: string;
   taxReceiptUrl?: string | null;
@@ -199,6 +207,8 @@ export interface ActionItem {
   amount: number;
   ngo: string;
   campaign: string;
+  fieldReportUrl?: string | null;
+  disbursementType?: "PROOF_OF_NEED" | "PROOF_OF_WORK";
 }
 export interface PendingCampaign {
   id: string;
@@ -228,18 +238,49 @@ export interface AuditLog {
   metadata?: Record<string, unknown>;
 }
 
+// export interface DisbursementResponse {
+//   id: string;
+//   campaignId: string;
+//   amountInr: number | string;
+//   status: string;
+//   cohort?: {
+//     name?: string;
+//   };
+//   fieldReportUrl?: string | null;
+//   proofSubmittedAt?: string | null;
+//   rejectionReason?: string | null;
+//   solanaTxHash?: string | null;
+// }
+
 export interface DisbursementResponse {
   id: string;
   campaignId: string;
+  ngoId?: string;
   amountInr: number | string;
-  status: string;
+  status: DisbursementStatus;
+  disbursementType?: string;
+  cohortId?: string | null;
+
   cohort?: {
     name?: string;
-  };
+  } | null;
+
+  campaign?: {
+    id: string;
+    title: string;
+  } | null;
+
+  ngo?: {
+    id: string;
+    organisationName?: string | null;
+  } | null;
+
   fieldReportUrl?: string | null;
   proofSubmittedAt?: string | null;
   rejectionReason?: string | null;
   solanaTxHash?: string | null;
+  approvedAt?: string | null;
+  createdAt?: string;
 }
 
 export interface PendingNgoAttestation {
@@ -273,6 +314,7 @@ export interface AdminPendingAttestation {
   attestedAt: string | null;
   statement: string;
   status: string;
+  allocatedAmount?: number | string;
   createdAt: string;
   donation: {
     id: string;
@@ -292,19 +334,19 @@ export interface AdminPendingAttestation {
   campaignTitle: string;
 }
 
-export interface AdminPendingDisbursement {
-  id: string;
-  campaignId: string;
-  amountInr: number | string;
-  status: string;
-  cohort?: {
-    name?: string;
-  };
-  fieldReportUrl?: string | null;
-  proofSubmittedAt?: string | null;
-  rejectionReason?: string | null;
-  solanaTxHash?: string | null;
-}
+// export interface AdminPendingDisbursement {
+//   id: string;
+//   campaignId: string;
+//   amountInr: number | string;
+//   status: string;
+//   cohort?: {
+//     name?: string;
+//   };
+//   fieldReportUrl?: string | null;
+//   proofSubmittedAt?: string | null;
+//   rejectionReason?: string | null;
+//   solanaTxHash?: string | null;
+// }
 export interface AdminAuditLog {
   id: string;
   createdAt: string;
@@ -329,4 +371,26 @@ export interface AuditLogPagination {
   limit: number;
   total: number;
   totalPages: number;
+}
+
+// Disbursement interface
+
+export type DisbursementStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "SENT"
+  | "SETTLED"
+  | "FAILED"
+  | "REJECTED";
+
+export interface AdminPendingDisbursement extends DisbursementResponse {
+  campaign: {
+    id: string;
+    title: string;
+  };
+
+  ngo: {
+    id: string;
+    organisationName?: string | null;
+  };
 }
