@@ -9,7 +9,7 @@
     "posttest": "bash scripts/stop-validator.sh"
   },
   "dependencies": {
-    "@coral-xyz/anchor": "^0.30.1",
+    "@coral-xyz/anchor": "0.29.0",
     "@solana/web3.js": "^1.95.8"
   },
   "devDependencies": {

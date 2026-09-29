@@ -1137,8 +1137,9 @@ export const signAttestation = async (
             await addToBlockchainRetryQueue({
               donationId: attestation.donationId,
               operationType: "UPDATE_STATUS",
-              newStatus: 4,
               error: statusResult.error || "Unknown error",
+              retryCount: 0,
+              metadata: { targetStatus: 4 },
             });
           }
         }
