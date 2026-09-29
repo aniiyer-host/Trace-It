@@ -201,66 +201,16 @@ RAZORPAY_KEY_SECRET="..."
 
 ### Commands to Verify Current State:
 ```bash
-# 1. Start local validator (separate terminal)
-solana-test-validator
-
-# 2. Build and test blockchain program
+# 1. Compile Anchor Program
 cd blockchain
 anchor build
+
+# 2. Run Anchor Integration Tests
 anchor test
 
-# 3. Test backend service layer
+# 3. Test Backend Blockchain Service & Hash Tests
 cd ../backend
-npm test
-
-# 4. Test specific blockchain integration
-npm test -- backend/services/blockchainService.test.ts
+npm test -- backend/tests/blockchainService.test.ts
 ```
 
-### Phase 2 Completion Criteria:
-Before moving to Phase 3, all of these must pass:
-- [ ] Anchor program compiles with zero errors (`anchor build`)
-- [ ] Program deploys to devnet successfully
-- [ ] `record_donation` test creates on-chain account with correct data
-- [ ] Idempotency test handles duplicate `donation_id` gracefully
-- [ ] `update_donation_status` test validates transitions properly
-- [ ] Invalid status transition test rejected with appropriate error
-- [ ] Zero amount test rejected with `InvalidAmount` error
-- [ ] `BlockchainService.recordDonation()` works against devnet
-- [ ] `BlockchainService.getDonationRecord()` reads back recorded data
-- [ ] `BlockchainService.verifyDonationIntegrity()` detects tampering
-- [ ] **All status update hooks verified** (ALLOCATED, DISBURSED, DELIVERED) call on-chain updates
-- [ ] Retry queue processor processes failed submissions
-- [ ] Webhook integration records transactions and handles failures
-- [ ] Public donation API returns explorable transaction hashes
-- [ ] Reconciliation script fixes orphaned records and status mismatches
-- [ ] All environment variables properly configured and tested
-- [ ] No blockchain-related secrets committed to repository
-
-## Risk Mitigation
-
-### Technical Risks:
-1. **Transaction Failures**: Mitigated by retry queue with exponential backoff
-2. **Inconsistent State**: Mitigated by reconciliation script and eventual consistency model
-3. **High Costs**: Mitigated by minimal on-chain storage (hashes only) and account cleanup
-4. **Security Vulnerabilities**: Mitigated by limiting program authority, input validation, and access controls
-
-### Operational Risks:
-1. **Key Loss**: Mitigated by secure key management and backup procedures
-2. **Network Issues**: Mitigated by RPC failover and offline queuing
-3. **Scalability Limits**: Mitigated by efficient PDA usage and batch processing
-
-## Decision Log
-
-| Date | Decision | Context |
-|------|----------|---------|
-| 2026-08-15 | Single Unified Anchor Program (Option C) | Chose for reduced complexity vs. 3 separate programs |
-| 2026-08-15 | Use SHA-512 for all hashes | Matched backend implementation and architecture doc |
-| 2026-08-31 | Enhance retry mechanism with background processor | Current webhook-only queueing insufficient for reliability |
-| 2026-08-31 | Complete status update hooks for all flows | Status lifecycle requires on-chain synchronization |
-| 2026-08-31 | Create reconciliation script for DB/chain consistency | Needed to handle downtime and manual interventions |
-| 2026-09-20 | Implement complete DELIVERED status hook in charity.ts | Added on-chain status update to complement DB update |
-| 2026-09-20 | Refocus Phase 4 on attestation enhancements per architecture | Removed beneficiary-specific focus since BENEFICIARY role not in schema |
-
----
-*This plan should be updated as work progresses through each phase. Last updated: 2026-09-20*
+*This implementation plan is maintained exclusively for the Trace-It Blockchain Engineering Team.*

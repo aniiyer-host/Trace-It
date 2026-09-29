@@ -21,6 +21,27 @@ custom-panic = []
 
 [dependencies]
 anchor-lang = { workspace = true, features = ["init-if-needed"] }
+
+# These host-only dependencies constrain transitive versions selected by old
+# Solana/Anchor tooling without compiling build utilities into the SBF program.
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+solana-program = { workspace = true }
+syn = { workspace = true }
+thiserror = { workspace = true }
+thiserror-impl = { workspace = true }
+quote = { workspace = true }
+unicode-segmentation = { workspace = true }
+unicode-ident = { workspace = true }
+hashbrown = { workspace = true }
+indexmap = { workspace = true }
+ppv-lite86 = { workspace = true }
+ryu = { workspace = true }
+bumpalo = { workspace = true }
+cc = { workspace = true }
+jobserver = { workspace = true }
+proc-macro2 = { workspace = true }
+log = { workspace = true }
+toml_edit = { workspace = true }
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
 zeroize_derive = { workspace = true }
