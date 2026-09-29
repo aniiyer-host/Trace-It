@@ -1,17 +1,16 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
-import { Traceit } from "../target/types/traceit";
 import { expect } from "chai";
 import crypto from "crypto";
+import { getTraceitProgram } from "./support/program";
 
 describe("attestation instructions", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-  const program = anchor.workspace.Traceit as Program<Traceit>;
+  const program = getTraceitProgram(provider);
 
   const donationId = `d-attest-${Date.now().toString().slice(-6)}`;
   const cleanDonationId = donationId.replace(/-/g, "");
-  const ngoId = "ngo-attest-1234-5678-90ab-cdef12345678";
+  const ngoId = "ngo-1234-5678-90ab-cdef12345678";
   const cleanNgoId = ngoId.replace(/-/g, "");
   const ngoPublicKey = provider.wallet.publicKey.toBase58();
   const signedAt = new anchor.BN(Math.floor(Date.now() / 1000));

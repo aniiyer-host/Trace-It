@@ -1659,6 +1659,8 @@ dependencies = [
  "ryu",
  "serde",
  "serde_derive",
+ "serde_json",
+ "sha2 0.10.9",
  "solana-program",
  "syn 2.0.50",
  "thiserror",
@@ -1668,6 +1670,14 @@ dependencies = [
  "unicode-segmentation",
  "wasm-bindgen",
  "zeroize_derive",
+]
+
+[[package]]
+name = "traceit-anchor"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "solana-program",
 ]
 
 [[package]]

@@ -3,7 +3,7 @@
 > **Owner:** Trace-It Blockchain Engineering Team  
 > **Last Updated:** 2026-09-29  
 > **Canonical Status:** Active; replaces the previous account-per-business-event execution plan  
-> **Current Phase:** Phase 0 — Baseline and Architecture Contract  
+> **Current Phase:** Phase 3 — Anchor Submission Worker and Reconciliation (waiting on external AnchorBatch persistence)  
 > **Architecture:** PostgreSQL-first application with asynchronous Solana audit anchoring
 
 ## 1. Purpose
@@ -93,8 +93,6 @@ The blockchain team may define interface requirements, review integrations, and 
 ### 5.2 Known baseline defects
 
 - Existing instructions accept an arbitrary signer and do not prove that the signer is the configured backend authority.
-- TypeScript Anchor package declarations, installed modules, CLI, and Rust Anchor versions are not consistently aligned.
-- Full local-validator integration-test success has not been re-established.
 - `verifyAttestation()` treats account existence as validity and does not verify a cryptographic signature.
 - Some attestation submissions use an empty NGO public key.
 - Current retry and reconciliation data are donation-oriented, not anchor-batch-oriented.
@@ -225,7 +223,7 @@ Creating an already-existing AnchorRecord will fail on-chain. The client may tra
 
 ## Phase 0 — Baseline and Architecture Contract
 
-**Status:** In progress  
+**Status:** Complete (2026-09-29)  
 **Goal:** Establish a reproducible legacy baseline and freeze decisions needed before the on-chain schema changes.
 
 ### Deliverables
@@ -260,9 +258,23 @@ Creating an already-existing AnchorRecord will fail on-chain. The client may tra
 - No unresolved field-layout, seed, authority, upgrade, or versioning decision remains.
 - The current program can be rebuilt and tested by another team member from documented commands.
 
+### Completion record
+
+- Supported legacy matrix: Anchor CLI, `anchor-lang`, and blockchain TypeScript client `0.29.0`; Solana CLI/`solana-program` `1.17.25`; Node.js 24; committed `Cargo.lock`.
+- The backend's Anchor `0.32.1` dependency is confined to the legacy adapter. The v1 anchor client must be a version-isolated adapter generated from the new program IDL; Anchor types must not cross that boundary.
+- `NO_DNA=1 npm test` passes all 17 legacy local-validator integration tests, including creation and read-back of legacy accounts.
+- Localnet and live legacy devnet program ID: `5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3`.
+- The previously configured devnet ID `5AFcU61X6LoQSNTcCFeEKauVsfCwfvtUDXY6XhMq7oCM` is closed and has been removed from active configuration.
+- The live legacy program is upgradeable. Its ProgramData address is `7BAG1hbTUTn9xDYQ638EsQmjs9TzP1zvxCSHGq3Zv4Ds`; its public upgrade authority is `Emi2GHuHM4UnY6TqcXio3Cbfe5H1E2uukL3QgBziQSrG`.
+- Deployment decision: create a new minimal anchor-only program. Preserve the legacy program and accounts for read compatibility; do not extend its business-record schema.
+- Authority decision: initialization requires a compiled bootstrap authority; v1 includes pause/unpause and two-step authority rotation.
+- Legacy disposition: the new program excludes legacy business instructions. Donation/status/disbursement writes stop at cutover. NGO/cohort writes may continue asynchronously only until cutover. Attestations migrate to audit batches unless separately approved by Product/Compliance.
+- The normative protocol, account sizes, byte order, domains, seeds, validation, and compatibility policy are frozen in `blockchain/docs/anchor-protocol-v1.md`.
+- Shared one-event, multi-event, maximum-value, invalid-input, and altered-root vectors are committed in `blockchain/tests/fixtures/anchor-protocol-v1.json` and verified by Rust and TypeScript tests.
+
 ## Phase 1 — Secure Minimal Anchor Program
 
-**Status:** Pending Phase 0  
+**Status:** Complete (2026-09-29)  
 **Goal:** Implement the smallest authority-controlled program capable of storing immutable audit anchors.
 
 ### Deliverables
@@ -296,9 +308,20 @@ Creating an already-existing AnchorRecord will fail on-chain. The client may tra
 - No privileged write instruction accepts an unconstrained signer.
 - IDL, program code, and client types describe the same layout.
 
+### Completion record
+
+- Added the separate minimal `traceit_anchor` program. The legacy `traceit` program remains unchanged for historical compatibility.
+- Implemented bootstrap-authority-only config initialization, pause/unpause, two-step authority rotation, and immutable `record_anchor` creation.
+- Enforced singleton config and deterministic anchor PDAs, current-authority signing, schema v1, nonzero roots, nonempty contiguous ranges, checked arithmetic, and fixed-size byte fields.
+- Confirmed exact account allocations: `AnchorConfig` 77 bytes and `AnchorRecord` 167 bytes. Rent requirements and deployment-time recheck requirements are documented.
+- Added generated IDL and TypeScript types under `blockchain/idl/` and `blockchain/client/`, plus an immutable-field matcher for safe duplicate classification.
+- Added localnet coverage for unauthorized initialization/writes, config reinitialization, wrong PDA, invalid root/range/count/schema, exact read-back, duplicate overwrite rejection, matching/mismatching duplicate comparison, maximum `u64`, pause, and authority rotation.
+- `NO_DNA=1 npm test` passes all 30 TypeScript tests across the new and legacy programs; Rust vector/unit tests and `anchor build` also pass.
+- The development-only program ID is `4qLwniS2NeDrqftgb83GbYVHWVbBBbUcjDR1Ncm5GCHX`. No deployment keypair is stored in the repository. Security/DevOps must allocate the deployable ID under approved custody in Phase 5.
+
 ## Phase 2 — Anchor Client and Service Boundary
 
-**Status:** Pending Phase 1  
+**Status:** Complete (2026-09-29)  
 **Goal:** Adapt existing blockchain infrastructure into a narrow anchor submission and verification service.
 
 ### Deliverables
@@ -355,9 +378,21 @@ INVALID_INPUT
 - All blockchain outcomes are represented by stable typed results.
 - Account validation follows untrusted-input rules.
 
+### Completion record
+
+- Added a version-isolated service under `backend/src/services/anchor/`; it uses raw `@solana/web3.js` wire encoding and does not expose Anchor runtime types to route/business code.
+- Implemented `deriveAnchorPda`, `submitAnchorBatch`, `fetchAnchorRecord`, `verifyAnchorRecord`, `getAnchorExplorerUrl`, and `reconcileAnchorSubmission`.
+- Added strict pre-RPC validation for byte lengths, zero roots, unsigned bounds, contiguous ranges, counts, and schema version.
+- Added strict untrusted-account validation for program owner, executable flag, exact 167-byte length, discriminator, PDA, stored bump, trusted authority, schema, timestamp, and all decoded fields.
+- Submission uses the configured server authority/fee payer, explicit commitment, simulation, preflight, one send, and confirmation against the same blockhash validity window.
+- Added stable domain outcomes for confirmed, matching duplicate, pending confirmation, missing, retryable RPC/blockhash failures, rejection, authorization, integrity conflict, invalid account/schema, and invalid input.
+- Ambiguous confirmation is never blindly retried; reconciliation checks the deterministic PDA first.
+- Added dependency-injected adapters and 26 focused tests covering wire encoding, success, all validation/error paths, malformed accounts, duplicate matching/conflict, simulation ordering, confirmation timeout, reconciliation, and explorer URLs.
+- The service remains disconnected from routes and business workflows. Phase 3 owns worker wiring and persisted batch state.
+
 ## Phase 3 — Anchor Submission Worker and Reconciliation
 
-**Status:** Pending external AnchorBatch persistence and Phase 2  
+**Status:** Pending external AnchorBatch persistence; all independent Phase 2 prerequisites complete  
 **Goal:** Reliably publish already-created batches without blocking application workflows.
 
 ### Deliverables
@@ -607,13 +642,12 @@ The blockchain team's migration is complete when:
 
 ## 14. Immediate Next Actions
 
-1. Align the TypeScript Anchor package and test environment with the working Anchor 0.29 program baseline.
-2. Run and record the complete local-validator Anchor test baseline.
-3. Confirm devnet program deployment and upgrade-authority status.
-4. Decide upgrade-in-place versus a new minimal anchor program.
-5. Freeze `AnchorConfig`, `AnchorRecord`, `batchKey`, root, encoding, PDA, and authority specifications.
-6. Produce Rust/TypeScript cross-language test vectors.
-7. Begin Phase 1 only after those decisions are recorded in this document or an approved linked specification.
+1. Obtain the Backend/Data-owned immutable `AnchorBatch` persistence and atomic claim/update/recovery interface defined in Section 6.
+2. Map persisted batches into the completed `AnchorBatch` service contract without reconstructing or mutating their identity fields.
+3. Add the dedicated anchor worker state machine with bounded jittered backoff, stale-claim recovery, dead-letter state, and graceful shutdown.
+4. Reconcile every ambiguous or previously `submitting` batch before considering resubmission.
+5. Add worker crash, duplicate-worker, persistence-failure, RPC-outage, retry-limit, and recovery tests using the injected Phase 2 adapter.
+6. Define structured logs and metrics for backlog age/count, confirmation latency, RPC classes, integrity conflicts, and authority balance.
 
 ---
 
