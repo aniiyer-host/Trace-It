@@ -4,3 +4,5 @@ export * from "./solanaAnchorAdapter.js";
 export * from "./anchorService.js";
 export * from "./anchorWorkerTypes.js";
 export * from "./anchorWorker.js";
+export * from "./anchorVerification.js";
+export * from "./solanaVerificationAdapter.js";

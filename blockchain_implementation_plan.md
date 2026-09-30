@@ -3,7 +3,7 @@
 > **Owner:** Trace-It Blockchain Engineering Team  
 > **Last Updated:** 2026-09-30  
 > **Canonical Status:** Active; replaces the previous account-per-business-event execution plan  
-> **Current Phase:** Phase 4 — Blockchain Verification Layer (Phase 3 production activation awaits external persistence)  
+> **Current Phase:** Phase 5 — Devnet Deployment and Operational Hardening (external Phase 3/4 integrations remain gated)  
 > **Architecture:** PostgreSQL-first application with asynchronous Solana audit anchoring
 
 ## 1. Purpose
@@ -449,7 +449,7 @@ INVALID_INPUT
 
 ## Phase 4 — Blockchain Verification Layer
 
-**Status:** Pending Phases 1–3 and external local audit verification  
+**Status:** Blockchain-owned implementation complete (2026-09-30); public route activation awaits the backend's locally verified audit-batch input  
 **Goal:** Provide the blockchain half of public, read-only audit verification.
 
 ### Deliverables
@@ -484,6 +484,19 @@ INVALID_INPUT
 - Account existence alone can never produce `VERIFIED`.
 - Verification clearly distinguishes unanchored, unavailable, invalid, mismatched, and verified states.
 - No secret or private audit payload is required by public verification.
+
+### Completion record
+
+- Added `AnchorVerificationService` with the exact public states defined above and a narrow `LocallyVerifiedAnchorBatch` input containing no audit events or private business data.
+- Reused the Phase 2 untrusted-account decoder, so verification covers configured program ownership, exact length/discriminator, deterministic PDA and bump, trusted authority, schema, timestamp, root, range, and event count. Account existence alone cannot succeed.
+- Distinguished locally valid pending work, unexpectedly missing anchors, immutable-field mismatches, invalid accounts, RPC outages, unsupported schemas, and verified records without collapsing states.
+- Added optional `SolanaAnchorTransactionVerifier` validation for confirmation status, transaction error, slot, configured authority signer, exact program, anchor PDA, and `record_anchor` discriminator.
+- Transaction signatures, explorer URLs, and slots are returned only after metadata verification; supplied but unchecked signatures are never reflected publicly.
+- Public record fields are JSON-safe: hashes use lowercase hex, public keys use base58, and 64-bit sequence/timestamp fields use decimal strings.
+- Added the versioned integration fixture `blockchain/tests/fixtures/anchor-verification-v1.json` and the backend/frontend contract in `blockchain/docs/anchor-verification-v1.md`.
+- Added focused coverage for valid evidence; wrong root, range, count, authority, PDA, owner/program, discriminator, and instruction; missing/pending/unsupported anchors; malformed RPC data; transaction states; and RPC outage/recovery.
+- Preserved all legacy record readers unchanged. Their historical local-validator compatibility remains covered by the existing legacy integration suite.
+- No public route was fabricated without local audit verification. Route wiring is an external integration dependency, not unfinished blockchain verification logic.
 
 ## Phase 5 — Devnet Deployment and Operational Hardening
 
@@ -656,8 +669,9 @@ The blockchain team's migration is complete when:
 
 1. Obtain and review the Backend/Data implementation of the `AnchorBatchRepository` contract defined in Section 6 and `blockchain/docs/anchor-worker-v1.md`.
 2. Add the production repository adapter and bootstrap the completed worker with process shutdown hooks; do not use in-memory persistence.
-3. Begin Phase 4's blockchain verification result mapping against locally verified batches supplied by the backend audit layer.
-4. Run a local persistence-to-validator recovery drill, then a separately approved devnet smoke test once the repository adapter and deployable program identity are available.
+3. Connect the completed verifier to the backend's locally verified batch output and expose the documented read-only public contract.
+4. Begin Phase 5 custody/program-ID review, deployment runbook, monitoring thresholds, and security checklist without deploying or sending a transaction.
+5. Run a local persistence-to-validator recovery drill, then request separate approval for a devnet deployment/smoke test once the repository adapter and deployable program identity are available.
 
 ---
 
