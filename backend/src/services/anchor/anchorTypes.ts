@@ -63,6 +63,7 @@ export class AnchorAdapterError extends Error {
     public readonly kind: AnchorAdapterErrorKind,
     message: string,
     public readonly cause?: unknown,
+    public readonly signature?: string,
   ) {
     super(message);
     this.name = "AnchorAdapterError";

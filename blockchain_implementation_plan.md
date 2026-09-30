@@ -1,9 +1,9 @@
 # Trace-It Blockchain Implementation Plan
 
 > **Owner:** Trace-It Blockchain Engineering Team  
-> **Last Updated:** 2026-09-29  
+> **Last Updated:** 2026-09-30  
 > **Canonical Status:** Active; replaces the previous account-per-business-event execution plan  
-> **Current Phase:** Phase 3 — Anchor Submission Worker and Reconciliation (waiting on external AnchorBatch persistence)  
+> **Current Phase:** Phase 4 — Blockchain Verification Layer (Phase 3 production activation awaits external persistence)  
 > **Architecture:** PostgreSQL-first application with asynchronous Solana audit anchoring
 
 ## 1. Purpose
@@ -392,7 +392,7 @@ INVALID_INPUT
 
 ## Phase 3 — Anchor Submission Worker and Reconciliation
 
-**Status:** Pending external AnchorBatch persistence; all independent Phase 2 prerequisites complete  
+**Status:** Blockchain-owned implementation complete (2026-09-30); production activation awaits the Backend/Data-owned `AnchorBatch` repository  
 **Goal:** Reliably publish already-created batches without blocking application workflows.
 
 ### Deliverables
@@ -434,6 +434,18 @@ INVALID_INPUT
 - No tested failure mode loses or mutates an audit batch.
 - Ambiguous submissions are reconciled before resubmission.
 - Worker downtime does not affect normal application API success.
+
+### Completion record
+
+- Added a dedicated `AnchorWorker` and stable `AnchorBatchRepository` contract under `backend/src/services/anchor/`; no Anchor runtime types or business records cross this boundary.
+- Implemented atomic-claim-token expectations, lease heartbeats and recovery, durable pre-send `SUBMITTING` state, reconciliation-required state, bounded exponential backoff with jitter, terminal classification, retry exhaustion/dead-letter handling, and graceful polling shutdown.
+- Fresh work verifies the deterministic PDA before sending. Recovered `SUBMITTING` and ambiguous work reconciles first, and requires three separately claimed absence checks before becoming eligible for resubmission.
+- Existing records are accepted only through the Phase 2 full immutable-field validator. Integrity conflicts are terminal and counted separately.
+- Confirmation timeouts now preserve the submitted transaction signature through the adapter/service boundary for durable reconciliation.
+- Added observability contracts for backlog counts and age, per-result RPC/operation latency, end-to-end confirmation latency, recovered claims, integrity conflicts, and authority balance, plus structured lifecycle/failure logs.
+- Added focused tests for confirmation, RPC outage/recovery, simulation rejection, ambiguity, crash recovery, duplicate workers, persistence failure, matching/mismatching PDA outcomes, bounded reconciliation, dead-lettering, metrics, and graceful shutdown.
+- Documented persistence transaction semantics and startup/shutdown requirements in `blockchain/docs/anchor-worker-v1.md`.
+- The worker is deliberately not bootstrapped with transient storage. Final production wiring requires the external durable repository defined in Section 6; this is an integration dependency, not unfinished blockchain-team implementation.
 
 ## Phase 4 — Blockchain Verification Layer
 
@@ -642,12 +654,10 @@ The blockchain team's migration is complete when:
 
 ## 14. Immediate Next Actions
 
-1. Obtain the Backend/Data-owned immutable `AnchorBatch` persistence and atomic claim/update/recovery interface defined in Section 6.
-2. Map persisted batches into the completed `AnchorBatch` service contract without reconstructing or mutating their identity fields.
-3. Add the dedicated anchor worker state machine with bounded jittered backoff, stale-claim recovery, dead-letter state, and graceful shutdown.
-4. Reconcile every ambiguous or previously `submitting` batch before considering resubmission.
-5. Add worker crash, duplicate-worker, persistence-failure, RPC-outage, retry-limit, and recovery tests using the injected Phase 2 adapter.
-6. Define structured logs and metrics for backlog age/count, confirmation latency, RPC classes, integrity conflicts, and authority balance.
+1. Obtain and review the Backend/Data implementation of the `AnchorBatchRepository` contract defined in Section 6 and `blockchain/docs/anchor-worker-v1.md`.
+2. Add the production repository adapter and bootstrap the completed worker with process shutdown hooks; do not use in-memory persistence.
+3. Begin Phase 4's blockchain verification result mapping against locally verified batches supplied by the backend audit layer.
+4. Run a local persistence-to-validator recovery drill, then a separately approved devnet smoke test once the repository adapter and deployable program identity are available.
 
 ---
 

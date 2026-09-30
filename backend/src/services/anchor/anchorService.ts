@@ -189,5 +189,10 @@ function classifyAdapterFailure(
     UNAUTHORIZED: "UNAUTHORIZED",
     CONFIRMATION: "PENDING_CONFIRMATION",
   } as const;
-  return { status: status[error.kind], pda: pdaString, error: error.message };
+  return {
+    status: status[error.kind],
+    pda: pdaString,
+    signature: error.signature,
+    error: error.message,
+  };
 }

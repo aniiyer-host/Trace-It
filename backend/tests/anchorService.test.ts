@@ -250,6 +250,23 @@ describe("AnchorService", () => {
     });
   });
 
+  it("preserves an ambiguous transaction signature for durable reconciliation", async () => {
+    const adapter = adapterMock();
+    adapter.getAccountInfo.mockResolvedValue(null);
+    adapter.submitRecordAnchor.mockRejectedValue(
+      new AnchorAdapterError(
+        "CONFIRMATION",
+        "confirmation timed out",
+        undefined,
+        "ambiguous-signature",
+      ),
+    );
+    await expect(service(adapter).submitAnchorBatch(batch())).resolves.toMatchObject({
+      status: "PENDING_CONFIRMATION",
+      signature: "ambiguous-signature",
+    });
+  });
+
   it("generates cluster-aware explorer URLs", () => {
     const adapter = adapterMock();
     expect(service(adapter, "devnet").getAnchorExplorerUrl("sig")).toBe(
@@ -362,6 +379,9 @@ describe("SolanaAnchorAdapter", () => {
         anchorPda: deriveAnchorPda(PROGRAM_ID, value.batchKey),
         authority: signer.publicKey,
       }),
-    ).rejects.toMatchObject({ kind: "CONFIRMATION" });
+    ).rejects.toMatchObject({
+      kind: "CONFIRMATION",
+      signature: "ambiguous-signature",
+    });
   });
 });

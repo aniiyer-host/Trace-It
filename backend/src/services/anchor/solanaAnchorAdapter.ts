@@ -117,6 +117,7 @@ export class SolanaAnchorAdapter implements AnchorChainAdapter {
           "CONFIRMATION",
           `submission ${signature} has an ambiguous confirmation result: ${message}`,
           error,
+          signature,
         );
       }
       if (/blockhash|block height|expired/i.test(message)) {
