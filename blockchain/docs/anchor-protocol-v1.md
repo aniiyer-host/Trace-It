@@ -59,10 +59,10 @@ are idempotent only after every immutable field matches.
 ## Legacy and Deployment Decisions
 
 The new deployment contains only config/authority operations and
-`record_anchor`. Legacy accounts remain read-only through compatibility
-adapters. New donation, status, and disbursement writes stop at cutover. NGO and
-cohort writes may continue asynchronously only until cutover; receipt/delivery
-attestations migrate into audit batches unless Product/Compliance explicitly
-approves a separately secured individual-record requirement.
+`record_anchor`. Phase 6 closed every application legacy-write path, including
+donation, status, disbursement, NGO, cohort, and direct-attestation writes; no
+exceptional writer was approved. Historical accounts remain readable through
+the narrow compatibility adapter and frozen legacy IDL. New evidence is
+represented through audit batches.
 
 The shared normative vectors are in `tests/fixtures/anchor-protocol-v1.json`.

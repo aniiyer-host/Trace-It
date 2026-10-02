@@ -15,7 +15,6 @@ import webhookRoutes from "./routes/webhooks/razorpay.js";
 
 import { errorHandler } from "./middleware/errorHandler.js";
 import { notFound } from "./middleware/notFound.js";
-import BlockchainRetryProcessor from "./services/blockchainRetryProcessor.js";
 import { validateEnvironment } from "./utils/envValidator.js";
 
 validateEnvironment();
@@ -84,23 +83,6 @@ app.use(notFound);
 
 // Error handler
 app.use(errorHandler);
-
-// Start blockchain retry processor (only in non-test environments)
-if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
-  const retryProcessor = new BlockchainRetryProcessor();
-  retryProcessor.start().catch(console.error);
-
-  // Graceful shutdown handling
-  process.on("SIGINT", () => {
-    retryProcessor.stop();
-    // ... existing shutdown code ...
-  });
-
-  process.on("SIGTERM", () => {
-    retryProcessor.stop();
-    // ... existing shutdown code ...
-  });
-}
 
 // Health check endpoint (placed before 404 handler for orchestrator compatibility)
 // app.get("/health", (req, res) => {

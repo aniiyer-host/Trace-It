@@ -28,6 +28,20 @@ export interface BlockchainResult {
   error?: string;
 }
 
+export const LEGACY_BLOCKCHAIN_WRITE_RETIRED = "LEGACY_BLOCKCHAIN_WRITE_RETIRED";
+
+export function legacyBlockchainWritesAreRetired(): boolean {
+  return true;
+}
+
+function retiredLegacyWrite(operation: string): BlockchainResult {
+  return {
+    success: false,
+    txHash: null,
+    error: `${LEGACY_BLOCKCHAIN_WRITE_RETIRED}:${operation}`,
+  };
+}
+
 export interface DonationOnChainData {
   donationId: string;
   donorIdHash: string;
@@ -142,9 +156,12 @@ export class BlockchainService {
    * Record a confirmed donation on-chain.
    * This is the primary integration point called after Razorpay webhook confirmation.
    *
-   * Idempotent: If the donation already exists on-chain, returns success with the existing tx.
+   * @deprecated Phase 6 retired individual donation writes. Use AnchorBatch publication.
    */
   async recordDonation(params: RecordDonationParams): Promise<BlockchainResult> {
+    if (legacyBlockchainWritesAreRetired()) {
+      return retiredLegacyWrite("recordDonation");
+    }
     if (!this.program) {
       throw new Error('BlockchainService not initialized. Call init() first.');
     }
@@ -226,12 +243,15 @@ export class BlockchainService {
 
   /**
    * Update the status of a donation on-chain.
-   * Enforces valid transitions: SUCCESS→ALLOCATED→DISBURSED→DELIVERED
+   * @deprecated Phase 6 retired individual status writes. Use audit events and AnchorBatch publication.
    */
   async updateDonationStatus(
     donationId: string,
     newStatus: number
   ): Promise<BlockchainResult> {
+    if (legacyBlockchainWritesAreRetired()) {
+      return retiredLegacyWrite("updateDonationStatus");
+    }
     if (!this.program) {
       throw new Error('BlockchainService not initialized. Call init() first.');
     }
@@ -350,9 +370,12 @@ export class BlockchainService {
 
   /**
    * Register an NGO on-chain.
-   * Called after NGO approval in the backend.
+   * @deprecated No exceptional NGO-registry write was approved for Phase 6.
    */
   async registerNgo(params: RegisterNgoParams): Promise<BlockchainResult> {
+    if (legacyBlockchainWritesAreRetired()) {
+      return retiredLegacyWrite("registerNgo");
+    }
     if (!this.program) {
       throw new Error('BlockchainService not initialized. Call init() first.');
     }
@@ -396,6 +419,9 @@ export class BlockchainService {
    * Called after NGO uploads proof documents.
    */
   async registerCohort(params: RegisterCohortParams): Promise<BlockchainResult> {
+    if (legacyBlockchainWritesAreRetired()) {
+      return retiredLegacyWrite("registerCohort");
+    }
     if (!this.program) {
       throw new Error('BlockchainService not initialized. Call init() first.');
     }
@@ -434,6 +460,9 @@ export class BlockchainService {
    * Called after platform sends funds to an NGO.
    */
   async recordDisbursement(params: RecordDisbursementParams): Promise<BlockchainResult> {
+    if (legacyBlockchainWritesAreRetired()) {
+      return retiredLegacyWrite("recordDisbursement");
+    }
     if (!this.program) {
       throw new Error('BlockchainService not initialized. Call init() first.');
     }
@@ -647,6 +676,9 @@ export class BlockchainService {
    * Called after NGO signs a receipt attestation.
    */
   async storeNgoAttestation(params: StoreAttestationParams): Promise<BlockchainResult> {
+    if (legacyBlockchainWritesAreRetired()) {
+      return retiredLegacyWrite("storeNgoAttestation");
+    }
     if (!this.program) {
       throw new Error('BlockchainService not initialized. Call init() first.');
     }
@@ -692,6 +724,9 @@ export class BlockchainService {
    * Legacy alias for storeNgoAttestation to prevent breaking call sites.
    */
   async storeNgpAttestation(params: StoreAttestationParams): Promise<BlockchainResult> {
+    if (legacyBlockchainWritesAreRetired()) {
+      return retiredLegacyWrite("storeNgpAttestation");
+    }
     return this.storeNgoAttestation(params);
   }
 
@@ -700,6 +735,9 @@ export class BlockchainService {
    * Called after NGO signs a delivery attestation.
    */
   async storeDeliveryAttestation(params: StoreAttestationParams): Promise<BlockchainResult> {
+    if (legacyBlockchainWritesAreRetired()) {
+      return retiredLegacyWrite("storeDeliveryAttestation");
+    }
     if (!this.program) {
       throw new Error('BlockchainService not initialized. Call init() first.');
     }

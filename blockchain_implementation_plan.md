@@ -1,9 +1,9 @@
 # Trace-It Blockchain Implementation Plan
 
 > **Owner:** Trace-It Blockchain Engineering Team  
-> **Last Updated:** 2026-09-30  
+> **Last Updated:** 2026-10-02
 > **Canonical Status:** Active; replaces the previous account-per-business-event execution plan  
-> **Current Phase:** Phase 5 — Devnet Deployment and Operational Hardening (external Phase 3/4 integrations remain gated)  
+> **Current Phase:** Blockchain-owned implementation through Phase 6 complete; Phase 5 deployment and cross-team operational activation remain pending
 > **Architecture:** PostgreSQL-first application with asynchronous Solana audit anchoring
 
 ## 1. Purpose
@@ -500,7 +500,7 @@ INVALID_INPUT
 
 ## Phase 5 — Devnet Deployment and Operational Hardening
 
-**Status:** Pending Phases 1–4  
+**Status:** Operational implementation complete; devnet deployment blocked by the recorded preflight conditions
 **Goal:** Demonstrate the complete blockchain-owned path on devnet and prepare it for controlled operation.
 
 ### Deliverables
@@ -530,9 +530,23 @@ INVALID_INPUT
 - Operational procedures are documented and reviewed.
 - Mainnet is not attempted without a separate approval and deployment checklist.
 
+### Implementation and preflight record
+
+- Added read-only RPC failover adapters for account and transaction verification. Fallback occurs only after transport exceptions; authoritative missing/invalid results do not fail over, and writes never switch endpoints after an ambiguous send.
+- Added a read-only devnet preflight that verifies genesis hash, public identity consistency, deployment state, artifact hashes, fee-payer balance, target-cluster rent, and post-deployment operating reserve.
+- Added guarded deployment and smoke-test entrypoints. Both require an explicit devnet consent value; the smoke path verifies cluster/authority, simulates initialization and anchoring before submission, uses only the public `multiple_events` fixture, and validates full read-back.
+- Added deterministic deployment-rent sizing, operational alert evaluation, RPC credential redaction, release-control tests, and a public deployment manifest.
+- Published `blockchain/docs/phase5-operations-runbook.md` covering custody, fee payer, blockhash/retry behavior, deployment, rotation, upgrade, rollback, pause, incident response, monitoring, and release approval.
+- Published `blockchain/docs/phase5-security-review.md`. No code-level critical finding remains; program identity custody and upgrade-authority custody remain operational approvals.
+- Local recovery evidence is green: all 39 blockchain/local-validator tests and all 189 backend tests pass, including Phase 3 ambiguity/recovery, Phase 4 verification, and Phase 5 read-failover cases.
+- Read-only devnet preflight confirmed the official devnet genesis and found no deployed anchor program at either current candidate address.
+- Deployment blocker: the compiled development ID `4qLw…GCHX` does not match the available generated deployment-keypair address `5s9A…QywW`; an approved canonical devnet identity must be selected and synchronized before building.
+- Funding blocker: fee payer `Emi2…QSrG` held 1.026224262 SOL versus a measured 3.5928428 SOL peak requirement for the current 232,136-byte binary, temporary buffer, config, first anchor, and fee reserve.
+- Safety blocker: deployment, config initialization, and the fixture anchor require explicit transaction review/approval. No devnet write was attempted.
+
 ## Phase 6 — Legacy Cutover and Retirement
 
-**Status:** Pending external outage/cutover evidence and Phases 1–5  
+**Status:** Blockchain-owned retirement implementation complete (2026-10-02); operational cutover awaits Phase 5 and external outage/integration evidence
 **Goal:** Remove obsolete blockchain execution paths without losing historical verification.
 
 ### Required external evidence before cutover
@@ -563,6 +577,19 @@ INVALID_INPUT
 - Only anchor publication and explicitly retained exceptional records can write on-chain.
 - Historical records remain verifiable according to the compatibility policy.
 - Legacy retry jobs cannot create new obsolete records.
+
+### Blockchain-team completion record
+
+- Permanently closed the application legacy-write gateway: `getBlockchainService()` now returns no writer, even when old wallet/program variables are present.
+- Added fail-closed retirement results to every legacy write method (`recordDonation`, status, disbursement, NGO, cohort, and both attestation paths) before any RPC or program work.
+- Removed legacy retry startup from the API and reduced `BlockchainRetryProcessor` to a transaction-free compatibility no-op. Preserved queue rows are inert migration evidence.
+- Added the narrow `getLegacyBlockchainReader()` interface exposing historical fetches only, fixed to legacy program `5fj53u…XzV3`.
+- Froze the generated legacy IDL at `blockchain/idl/traceit_legacy.json`; the compatibility reader no longer depends on an ignored `target/` artifact.
+- Recorded that no NGO/cohort/direct-attestation exception was approved. All new ordinary and attestation evidence migrates to audit batches.
+- Published `blockchain/docs/phase6-legacy-cutover.md` with write disposition, indefinite compatibility policy, configuration retirement, and the operational slot/release evidence that Release Engineering must append at rollout.
+- Added regression coverage proving all legacy writes fail closed and the retired processor cannot execute stale jobs.
+- Verification is green: 200 backend tests, 41 blockchain/local-validator tests (including `anchor build`), and backend/frontend production builds.
+- Phase 6 operational exit criteria remain external: the Phase 5 devnet release, durable Backend/Data audit-chain and `AnchorBatchRepository`, worker/public-route activation, and Solana-disabled workflow evidence are not blockchain-team deliverables and are not yet complete.
 
 ## 9. Testing Strategy
 
@@ -670,8 +697,10 @@ The blockchain team's migration is complete when:
 1. Obtain and review the Backend/Data implementation of the `AnchorBatchRepository` contract defined in Section 6 and `blockchain/docs/anchor-worker-v1.md`.
 2. Add the production repository adapter and bootstrap the completed worker with process shutdown hooks; do not use in-memory persistence.
 3. Connect the completed verifier to the backend's locally verified batch output and expose the documented read-only public contract.
-4. Begin Phase 5 custody/program-ID review, deployment runbook, monitoring thresholds, and security checklist without deploying or sending a transaction.
-5. Run a local persistence-to-validator recovery drill, then request separate approval for a devnet deployment/smoke test once the repository adapter and deployable program identity are available.
+4. Approve a custody-backed devnet program identity. The currently available candidate is `5s9AEJfEKfUrcCszpfdkZmka1XcX2XA7mbyDTmKmQywW`; selecting it requires synchronizing program/config/client/test IDs and rebuilding all hashes.
+5. Fund the devnet fee payer above the read-only preflight requirement while retaining the 1 SOL operating threshold.
+6. Review and explicitly approve the devnet deployment, config initialization, and public-fixture anchor transactions described in the Phase 5 runbook.
+7. Deploy, execute the guarded smoke test, record ProgramData/slot/signatures in the manifest, and rerun the preflight in deployed mode.
 
 ---
 

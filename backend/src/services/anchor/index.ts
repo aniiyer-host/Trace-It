@@ -6,3 +6,4 @@ export * from "./anchorWorkerTypes.js";
 export * from "./anchorWorker.js";
 export * from "./anchorVerification.js";
 export * from "./solanaVerificationAdapter.js";
+export * from "./anchorRpcFailover.js";
