@@ -461,6 +461,22 @@ export const apiService = {
       amount: number;
       paymentMethod: string;
     }) => post<DonationCreateResponse>("/donor/donate", donationData),
+    verifyPayment: (
+      donationId: string,
+      payment: {
+        razorpay_order_id: string;
+        razorpay_payment_id: string;
+        razorpay_signature: string;
+      },
+    ) =>
+      post<{ id: string; status: Donation["status"]; razorpayPaymentId: string }>(
+        `/donor/donations/${donationId}/verify-payment`,
+        payment,
+      ),
+    getReceipt: (donationId: string) =>
+      get<{ receiptUrl: string; publicDonationId: string }>(
+        `/donor/receipt/${donationId}`,
+      ),
     getAttestation: (donationId: string): Promise<Attestation> =>
       get(`/donor/donations/${donationId}/attestation`),
     requestAttestation: (donationId: string, type: "receipt" | "delivery") =>

@@ -1,24 +1,41 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { useToast } from '@/hooks/use-toast'
+import { downloadDonationReceipt } from '@/lib/donationReceipt'
+import type { Donation } from '@/types'
 
 interface AttestationDetailsModalProps {
   donationId: string;
   attestationStatus: string;
+  donationStatus?: Donation["status"];
   amount?: number;
   campaignTitle?: string;
   confirmedAt?: string;
   donationDate?: string;
+  paymentMethod?: Donation["paymentMethod"];
+  orderId?: string;
+  paymentId?: string;
+  donorName?: string;
+  ngoName?: string;
   onClose: () => void;
 }
 
 export default function AttestationDetailsModal({
   donationId,
   attestationStatus,
+  donationStatus,
   amount,
   campaignTitle,
   confirmedAt,
   donationDate,
+  paymentMethod,
+  orderId,
+  paymentId,
+  donorName,
+  ngoName,
   onClose,
 }: AttestationDetailsModalProps) {
+  const { toast } = useToast();
   const getAttestationDetails = () => {
     switch (attestationStatus) {
       case 'pending':
@@ -61,6 +78,43 @@ export default function AttestationDetailsModal({
   }
 
   const { title, description, steps } = getAttestationDetails()
+  const receiptEligible = donationStatus === "SUCCESS";
+  const receiptDetailsAvailable =
+    amount !== undefined && Boolean(paymentMethod && donationDate);
+
+  const handleDownloadReceipt = () => {
+    if (!receiptEligible) return;
+
+    try {
+      if (amount === undefined || !paymentMethod || !donationDate) {
+        throw new Error("Required donation receipt details are unavailable");
+      }
+
+      downloadDonationReceipt({
+        receiptId: orderId || donationId,
+        donationId,
+        donorName: donorName || "Donor",
+        ngoName: ngoName || "NGO",
+        campaignName: campaignTitle || "Donation",
+        paymentMethod: paymentMethod.toUpperCase(),
+        date: new Date(donationDate).toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        }),
+        amount,
+      });
+      toast({
+        title: "Receipt generated successfully. Your receipt has been downloaded.",
+      });
+    } catch (error) {
+      console.error("Receipt download failed:", error);
+      toast({
+        title: "Unable to generate the receipt. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Simple modal implementation using Card components
   return (
@@ -104,6 +158,26 @@ export default function AttestationDetailsModal({
                   <strong>Campaign / NGO:</strong> {campaignTitle}
                 </p>
               )}
+              {donationStatus && (
+                <p className="text-xs text-muted-foreground">
+                  <strong>Payment Status:</strong> {donationStatus}
+                </p>
+              )}
+              {paymentMethod && (
+                <p className="text-xs text-muted-foreground">
+                  <strong>Payment Method:</strong> {paymentMethod.toUpperCase()}
+                </p>
+              )}
+              {orderId && (
+                <p className="text-xs text-muted-foreground break-all">
+                  <strong>Order ID:</strong> {orderId}
+                </p>
+              )}
+              {paymentId && (
+                <p className="text-xs text-muted-foreground break-all">
+                  <strong>Payment ID:</strong> {paymentId}
+                </p>
+              )}
               {attestationStatus === 'pending' ? (
                 <>
                   <p className="text-xs text-muted-foreground">
@@ -119,6 +193,21 @@ export default function AttestationDetailsModal({
                 </p>
               )}
             </div>
+            {receiptEligible ? (
+              <Button
+                className="w-full"
+                onClick={handleDownloadReceipt}
+                disabled={!receiptDetailsAvailable}
+              >
+                {receiptDetailsAvailable
+                  ? "Download Receipt"
+                  : "Receipt details unavailable"}
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                A receipt will be available after payment is confirmed.
+              </p>
+            )}
           </div>
         </CardContent>
         <div className="flex justify-end p-6">

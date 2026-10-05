@@ -1,12 +1,8 @@
 import crypto from 'crypto';
 import { prisma } from '../db/prisma.js';
 import { requireEnvironmentVariable } from '../utils/envValidator.js';
-import {
-  AuditActorType,
-  AttestationType,
-  AttestationStatus,
-  DonationStatus,
-} from '../../generated/prisma/enums.js';
+import { AuditActorType, DonationStatus } from '../../generated/prisma/enums.js';
+import Razorpay from 'razorpay';
 import { writeAuditLog } from './auditLogService.js';
 import { generateAndStoreReceipt } from './receiptService.js';
 import { notifyAdmin } from './emailService.js';
@@ -14,19 +10,47 @@ import { getBlockchainService } from './blockchainInstance.js';
 import { addToBlockchainRetryQueue } from './blockchainRetryQueue.js';
 
 export interface CompleteDonationOptions {
-  razorpayPaymentId?: string;
-  razorpayOrderId?: string;
   ipAddress?: string;
   actorType?: AuditActorType;
 }
 
+export type DonationPaymentEvidence =
+  | {
+      source: 'checkout' | 'webhook';
+      razorpayOrderId: string;
+      razorpayPaymentId: string;
+      amountPaise: number;
+      currency: string;
+    }
+  | { source: 'simulation' };
+
+export class DonationPaymentError extends Error {
+  constructor(message: string, public readonly statusCode = 400) {
+    super(message);
+    this.name = 'DonationPaymentError';
+  }
+}
+
+let razorpayClient: Razorpay | undefined;
+
+export const getRazorpayClient = () => {
+  if (!razorpayClient) {
+    razorpayClient = new Razorpay({
+      key_id: requireEnvironmentVariable('RAZORPAY_KEY_ID'),
+      key_secret: requireEnvironmentVariable('RAZORPAY_KEY_SECRET'),
+    });
+  }
+
+  return razorpayClient;
+};
+
 /**
  * Shared service function to finalize a successful donation.
- * Transitions donation to SUCCESS, checks AML, records payment success audit,
- * initiates 80G receipt, records on Solana blockchain, and auto-creates RECEIPT attestation request.
+ * Only the request that conditionally transitions an eligible donation runs success side effects.
  */
 export const completeDonationSuccess = async (
   donationId: string,
+  evidence: DonationPaymentEvidence,
   options?: CompleteDonationOptions
 ) => {
   const donation = await prisma.donation.findUnique({
@@ -41,23 +65,116 @@ export const completeDonationSuccess = async (
     throw new Error(`Donation with ID ${donationId} not found`);
   }
 
+  const orderId =
+    evidence.source === 'simulation'
+      ? donation.razorpayOrderId
+      : evidence.razorpayOrderId;
   const paymentId =
-    options?.razorpayPaymentId ||
-    donation.razorpayPaymentId ||
-    `pay_sim_${donation.id.replace(/-/g, '').substring(0, 14)}`;
+    evidence.source === 'simulation'
+      ? `pay_sim_${donation.id.replace(/-/g, '')}`
+      : evidence.razorpayPaymentId;
+  const amountPaise =
+    evidence.source === 'simulation'
+      ? Math.round(Number(donation.amount) * 100)
+      : evidence.amountPaise;
+  const currency =
+    evidence.source === 'simulation' ? donation.currencyCode : evidence.currency;
+  const expectedAmountPaise = Math.round(Number(donation.amount) * 100);
 
-  const updatedDonation = await prisma.donation.update({
-    where: { id: donation.id },
-    data: {
-      status: DonationStatus.SUCCESS,
-      razorpayPaymentId: paymentId,
-    },
-    include: {
-      ngo: true,
-      donor: true,
-    },
-  });
+  if (
+    !orderId ||
+    (evidence.source !== 'simulation' &&
+      (!paymentId ||
+        !Number.isSafeInteger(evidence.amountPaise) ||
+        evidence.currency !== 'INR')) ||
+    currency !== donation.currencyCode ||
+    donation.currencyCode !== 'INR' ||
+    !Number.isSafeInteger(expectedAmountPaise) ||
+    expectedAmountPaise !== amountPaise
+  ) {
+    throw new DonationPaymentError('Payment evidence does not match donation');
+  }
 
+  if (
+    evidence.source !== 'simulation' &&
+    evidence.razorpayOrderId !== donation.razorpayOrderId
+  ) {
+    throw new DonationPaymentError('Razorpay order does not match donation');
+  }
+
+  if (
+    donation.razorpayPaymentId === paymentId &&
+    donation.status !== DonationStatus.INITIATED &&
+    donation.status !== DonationStatus.FAILED
+  ) {
+    return donation;
+  }
+
+  let transition;
+  try {
+    transition = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.donation.updateMany({
+        where: {
+          id: donation.id,
+          razorpayOrderId: orderId,
+          amount: donation.amount,
+          currencyCode: donation.currencyCode,
+          status: { in: [DonationStatus.INITIATED, DonationStatus.FAILED] },
+          razorpayPaymentId: null,
+        },
+        data: {
+          status: DonationStatus.SUCCESS,
+          razorpayPaymentId: paymentId,
+        },
+      });
+
+      const currentDonation = await tx.donation.findUnique({
+        where: { id: donation.id },
+        include: { ngo: true, donor: true },
+      });
+
+      if (!currentDonation) {
+        throw new Error(`Donation with ID ${donationId} not found`);
+      }
+
+      if (claimed.count === 0) {
+        if (
+          currentDonation.razorpayOrderId === orderId &&
+          currentDonation.razorpayPaymentId === paymentId &&
+          currentDonation.status !== DonationStatus.INITIATED &&
+          currentDonation.status !== DonationStatus.FAILED
+        ) {
+          return { donation: currentDonation, transitioned: false };
+        }
+
+        throw new DonationPaymentError(
+          'Donation is not eligible for this payment transition',
+          409,
+        );
+      }
+
+      return { donation: currentDonation, transitioned: true };
+    });
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'P2002'
+    ) {
+      throw new DonationPaymentError(
+        'Razorpay payment is already associated with another donation',
+        409,
+      );
+    }
+    throw error;
+  }
+
+  if (!transition.transitioned) {
+    return transition.donation;
+  }
+
+  const updatedDonation = transition.donation;
 
   // 2. AML flag check: if amount > 100,000 INR
   if (Number(updatedDonation.amount) > 100000) {
@@ -81,13 +198,15 @@ export const completeDonationSuccess = async (
 
   // 3. Audit log for payment success
   void writeAuditLog({
-    actorType: options?.actorType ?? (options?.razorpayPaymentId ? AuditActorType.WEBHOOK : AuditActorType.SYSTEM),
+    actorType:
+      options?.actorType ??
+      (evidence.source === 'webhook' ? AuditActorType.WEBHOOK : AuditActorType.SYSTEM),
     actorId: undefined,
     entityType: 'donation',
     entityId: updatedDonation.id,
     action: 'PAYMENT_SUCCESS',
     metadata: {
-      razorpayOrderId: options?.razorpayOrderId || updatedDonation.razorpayOrderId,
+      razorpayOrderId: orderId,
       razorpayPaymentId: paymentId,
       amount: updatedDonation.amount,
       ngoId: updatedDonation.ngoId,
@@ -218,36 +337,35 @@ export const completeDonationSuccess = async (
  * @param amountInr - Amount in Indian Rupees (integer in paise? Actually Razorpay expects amount in paise, but we'll convert)
  * @returns Order object from Razorpay
  */
-export const createRazorpayOrder = async (amountInr: number) => {
+export const createRazorpayOrder = async (
+  amountInr: number,
+  donationId: string,
+) => {
   // Razorpay expects amount in the smallest currency unit (paise for INR)
-  const amountInPaise = amountInr * 100;
+  const amountInPaise = Math.round(amountInr * 100);
 
-  const options = {
+  if (
+    !Number.isSafeInteger(amountInPaise) ||
+    amountInPaise <= 0 ||
+    amountInPaise / 100 !== amountInr
+  ) {
+    throw new DonationPaymentError('Donation amount must be a valid INR amount');
+  }
+
+  return getRazorpayClient().orders.create({
     amount: amountInPaise,
     currency: 'INR',
-    receipt: `receipt_${crypto.randomBytes(10).toString('hex')}`,
-    payment_capture: 1, // auto capture
-  };
-
-  // In a real implementation, we would make an HTTP request to Razorpay API
-  // For now, we'll simulate the response
-  // TODO: Replace with actual Razorpay SDK or HTTP call
-  const mockOrder = {
-    id: `order_${crypto.randomBytes(10).toString('hex')}`,
-    entity: 'order',
-    amount: amountInPaise,
-    amount_paid: 0,
-    amount_due: amountInPaise,
-    currency: 'INR',
-    receipt: options.receipt,
-    offer_id: null,
-    status: 'created',
-    attempts: 0,
-    notes: [],
-    created_at: Math.floor(Date.now() / 1000),
-  };
-
-  return mockOrder;
+    receipt: `don_${donationId.replace(/-/g, '')}`,
+    notes: { donationId },
+    // payment: {
+    //   capture: 'automatic',
+    //   capture_options: {
+    //     automatic_expiry_period: 12,
+    //     manual_expiry_period: 12,
+    //     refund_speed: 'normal',
+    //   },
+    // },
+  });
 };
 
 /**
@@ -262,6 +380,12 @@ export const verifyRazorpaySignature = (orderId: string, paymentId: string, sign
   const hmac = crypto.createHmac('sha256', razorpayKeySecret);
   hmac.update(`${orderId}|${paymentId}`);
   const generatedSignature = hmac.digest('hex');
-  return generatedSignature === signature;
-};
+  if (!/^[a-f\d]{64}$/i.test(signature)) {
+    return false;
+  }
 
+  return crypto.timingSafeEqual(
+    Buffer.from(generatedSignature, 'hex'),
+    Buffer.from(signature, 'hex'),
+  );
+};

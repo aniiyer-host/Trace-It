@@ -12,7 +12,7 @@ describe("validateEnvironment", () => {
         JWT_REFRESH_SECRET: "",
       }),
     ).toThrow(
-      "Missing required production environment variables: JWT_REFRESH_SECRET, RAZORPAY_WEBHOOK_SECRET",
+      "Missing required production environment variables: JWT_REFRESH_SECRET, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET",
     );
   });
 
@@ -22,6 +22,8 @@ describe("validateEnvironment", () => {
         NODE_ENV: "production",
         JWT_ACCESS_SECRET: "access-secret",
         JWT_REFRESH_SECRET: "refresh-secret",
+        RAZORPAY_KEY_ID: "rzp_test_key",
+        RAZORPAY_KEY_SECRET: "razorpay-secret",
         RAZORPAY_WEBHOOK_SECRET: "webhook-secret",
       }),
     ).not.toThrow();

@@ -8,6 +8,7 @@ import {
   CampaignStatus,
   AttestationType,
   AttestationStatus,
+  KycStatus,
 } from "../generated/prisma/enums.js";
 import crypto from "crypto";
 
@@ -25,6 +26,7 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
       data: {
         email: `donor-sim-${crypto.randomUUID()}@example.com`,
         role: UserRole.DONOR,
+        kycStatus: KycStatus.NOT_REQUIRED,
       },
     });
     donorUserId = donor.id;
@@ -112,5 +114,286 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
     
     // Attestations are now generated at disbursement approval, not here
     expect(updated?.attestations.length).toBe(0);
+
+    const receiptResponse = await request(app)
+      .get(`/api/donor/receipt/${donationId}`)
+      .set("Authorization", `Bearer ${donorToken}`);
+    expect(receiptResponse.status).toBe(200);
+    expect(receiptResponse.body.receiptUrl).toContain("mock.s3.test");
+    expect(
+      (await prisma.donation.findUnique({ where: { id: donationId } }))?.status,
+    ).toBe("SUCCESS");
+
+    const duplicateRes = await request(app)
+      .post("/api/webhooks/simulate-success")
+      .send({ donationId });
+    expect(duplicateRes.status).toBe(200);
+
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { raisedAmount: true },
+    });
+    expect(Number(campaign?.raisedAmount)).toBe(500);
+  });
+
+  it("does not persist failed payment IDs and allows a captured retry for the same order", async () => {
+    const donateRes = await request(app)
+      .post("/api/donor/donate")
+      .set("Authorization", `Bearer ${donorToken}`)
+      .send({
+        ngoId: ngoUserId,
+        campaignId,
+        amount: 125,
+        paymentMethod: "UPI",
+      });
+    expect(donateRes.status).toBe(201);
+
+    const failedBody = JSON.stringify({
+      event: "payment.failed",
+      payload: {
+        payment: {
+          entity: {
+            id: `pay_failed_${donateRes.body.id}`,
+            order_id: donateRes.body.razorpayOrderId,
+            status: "failed",
+          },
+        },
+      },
+    });
+    const failedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET!)
+      .update(failedBody)
+      .digest("hex");
+    const failedWebhook = await request(app)
+      .post("/api/webhooks/razorpay")
+      .set("Content-Type", "application/json")
+      .set("x-razorpay-signature", failedSignature)
+      .send(failedBody);
+    expect(failedWebhook.status).toBe(200);
+
+    const failedDonation = await prisma.donation.findUnique({
+      where: { id: donateRes.body.id },
+    });
+    expect(failedDonation?.status).toBe("FAILED");
+    expect(failedDonation?.razorpayPaymentId).toBeNull();
+
+    const capturedBody = JSON.stringify({
+      event: "payment.captured",
+      payload: {
+        payment: {
+          entity: {
+            id: `pay_retry_${donateRes.body.id}`,
+            order_id: donateRes.body.razorpayOrderId,
+            amount: 12500,
+            currency: "INR",
+            status: "captured",
+            captured: true,
+          },
+        },
+      },
+    });
+    const capturedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET!)
+      .update(capturedBody)
+      .digest("hex");
+    const capturedWebhook = await request(app)
+      .post("/api/webhooks/razorpay")
+      .set("Content-Type", "application/json")
+      .set("x-razorpay-signature", capturedSignature)
+      .send(capturedBody);
+
+    expect(capturedWebhook.status).toBe(200);
+    const donation = await prisma.donation.findUnique({
+      where: { id: donateRes.body.id },
+    });
+    expect(donation?.status).toBe("SUCCESS");
+    expect(donation?.razorpayPaymentId).toBe(`pay_retry_${donateRes.body.id}`);
+
+    const lateFailureBody = JSON.stringify({
+      event: "payment.failed",
+      payload: {
+        payment: {
+          entity: {
+            id: `pay_late_failure_${donateRes.body.id}`,
+            order_id: donateRes.body.razorpayOrderId,
+            status: "failed",
+          },
+        },
+      },
+    });
+    const lateFailureSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET!)
+      .update(lateFailureBody)
+      .digest("hex");
+    const lateFailureWebhook = await request(app)
+      .post("/api/webhooks/razorpay")
+      .set("Content-Type", "application/json")
+      .set("x-razorpay-signature", lateFailureSignature)
+      .send(lateFailureBody);
+    expect(lateFailureWebhook.status).toBe(200);
+
+    const afterLateFailure = await prisma.donation.findUnique({
+      where: { id: donateRes.body.id },
+    });
+    expect(afterLateFailure?.status).toBe("SUCCESS");
+    expect(afterLateFailure?.razorpayPaymentId).toBe(`pay_retry_${donateRes.body.id}`);
+  });
+
+  it("requires KYC only above ₹10,000 and rejects before creating a donation", async () => {
+    const belowThresholdDonation = await request(app)
+      .post("/api/donor/donate")
+      .set("Authorization", `Bearer ${donorToken}`)
+      .send({
+        ngoId: ngoUserId,
+        campaignId,
+        amount: 9999,
+        paymentMethod: "UPI",
+      });
+    expect(belowThresholdDonation.status).toBe(201);
+
+    const thresholdDonation = await request(app)
+      .post("/api/donor/donate")
+      .set("Authorization", `Bearer ${donorToken}`)
+      .send({
+        ngoId: ngoUserId,
+        campaignId,
+        amount: 10000,
+        paymentMethod: "UPI",
+      });
+    expect(thresholdDonation.status).toBe(201);
+
+    const donationsBeforeKycRequiredAttempt = await prisma.donation.count({
+      where: { donorId: donorUserId },
+    });
+    const kycRequired = await request(app)
+      .post("/api/donor/donate")
+      .set("Authorization", `Bearer ${donorToken}`)
+      .send({
+        ngoId: ngoUserId,
+        campaignId,
+        amount: 10001,
+        paymentMethod: "UPI",
+      });
+
+    expect(kycRequired.status).toBe(402);
+    expect(kycRequired.body).toEqual({ requiresKyc: true });
+    expect(
+      await prisma.donation.count({ where: { donorId: donorUserId } }),
+    ).toBe(donationsBeforeKycRequiredAttempt);
+
+    const stringAmountKycRequired = await request(app)
+      .post("/api/donor/donate")
+      .set("Authorization", `Bearer ${donorToken}`)
+      .send({
+        ngoId: ngoUserId,
+        campaignId,
+        amount: "10001",
+        paymentMethod: "UPI",
+      });
+    expect(stringAmountKycRequired.status).toBe(402);
+    expect(stringAmountKycRequired.body).toEqual({ requiresKyc: true });
+    expect(
+      await prisma.donation.count({ where: { donorId: donorUserId } }),
+    ).toBe(donationsBeforeKycRequiredAttempt);
+  });
+
+  it("verifies Checkout evidence server-side and treats repeated verification as a no-op", async () => {
+    const donateRes = await request(app)
+      .post("/api/donor/donate")
+      .set("Authorization", `Bearer ${donorToken}`)
+      .send({
+        ngoId: ngoUserId,
+        campaignId,
+        amount: 40,
+        paymentMethod: "UPI",
+      });
+    expect(donateRes.status).toBe(201);
+
+    const paymentId = `pay_checkout_${donateRes.body.id}`;
+    const signature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
+      .update(`${donateRes.body.razorpayOrderId}|${paymentId}`)
+      .digest("hex");
+    const verificationRequest = () =>
+      request(app)
+        .post(`/api/donor/donations/${donateRes.body.id}/verify-payment`)
+        .set("Authorization", `Bearer ${donorToken}`)
+        .send({
+          razorpay_order_id: donateRes.body.razorpayOrderId,
+          razorpay_payment_id: paymentId,
+          razorpay_signature: signature,
+        });
+
+    const firstVerification = await verificationRequest();
+    const duplicateVerification = await verificationRequest();
+    expect(firstVerification.status).toBe(200);
+    expect(firstVerification.body.status).toBe("SUCCESS");
+    expect(duplicateVerification.status).toBe(200);
+
+    const donation = await prisma.donation.findUnique({
+      where: { id: donateRes.body.id },
+    });
+    expect(donation?.status).toBe("SUCCESS");
+    expect(donation?.razorpayPaymentId).toBe(paymentId);
+
+    const dashboard = await request(app)
+      .get("/api/donor/dashboard")
+      .set("Authorization", `Bearer ${donorToken}`);
+    const dashboardDonation = dashboard.body.donations.find(
+      (item: { id: string }) => item.id === donateRes.body.id,
+    );
+    expect(dashboardDonation?.status).toBe("SUCCESS");
+  });
+
+  it("routes a signed captured-payment webhook through the same success transition", async () => {
+    const donateRes = await request(app)
+      .post("/api/donor/donate")
+      .set("Authorization", `Bearer ${donorToken}`)
+      .send({
+        ngoId: ngoUserId,
+        campaignId,
+        amount: 60,
+        paymentMethod: "UPI",
+      });
+    expect(donateRes.status).toBe(201);
+
+    const body = JSON.stringify({
+      event: "payment.captured",
+      payload: {
+        payment: {
+          entity: {
+            id: `pay_webhook_${donateRes.body.id}`,
+            order_id: donateRes.body.razorpayOrderId,
+            amount: 6000,
+            currency: "INR",
+            status: "captured",
+            captured: true,
+          },
+        },
+      },
+    });
+    const signature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET!)
+      .update(body)
+      .digest("hex");
+
+    const firstWebhook = await request(app)
+      .post("/api/webhooks/razorpay")
+      .set("Content-Type", "application/json")
+      .set("x-razorpay-signature", signature)
+      .send(body);
+    const duplicateWebhook = await request(app)
+      .post("/api/webhooks/razorpay")
+      .set("Content-Type", "application/json")
+      .set("x-razorpay-signature", signature)
+      .send(body);
+
+    expect(firstWebhook.status).toBe(200);
+    expect(duplicateWebhook.status).toBe(200);
+    const donation = await prisma.donation.findUnique({
+      where: { id: donateRes.body.id },
+    });
+    expect(donation?.status).toBe("SUCCESS");
+    expect(donation?.razorpayPaymentId).toBe(`pay_webhook_${donateRes.body.id}`);
   });
 });

@@ -70,6 +70,7 @@ app.use("/api/donor", donorRoutes);
 app.use("/api/charity", charityRoutes);
 app.use("/api/admin", adminRoutes);
 // Webhook Routes (Razorpay & Simulation)
+// for tests
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/webhooks/razorpay", webhookRoutes);
 

@@ -3,11 +3,11 @@ import { Request, Response, NextFunction, Router } from 'express';
 import { prisma } from '../../db/prisma.js';
 import crypto from 'crypto';
 import { writeAuditLog } from '../../services/auditLogService.js';
-import { AuditActorType, AttestationType, AttestationStatus } from '../../../generated/prisma/enums.js';
-import { generateAndStoreReceipt } from '../../services/receiptService.js';
-import { notifyAdmin } from '../../services/emailService.js';
-import { getBlockchainService } from '../../services/blockchainInstance.js';
-import { completeDonationSuccess } from '../../services/donationService.js';
+import { AuditActorType, DonationStatus } from '../../../generated/prisma/enums.js';
+import {
+  completeDonationSuccess,
+  DonationPaymentError,
+} from '../../services/donationService.js';
 
 interface RawRequest extends Request {
   rawBody: Buffer;
@@ -61,7 +61,13 @@ export const razorpayWebhookHandler = async (
     hmac.update(rawBody);
     const generatedSignature = hmac.digest('hex');
 
-    if (generatedSignature !== razorpaySignature) {
+    if (
+      !/^[a-f\d]{64}$/i.test(razorpaySignature) ||
+      !crypto.timingSafeEqual(
+        Buffer.from(generatedSignature, 'hex'),
+        Buffer.from(razorpaySignature, 'hex'),
+      )
+    ) {
       // Log webhook tamper attempt
       void writeAuditLog({
         actorType: AuditActorType.WEBHOOK,
@@ -86,13 +92,19 @@ export const razorpayWebhookHandler = async (
       const razorpayOrderId = paymentEntity.order_id;
       const razorpayPaymentId = paymentEntity.id;
 
-      // Find donation by razorpayOrderId
-      const donation = await prisma.donation.findFirst({
+      if (
+        typeof razorpayOrderId !== 'string' ||
+        typeof razorpayPaymentId !== 'string' ||
+        !Number.isSafeInteger(paymentEntity.amount) ||
+        paymentEntity.currency !== 'INR' ||
+        paymentEntity.status !== 'captured' ||
+        paymentEntity.captured !== true
+      ) {
+        return res.status(400).json({ error: 'Invalid captured payment evidence' });
+      }
+
+      const donation = await prisma.donation.findUnique({
         where: { razorpayOrderId },
-        include: {
-          ngo: true,
-          donor: true,
-        },
       });
 
       if (!donation) {
@@ -112,196 +124,17 @@ export const razorpayWebhookHandler = async (
         return res.status(200).json({ received: true });
       }
 
-      // Check if payment already processed (idempotency)
-      if (donation.razorpayPaymentId) {
-        // Log duplicate webhook
-        void writeAuditLog({
-          actorType: AuditActorType.WEBHOOK,
-          entityType: 'donation',
-          entityId: donation.id,
-          action: 'WEBHOOK_DUPLICATE',
-          metadata: {
-            razorpayOrderId,
-            razorpayPaymentId,
-            existingPaymentId: donation.razorpayPaymentId,
-          },
-          ipAddress: req.ip,
-        });
-
-        return res.status(200).json({ received: true });
-      }
-
-      // Update donation status to SUCCESS and store payment ID
-      await prisma.donation.update({
-        where: { id: donation.id },
-        data: {
-          status: 'SUCCESS',
-          razorpayPaymentId,
-        },
-      });
-
-      // AML flag: if amount_inr > 100000, inject AML_FLAG_RAISED audit entry
-      if (donation.amount.gt(100000)) {
-        void writeAuditLog({
-          actorType: AuditActorType.SYSTEM,
-          entityType: 'donation',
-          entityId: donation.id,
-          action: 'AML_FLAG_RAISED',
-          metadata: {
-            amount: donation.amount,
-            threshold: 100000,
-          },
-          ipAddress: req.ip,
-        });
-
-        // Notify admin about AML flag
-        void notifyAdmin(
-          'AML Flag Raised',
-          `Donation of INR ${donation.amount} by donor ${donation.donorId} exceeded AML threshold.`
-        );
-      }
-
-      // Audit log for successful payment
-      void writeAuditLog({
-        actorType: AuditActorType.WEBHOOK,
-        actorId: undefined, // Webhook is system-generated
-        entityType: 'donation',
-        entityId: donation.id,
-        action: 'PAYMENT_SUCCESS',
-        metadata: {
+      await completeDonationSuccess(
+        donation.id,
+        {
+          source: 'webhook',
           razorpayOrderId,
           razorpayPaymentId,
-          amount: donation.amount,
-          ngoId: donation.ngoId,
-          donorId: donation.donorId,
+          amountPaise: paymentEntity.amount,
+          currency: paymentEntity.currency,
         },
-        ipAddress: req.ip,
-      });
-
-      // Queue 80G receipt generation (async, non-blocking)
-      // This will generate the receipt and upload to storage
-      void generateAndStoreReceipt(donation.id)
-        .then(() => {
-          // Log receipt generation started
-          void writeAuditLog({
-            actorType: AuditActorType.SYSTEM,
-            entityType: 'donation',
-            entityId: donation.id,
-            action: 'RECEIPT_GENERATION_STARTED',
-            metadata: {
-              donationId: donation.id,
-            },
-            ipAddress: req.ip,
-          });
-        })
-        .catch((error: unknown) => {
-          // Log receipt generation failure
-          void writeAuditLog({
-            actorType: AuditActorType.SYSTEM,
-            entityType: 'donation',
-            entityId: donation.id,
-            action: 'RECEIPT_GENERATION_FAILED',
-            metadata: {
-              donationId: donation.id,
-              error: error instanceof Error ? error.message : 'Unknown error',
-            },
-            ipAddress: req.ip,
-          });
-        });
-
-
-
-      // BLOCKCHAIN INTEGRATION: Record donation on-chain after successful payment
-      try {
-        const blockchainService = await getBlockchainService();
-
-        if (blockchainService) {
-          // Prepare donation data for on-chain recording
-          const donationData = {
-            donationId: donation.id, // UUID from Postgres
-            donorUserId: donation.donorId, // Raw user ID (will be hashed by service)
-            ngoId: donation.ngoId,
-            campaignId: donation.campaignId ?? '',
-            amountInr: donation.amount.toNumber(), // Amount in INR
-            currency: 'INR',
-            timestamp: new Date() // Current timestamp
-          };
-
-          // Record on-chain (idempotent - safe to call multiple times)
-          const blockchainResult = await blockchainService.recordDonation(donationData);
-
-          if (blockchainResult.success) {
-            // Store transaction hash in donation record
-            await prisma.donation.update({
-              where: { id: donation.id },
-              data: { solanaTxHash: blockchainResult.txHash }
-            });
-
-            // Log success to audit trail
-            await writeAuditLog({
-              actorType: AuditActorType.SYSTEM,
-              entityType: 'donation',
-              entityId: donation.id,
-              action: 'BLOCKCHAIN_RECORD_SUCCESS',
-              metadata: {
-                donationId: donation.id,
-                transactionHash: blockchainResult.txHash
-              },
-              ipAddress: req.ip,
-            });
-
-            console.info(`Blockchain recording successful for donation ${donation.id}: ${blockchainResult.txHash}`);
-          } else {
-            // Handle recording failure
-            console.error(`Blockchain recording failed for donation ${donation.id}: ${blockchainResult.error}`);
-
-            // Add to retry queue for later processing
-            await addToBlockchainRetryQueue({
-              donationId: donation.id,
-              error: blockchainResult.error ?? 'Unknown error',
-              retryCount: 0
-            });
-
-            // Log failure to audit trail
-            await writeAuditLog({
-              actorType: AuditActorType.SYSTEM,
-              entityType: 'donation',
-              entityId: donation.id,
-              action: 'BLOCKCHAIN_RECORD_FAILED',
-              metadata: {
-                donationId: donation.id,
-                error: blockchainResult.error
-              },
-              ipAddress: req.ip,
-            });
-          }
-        } else {
-          console.warn('[Blockchain] Service not available — skipping on-chain recording');
-        }
-      } catch (error) {
-        // Handle service initialization or other unexpected errors
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(`Blockchain service error for donation ${donation.id}:`, error);
-
-        // Add to retry queue
-        await addToBlockchainRetryQueue({
-          donationId: donation.id,
-          error: errorMessage,
-          retryCount: 0
-        });
-
-        await writeAuditLog({
-          actorType: AuditActorType.SYSTEM,
-          entityType: 'donation',
-          entityId: donation.id,
-          action: 'BLOCKCHAIN_SERVICE_ERROR',
-          metadata: {
-            donationId: donation.id,
-            error: errorMessage
-          },
-          ipAddress: req.ip,
-        });
-      }
+        { ipAddress: req.ip, actorType: AuditActorType.WEBHOOK },
+      );
 
       return res.status(200).json({ received: true });
     }
@@ -311,35 +144,43 @@ export const razorpayWebhookHandler = async (
       const paymentEntity = event.payload.payment.entity;
       const razorpayOrderId = paymentEntity.order_id;
       const razorpayPaymentId = paymentEntity.id;
+      if (
+        typeof razorpayOrderId !== 'string' ||
+        typeof razorpayPaymentId !== 'string' ||
+        paymentEntity.status !== 'failed'
+      ) {
+        return res.status(400).json({ error: 'Invalid failed payment evidence' });
+      }
 
       // Find donation by razorpayOrderId
-      const donation = await prisma.donation.findFirst({
+      const donation = await prisma.donation.findUnique({
         where: { razorpayOrderId },
       });
 
-      if (donation) {
-        // Update donation status to FAILED
-        await prisma.donation.update({
-          where: { id: donation.id },
-          data: {
-            status: 'FAILED',
-            razorpayPaymentId,
+      if (donation && donation.status === DonationStatus.INITIATED) {
+        const failed = await prisma.donation.updateMany({
+          where: {
+            id: donation.id,
+            status: DonationStatus.INITIATED,
+            razorpayPaymentId: null,
           },
+          data: { status: DonationStatus.FAILED },
         });
 
-        // Audit log for failed payment
-        void writeAuditLog({
-          actorType: AuditActorType.WEBHOOK,
-          entityType: 'donation',
-          entityId: donation.id,
-          action: 'PAYMENT_FAILED',
-          metadata: {
-            razorpayOrderId,
-            razorpayPaymentId,
-            amount: donation.amount,
-          },
-          ipAddress: req.ip,
-        });
+        if (failed.count === 1) {
+          void writeAuditLog({
+            actorType: AuditActorType.WEBHOOK,
+            entityType: 'donation',
+            entityId: donation.id,
+            action: 'PAYMENT_FAILED',
+            metadata: {
+              razorpayOrderId,
+              razorpayPaymentId,
+              amount: donation.amount,
+            },
+            ipAddress: req.ip,
+          });
+        }
       }
 
       return res.status(200).json({ received: true });
@@ -348,6 +189,9 @@ export const razorpayWebhookHandler = async (
     // For other events, just acknowledge receipt
     return res.status(200).json({ received: true });
   } catch (err) {
+    if (err instanceof DonationPaymentError) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
     next(err);
   }
 };
@@ -491,7 +335,7 @@ async function addToBlockchainRetryQueue(data: {
   }
 }
 
-// Dev-only endpoint to simulate payment webhook success and trigger attestation + receipt generation
+// Dev-only synthetic payment routed through the canonical donation success service.
 export const simulateSuccessHandler = async (
   req: Request,
   res: Response,
@@ -518,10 +362,11 @@ export const simulateSuccessHandler = async (
       return res.status(400).json({ error: 'donationId is required' });
     }
 
-    const donation = await completeDonationSuccess(donationId, {
-      ipAddress: req.ip,
-      actorType: AuditActorType.SYSTEM,
-    });
+    const donation = await completeDonationSuccess(
+      donationId,
+      { source: 'simulation' },
+      { ipAddress: req.ip, actorType: AuditActorType.SYSTEM },
+    );
 
     return res.status(200).json({
       success: true,
@@ -533,6 +378,9 @@ export const simulateSuccessHandler = async (
       },
     });
   } catch (err) {
+    if (err instanceof DonationPaymentError) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
     next(err);
   }
 };
@@ -542,7 +390,7 @@ const razorpayRouter = Router();
 
 // Configure express.raw middleware to preserve raw body for webhook verification
 // This must be done before express.json() in the chain
-razorpayRouter.use(express.raw({ type: '*/*' }));
+//razorpayRouter.use(express.raw({ type: '*/*' }));
 
 razorpayRouter.post('/', razorpayWebhookHandler);
 razorpayRouter.post('/refund', razorpayRefundWebhookHandler);

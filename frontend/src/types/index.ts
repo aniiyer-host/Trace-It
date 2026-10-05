@@ -100,6 +100,7 @@ export interface Donation {
   orderId?: string; // Razorpay order ID (mock) or SOL tx hash
   razorpayOrderId?: string;
   razorpayPaymentId?: string;
+  taxReceiptUrl?: string | null;
   txHash?: string; // Solana explorer tx hash (mock)
   status: DonationStatus;
   milestoneId?: string;
@@ -193,6 +194,9 @@ export interface DonationCreateResponse {
   campaignId: string;
   ngoId: string;
   razorpayOrderId: string;
+  razorpayKeyId: string;
+  razorpayAmount: number;
+  razorpayCurrency: string;
 }
 
 export interface DonorDashboardResponse {

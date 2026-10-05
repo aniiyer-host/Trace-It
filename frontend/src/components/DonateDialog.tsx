@@ -13,125 +13,43 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuthStore } from "@/store/authStore";
 import { useDonationStore } from "@/store/donationStore";
 import { apiService } from "@/utils/apiClient";
-import { initiateUpiPayment } from "@/services/mockPayments";
+import { openRazorpayCheckout } from "@/services/razorpayPayments";
+import { downloadDonationReceipt } from "@/lib/donationReceipt";
 import { formatUSD, shortenHash } from "@/lib/utils";
 import type { Campaign, PaymentMethod, Donation } from "@/types";
 import axios from "axios";
 
 const PRESET_AMOUNTS = [25, 50, 100, 250];
 
-const escapeHtml = (value: string) =>
-  value.replace(/[&<>"']/g, (character) => {
-    const entities: Record<string, string> = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    };
-    return entities[character];
-  });
-
-const amountInWords = (amount: number): string => {
-  const ones = [
-    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-    "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
-    "seventeen", "eighteen", "nineteen",
-  ];
-  const tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
-  const scales = ["", "thousand", "lakh", "crore", "arab", "kharab"];
-  const twoDigitWords = (value: number) =>
-    value < 20
-      ? ones[value]
-      : `${tens[Math.floor(value / 10)]}${value % 10 ? ` ${ones[value % 10]}` : ""}`;
-  const threeDigitWords = (value: number) => {
-    const hundreds = Math.floor(value / 100);
-    const remainder = value % 100;
-    return `${hundreds ? `${ones[hundreds]} hundred${remainder ? " " : ""}` : ""}${remainder ? twoDigitWords(remainder) : ""}`;
-  };
-
-  const absoluteAmount = Math.abs(amount);
-  let rupees = Math.floor(absoluteAmount);
-  let paise = Math.round((absoluteAmount - rupees) * 100);
-  if (paise === 100) {
-    rupees += 1;
-    paise = 0;
-  }
-
-  let remaining = rupees;
-  let groupIndex = 0;
-  const groups: string[] = [];
-  while (remaining > 0 && groupIndex < scales.length) {
-    const groupSize = groupIndex === 0 ? 1000 : 100;
-    const group = remaining % groupSize;
-    if (group) {
-      groups.unshift(`${threeDigitWords(group)}${scales[groupIndex] ? ` ${scales[groupIndex]}` : ""}`);
-    }
-    remaining = Math.floor(remaining / groupSize);
-    groupIndex += 1;
-  }
-
-  const rupeeWords = groups.join(" ") || "zero";
-  const paiseWords = paise ? ` and ${twoDigitWords(paise)} paise` : "";
-  return `${rupeeWords}${paiseWords} only`.replace(/\b\w/g, (letter) =>
-    letter.toUpperCase(),
-  );
-};
-
 interface Props {
   campaign: Campaign | null;
   open: boolean;
   onClose: () => void;
+  onDonationUpdated?: (donation: Donation) => void;
 }
 
-export function DonateDialog({ campaign, open, onClose }: Props) {
+export function DonateDialog({
+  campaign,
+  open,
+  onClose,
+  onDonationUpdated,
+}: Props) {
   const [amount, setAmount] = useState(50);
   const [custom, setCustom] = useState("");
   const method: PaymentMethod = "upi";
   const [loading, setLoading] = useState(false);
   const [createdDonation, setCreatedDonation] = useState<Donation | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [requiresKyc, setRequiresKyc] = useState(false);
+  const [pan, setPan] = useState("");
+  const [submittingKyc, setSubmittingKyc] = useState(false);
 
   const { user } = useAuthStore();
   const donationStore = useDonationStore();
+  const setDonations = useDonationStore((state) => state.setDonations);
   const { toast } = useToast();
 
   const finalAmount = custom ? parseInt(custom, 10) || 0 : amount;
-
-  /* --- OLD DONATE LOGIC (preserved/commented) ---
-    const handleDonateOld = async () => {
-        if (!campaign) {
-            toast({ title: 'Select a campaign', variant: 'destructive' })
-            return
-        }
-        if (!user) {
-            toast({ title: 'Sign in to donate', variant: 'destructive' })
-            return
-        }
-        if (finalAmount < 1) {
-            toast({ title: 'Enter a valid amount', variant: 'destructive' })
-            return
-        }
-        setLoading(true)
-        try {
-            await initiateUpiPayment(finalAmount)
-            const payload = {
-                campaignId: campaign.id,
-                ngoId: campaign.ngoId,
-                amount: finalAmount,
-                paymentMethod: method.toUpperCase(),
-            }
-            const donation = await apiService.donations.create(payload) as Donation
-            donationStore.addDonation(donation)
-            toast({ title: `${formatUSD(finalAmount)} donation successful! 🎉` })
-        } catch (_error) {
-            console.error(_error)
-            toast({ title: 'Donation failed', variant: 'destructive' })
-        } finally {
-            setLoading(false)
-        }
-    }
-    ------------------------------------------------ */
 
   const handleDonate = async () => {
     if (!campaign) {
@@ -148,8 +66,6 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
     }
     setLoading(true);
     try {
-      await initiateUpiPayment(finalAmount);
-
       const payload = {
         campaignId: campaign.id,
         ngoId: campaign.ngoId,
@@ -167,31 +83,68 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
         amount: finalAmount,
         paymentMethod: method,
         orderId: res.razorpayOrderId || `order_${Date.now()}`,
+        razorpayOrderId: res.razorpayOrderId,
         status: "INITIATED",
         createdAt: new Date().toISOString(),
         walletAddress: "donor_wallet",
         explorerUrl: `https://explorer.solana.com/?cluster=devnet`,
       };
-
+      donationStore.addDonation(newDonation);
       donationStore.addDonation(newDonation);
       setCreatedDonation(newDonation);
       toast({ title: `Donation initiated for ${formatUSD(finalAmount)}!` });
-      // } catch (_error: any) {
-      //   console.error(_error);
-      //   if (
-      //     _error?.response?.status === 402 &&
-      //     _error?.response?.data?.requiresKyc
-      //   ) {
-      //     toast({
-      //       title: "KYC Verification Required",
-      //       description:
-      //         "Donations over ₹10,000 require KYC verification. Please complete your KYC before donating this amount.",
-      //       variant: "destructive",
-      //     });
-      //   } else {
-      //     toast({ title: "Donation failed", variant: "destructive" });
-      //   }
-      // }
+
+      const payment = await openRazorpayCheckout({
+        key: res.razorpayKeyId,
+        amount: res.razorpayAmount,
+        currency: res.razorpayCurrency,
+        name: "Trace-It",
+        description: `Donation to ${campaign.title}`,
+        order_id: res.razorpayOrderId,
+      });
+
+      if (!payment) {
+        toast({
+          title: "Payment cancelled",
+          description: "The donation remains pending and was not marked successful.",
+        });
+        return;
+      }
+
+      try {
+        const verified = await apiService.donations.verifyPayment(
+          newDonation.id,
+          payment,
+        );
+        const verifiedDonation = {
+          ...newDonation,
+          status: verified.status,
+          razorpayPaymentId: verified.razorpayPaymentId,
+        };
+        setDonations(
+          useDonationStore.getState().donations.map((donation) =>
+            donation.id === verifiedDonation.id ? verifiedDonation : donation,
+          ),
+        );
+        setCreatedDonation((previous) =>
+          previous ? { ...previous, status: verified.status } : previous,
+        );
+        onDonationUpdated?.(verifiedDonation);
+        try {
+          const donations = await apiService.donations.getByUser();
+          donationStore.setDonations(donations);
+        } catch (refreshError) {
+          console.error("Failed to refresh donation history:", refreshError);
+        }
+        toast({ title: "Payment confirmed! Donation recorded." });
+      } catch (verificationError) {
+        console.error("Razorpay verification pending:", verificationError);
+        toast({
+          title: "Payment submitted",
+          description:
+            "We could not confirm the payment yet. Your donation status will update after server verification.",
+        });
+      }
     } catch (_error: unknown) {
       console.error(_error);
 
@@ -200,10 +153,11 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
         _error.response?.status === 402 &&
         _error.response?.data?.requiresKyc
       ) {
+        setRequiresKyc(true);
         toast({
           title: "KYC Verification Required",
           description:
-            "Donations over ₹10,000 require KYC verification. Please complete your KYC before donating this amount.",
+            "Donations over ₹10,000 require KYC verification before an order can be created.",
           variant: "destructive",
         });
       } else {
@@ -214,14 +168,40 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
     }
   };
 
+  const handleSubmitKyc = async () => {
+    setSubmittingKyc(true);
+    try {
+      await apiService.auth.submitKyc(pan.trim().toUpperCase());
+      setRequiresKyc(false);
+      setPan("");
+      toast({
+        title: "KYC approved",
+        description: "You can now retry your donation.",
+      });
+    } catch (error) {
+      console.error("KYC submission failed:", error);
+      toast({
+        title: "KYC submission failed",
+        description: "Check your PAN details and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmittingKyc(false);
+    }
+  };
+
   useEffect(() => {
-    if (!createdDonation || createdDonation.status === "SUCCESS" || !user?.id)
+    if (
+      !createdDonation ||
+      createdDonation.status === "FAILED" ||
+      !user?.id
+    )
       return;
 
     let elapsed = 0;
     const intervalId = setInterval(async () => {
       elapsed += 3000;
-      if (elapsed > 30000) {
+      if (elapsed > 60000) {
         clearInterval(intervalId);
         return;
       }
@@ -232,16 +212,25 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
         const currentStatus = userDonations.find(
           (d) => d.id === createdDonation.id,
         );
-        //Cause of LINT error removed setCreatedDonation(currentStatus) as it was giving error of possibly null
-        // if (currentStatus && currentStatus.status === "SUCCESS") {
-        //   setCreatedDonation(currentStatus);
-        //   clearInterval(intervalId);
-        // }
-        if (currentStatus && currentStatus.status === "SUCCESS") {
-          setCreatedDonation((prev) =>
-            prev ? { ...prev, status: currentStatus.status } : prev,
+        setDonations(userDonations);
+        if (currentStatus) {
+          setCreatedDonation((previous) =>
+            previous &&
+            (previous.status !== currentStatus.status ||
+              previous.taxReceiptUrl !== currentStatus.taxReceiptUrl)
+              ? {
+                  ...previous,
+                  status: currentStatus.status,
+                  taxReceiptUrl: currentStatus.taxReceiptUrl,
+                }
+              : previous,
           );
-          clearInterval(intervalId);
+          if (currentStatus.status !== createdDonation.status) {
+            onDonationUpdated?.(currentStatus);
+          }
+          if (currentStatus.status === "FAILED") {
+            clearInterval(intervalId);
+          }
         }
       } catch (err) {
         console.error("Polling error:", err);
@@ -249,7 +238,41 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
     }, 3000);
 
     return () => clearInterval(intervalId);
-  }, [createdDonation, user?.id]);
+  }, [createdDonation, onDonationUpdated, setDonations, user?.id]);
+
+  const handleDownloadReceipt = () => {
+    if (!createdDonation) return;
+
+    try {
+      downloadDonationReceipt({
+        receiptId:
+          createdDonation.orderId ||
+          createdDonation.publicId ||
+          createdDonation.id,
+        donationId: createdDonation.publicId || createdDonation.id,
+        donorName: user?.name || "Donor",
+        ngoName: campaign?.ngoName || campaign?.ngo || "NGO",
+        campaignName: campaign?.title || createdDonation.campaignTitle || "",
+        category: campaign?.category,
+        paymentMethod: createdDonation.paymentMethod.toUpperCase(),
+        date: new Date(createdDonation.createdAt).toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        }),
+        amount: createdDonation.amount,
+      });
+      toast({
+        title: "Receipt generated successfully. Your receipt has been downloaded.",
+      });
+    } catch (error) {
+      console.error("Receipt download failed:", error);
+      toast({
+        title: "Unable to generate the receipt. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleSimulatePayment = async () => {
     if (!createdDonation) return;
@@ -262,7 +285,19 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
         txHash: `sim_tx_${createdDonation.id.slice(0, 8)}`,
       };
       setCreatedDonation(updated);
-      toast({ title: "Payment confirmed & attestation generated! 🎉" });
+      setDonations(
+        useDonationStore.getState().donations.map((donation) =>
+          donation.id === updated.id ? updated : donation,
+        ),
+      );
+      onDonationUpdated?.(updated);
+      try {
+        const donations = await apiService.donations.getByUser();
+        donationStore.setDonations(donations);
+      } catch (refreshError) {
+        console.error("Failed to refresh donation history:", refreshError);
+      }
+      toast({ title: "Payment confirmed! Donation recorded." });
     } catch (err) {
       console.error("Simulation error:", err);
       toast({ title: "Simulation failed", variant: "destructive" });
@@ -275,6 +310,8 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
     setCreatedDonation(null);
     setCustom("");
     setAmount(50);
+    setRequiresKyc(false);
+    setPan("");
     onClose();
   };
 
@@ -288,7 +325,43 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
           <DialogDescription>{campaign?.title}</DialogDescription>
         </DialogHeader>
 
-        {createdDonation ? (
+        {requiresKyc ? (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Donations above ₹10,000 require donor KYC. Your donation has not
+              been created and no Razorpay order was placed.
+            </p>
+            <div className="space-y-2">
+              <label htmlFor="donor-pan" className="text-sm font-medium">
+                PAN
+              </label>
+              <input
+                id="donor-pan"
+                value={pan}
+                onChange={(event) => setPan(event.target.value.toUpperCase())}
+                maxLength={10}
+                autoComplete="off"
+                placeholder="ABCDE1234F"
+                className="w-full rounded-md border border-border bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <Button
+              className="w-full"
+              onClick={handleSubmitKyc}
+              disabled={submittingKyc || pan.trim().length !== 10}
+            >
+              {submittingKyc ? "Verifying PAN…" : "Submit KYC"}
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setRequiresKyc(false)}
+              disabled={submittingKyc}
+            >
+              Back to donation
+            </Button>
+          </div>
+        ) : createdDonation ? (
           <div className="text-center space-y-4 py-4">
             {createdDonation.status === "SUCCESS" ? (
               <>
@@ -313,6 +386,15 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                   </a>
                 )}
               </>
+            ) : createdDonation.status === "FAILED" ? (
+              <>
+                <p className="text-4xl">!</p>
+                <p className="font-semibold text-destructive">Payment Failed</p>
+                <p className="text-xs text-muted-foreground">
+                  Razorpay reported that this payment failed. You can close this
+                  dialog and try donating again.
+                </p>
+              </>
             ) : (
               <>
                 <div className="inline-flex p-3 rounded-full bg-primary/10 text-primary animate-pulse">
@@ -320,7 +402,7 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
                 </div>
                 <p className="font-semibold text-primary">Payment Initiated</p>
                 <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-                  Awaiting gateway webhook confirmation (~15 seconds).
+                  Waiting for verified payment confirmation. Closing checkout does not mark the donation successful.
                 </p>
                 {import.meta.env.DEV && (
                   <Button
@@ -377,108 +459,15 @@ export function DonateDialog({ campaign, open, onClose }: Props) {
               </div>
 
               {createdDonation.status === "SUCCESS" && (
-                <Button
-                  variant="outline"
-                  className="w-full mt-4"
-                  onClick={() => {
-                    const receiptId =
-                      createdDonation.orderId ||
-                      createdDonation.publicId ||
-                      createdDonation.id;
-                    const safeReceiptId = escapeHtml(receiptId);
-                    const donorName = user?.name ? escapeHtml(user.name) : "";
-                    const ngoName = campaign?.ngoName || campaign?.ngo || "";
-                    const safeNgoName = ngoName ? escapeHtml(ngoName) : "";
-                    const campaignName =
-                      campaign?.title || createdDonation.campaignTitle || "";
-                    const safeCampaignName = campaignName
-                      ? escapeHtml(campaignName)
-                      : "";
-                    const category = campaign?.category
-                      ? escapeHtml(campaign.category)
-                      : "";
-                    const paymentMethod = escapeHtml(
-                      createdDonation.paymentMethod.toUpperCase(),
-                    );
-                    const date = escapeHtml(
-                      new Date(createdDonation.createdAt).toLocaleDateString(
-                        "en-IN",
-                        { day: "2-digit", month: "long", year: "numeric" },
-                      ),
-                    );
-                    const formattedAmount = escapeHtml(
-                      new Intl.NumberFormat("en-IN", {
-                        maximumFractionDigits: 2,
-                      }).format(createdDonation.amount),
-                    );
-                    const words = escapeHtml(
-                      amountInWords(createdDonation.amount),
-                    );
-                    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Donation Receipt - ${safeReceiptId}</title>
-  <style>
-    @page { size: A4; margin: 16mm; }
-    * { box-sizing: border-box; }
-    body { margin: 0; padding: 32px; color: #202824; background: #f2f4f3; font-family: Arial, Helvetica, sans-serif; }
-    .receipt { width: 100%; max-width: 780px; min-height: 900px; margin: 0 auto; padding: 44px 52px; background: #fff; border: 1px solid #cbd5cf; }
-    .organization { text-align: center; }
-    .organization-name { margin: 0; font-size: 21px; }
-    .title { margin: 36px 0 26px; text-align: center; font-size: 18px; letter-spacing: 1px; }
-    .meta { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 32px; font-size: 14px; }
-    .line { margin: 0 0 24px; font-size: 15px; line-height: 1.7; }
-    .category { margin-top: -12px; font-weight: 700; }
-    .panels { display: grid; grid-template-columns: minmax(180px, 0.85fr) minmax(280px, 1.6fr); gap: 28px; margin-top: 36px; }
-    .amount, .approval { min-height: 142px; border: 1px solid #26332c; }
-    .amount { display: flex; align-items: center; justify-content: center; padding: 20px; text-align: center; }
-    .amount-value { font-size: 22px; font-weight: 700; }
-    .approval { padding: 20px; }
-    .approval-title { margin: 0; font-size: 14px; font-weight: 700; }
-    .signature { display: flex; justify-content: flex-end; margin-top: 100px; }
-    .signature-label { width: 230px; text-align: center; font-size: 14px; }
-    @media print { body { padding: 0; background: #fff; } .receipt { max-width: none; min-height: 0; padding: 0; border: 0; } }
-    @media (max-width: 600px) { body { padding: 12px; } .receipt { min-height: 0; padding: 28px 20px; } .meta { flex-direction: column; gap: 8px; } .panels { grid-template-columns: 1fr; gap: 16px; } .signature { margin-top: 56px; } }
-  </style>
-</head>
-<body>
-  <main class="receipt">
-    <header class="organization">
-      ${safeNgoName ? `<h1 class="organization-name">${safeNgoName}</h1>` : ""}
-    </header>
-    <h2 class="title">RECEIPT</h2>
-    <div class="meta">
-      <span><strong>No.:</strong> ${safeReceiptId}</span>
-      <span><strong>Date:</strong> ${date}</span>
-    </div>
-    <p class="line">Received with thanks from&nbsp; <strong>${donorName}</strong></p>
-    <p class="line">by ${paymentMethod} __________________ Bank ______________________</p>
-    <p class="line">Rupees&nbsp; ${words}</p>
-    <p class="line">on account of&nbsp; <strong>${safeCampaignName}</strong></p>
-    ${category ? `<p class="line category">${category}</p>` : ""}
-    <div class="panels">
-      <div class="amount"><span class="amount-value">Rs. ${formattedAmount}/-</span></div>
-      <section class="approval">
-        <h3 class="approval-title">80G Approval Details</h3>
-      </section>
-    </div>
-    <div class="signature"><div class="signature-label">Authorised Signatory</div></div>
-  </main>
-</body>
-</html>`;
-                    const blob = new Blob([html], { type: "text/html" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `Receipt_${receiptId.replace(/[^a-zA-Z0-9_-]/g, "_")}.html`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                >
-                  Download Receipt
-                </Button>
+                <div className="space-y-2">
+                  <Button
+                    variant="outline"
+                    className="w-full mt-4"
+                    onClick={handleDownloadReceipt}
+                  >
+                    Download Receipt
+                  </Button>
+                </div>
               )}
             </div>
 

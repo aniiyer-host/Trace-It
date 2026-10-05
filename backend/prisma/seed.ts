@@ -100,7 +100,7 @@ async function main() {
       fullName: "Another Donor",
       role: "DONOR",
       isVerified: true,
-      kycStatus: "NOT_REQUIRED",
+      kycStatus: "PENDING",
       passwordHash: donor2PasswordHash,
     },
     create: {
@@ -109,7 +109,7 @@ async function main() {
       fullName: "Another Donor",
       role: "DONOR",
       isVerified: true,
-      kycStatus: "NOT_REQUIRED",
+      kycStatus: "PENDING",
       passwordHash: donor2PasswordHash,
     },
   });

@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction, Router } from "express";
+import { randomUUID } from "node:crypto";
 import { prisma } from "../db/prisma.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
@@ -13,6 +14,9 @@ import Joi from "joi";
 import {
   createRazorpayOrder,
   completeDonationSuccess,
+  DonationPaymentError,
+  getRazorpayClient,
+  verifyRazorpaySignature,
 } from "../services/donationService.js";
 import { writeAuditLog } from "../services/auditLogService.js";
 import {
@@ -157,12 +161,21 @@ export const createDonation = async (
       return res.status(400).json({ error: "Invalid or inactive campaign" });
     }
 
-    // --- Create Razorpay order ---
-    const razorpayOrder = await createRazorpayOrder(amount);
+    const amountInPaise = Math.round(amount * 100);
+    if (
+      !Number.isSafeInteger(amountInPaise) ||
+      amountInPaise / 100 !== amount
+    ) {
+      return res.status(400).json({ error: "Amount must be valid to the nearest paise" });
+    }
+
+    const donationId = randomUUID();
+    const razorpayOrder = await createRazorpayOrder(amount, donationId);
 
     // --- Insert donation (INITIATED) ---
     const donation = await prisma.donation.create({
       data: {
+        id: donationId,
         donorId,
         ngoId,
         campaignId,
@@ -191,24 +204,6 @@ export const createDonation = async (
       ipAddress: req.ip,
     });
 
-    // Dev-only auto-transition: simulate Razorpay webhook after ~15s without needing live gateway
-    // if (process.env.NODE_ENV !== "production") {
-    if (
-      process.env.NODE_ENV !== "production" &&
-      process.env.NODE_ENV !== "test"
-    ) {
-      setTimeout(() => {
-        void completeDonationSuccess(donation.id, {
-          razorpayOrderId: razorpayOrder.id,
-        }).catch((err) => {
-          console.error(
-            `[DevAutoTransition] Error auto-completing donation ${donation.id}:`,
-            err,
-          );
-        });
-      }, 15000);
-    }
-
     res.status(201).json({
       id: donation.id,
       publicId: donation.publicId,
@@ -219,8 +214,107 @@ export const createDonation = async (
       campaignId: donation.campaignId,
       ngoId: donation.ngoId,
       razorpayOrderId: razorpayOrder.id,
+      razorpayKeyId: process.env.RAZORPAY_KEY_ID,
+      razorpayAmount: razorpayOrder.amount,
+      razorpayCurrency: razorpayOrder.currency,
     });
   } catch (err) {
+    next(err);
+  }
+};
+
+const checkoutVerificationSchema = Joi.object({
+  razorpay_order_id: Joi.string().required(),
+  razorpay_payment_id: Joi.string().required(),
+  razorpay_signature: Joi.string().required(),
+}).unknown(false);
+
+export const verifyCheckoutPayment = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { error, value } = checkoutVerificationSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({ error: error.details[0].message });
+    }
+
+    const donorId = req.user?.id;
+    if (!donorId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const donationId = req.params["id"] as string;
+    const donation = await prisma.donation.findFirst({
+      where: { id: donationId, donorId },
+    });
+    if (!donation) {
+      return res.status(404).json({ error: "Donation not found" });
+    }
+
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
+      value as {
+        razorpay_order_id: string;
+        razorpay_payment_id: string;
+        razorpay_signature: string;
+      };
+    if (
+      !donation.razorpayOrderId ||
+      donation.razorpayOrderId !== razorpay_order_id ||
+      !verifyRazorpaySignature(
+        donation.razorpayOrderId,
+        razorpay_payment_id,
+        razorpay_signature,
+      )
+    ) {
+      return res.status(400).json({ error: "Invalid Razorpay payment evidence" });
+    }
+
+    const razorpay = getRazorpayClient();
+    const [payment, order] = await Promise.all([
+      razorpay.payments.fetch(razorpay_payment_id),
+      razorpay.orders.fetch(razorpay_order_id),
+    ]);
+    const expectedAmountPaise = Math.round(Number(donation.amount) * 100);
+    if (
+      payment.id !== razorpay_payment_id ||
+      payment.order_id !== donation.razorpayOrderId ||
+      payment.status !== "captured" ||
+      !payment.captured ||
+      payment.amount !== expectedAmountPaise ||
+      payment.currency !== donation.currencyCode ||
+      order.id !== donation.razorpayOrderId ||
+      order.status !== "paid" ||
+      order.amount !== expectedAmountPaise ||
+      order.currency !== donation.currencyCode ||
+      order.receipt !== `don_${donation.id.replace(/-/g, "")}` ||
+      order.notes?.donationId !== donation.id
+    ) {
+      return res.status(400).json({ error: "Razorpay payment does not match donation" });
+    }
+
+    const completed = await completeDonationSuccess(
+      donation.id,
+      {
+        source: "checkout",
+        razorpayOrderId: payment.order_id,
+        razorpayPaymentId: payment.id,
+        amountPaise: payment.amount,
+        currency: payment.currency,
+      },
+      { ipAddress: req.ip, actorType: AuditActorType.USER },
+    );
+
+    return res.json({
+      id: completed.id,
+      status: completed.status,
+      razorpayPaymentId: completed.razorpayPaymentId,
+    });
+  } catch (err) {
+    if (err instanceof DonationPaymentError) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
     next(err);
   }
 };
@@ -573,6 +667,11 @@ donorRouter.post(
   requireRole(UserRole.DONOR),
   kycCheckMiddleware,
   createDonation,
+);
+donorRouter.post(
+  "/donations/:id/verify-payment",
+  requireRole(UserRole.DONOR),
+  verifyCheckoutPayment,
 );
 donorRouter.post("/kyc", requireRole(UserRole.DONOR), submitKyc);
 donorRouter.get(

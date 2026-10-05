@@ -11,10 +11,15 @@ interface DonationHistoryTableProps {
   onViewAttestation: (data: {
     donationId: string;
     attestationStatus: "pending" | "receipt_confirmed" | "delivery_confirmed";
+    donationStatus: Donation["status"];
     amount?: number;
     campaignTitle?: string;
     confirmedAt?: string;
     donationDate?: string;
+    paymentMethod?: Donation["paymentMethod"];
+    orderId?: string;
+    paymentId?: string;
+    ngoName?: string;
   }) => void;
   onVerifyIntegrity: (donationId: string) => void;
 }
@@ -111,10 +116,15 @@ export default function DonationHistoryTable({
               const attestationData = {
                 donationId: donation.id,
                 attestationStatus: attestationStatus as "pending" | "receipt_confirmed" | "delivery_confirmed",
+                donationStatus: donation.status,
                 amount: Number(donation.amount),
                 campaignTitle: donation.campaignTitle || `Campaign ${donation.campaignId?.substring(0, 8)}`,
                 confirmedAt: confirmedAtt ? new Date(confirmedAtt.createdAt).toISOString() : undefined,
                 donationDate: donation.createdAt,
+                paymentMethod: donation.paymentMethod,
+                orderId: donation.razorpayOrderId || donation.orderId,
+                paymentId: donation.razorpayPaymentId,
+                ngoName: donation.ngoName,
               };
 
               const allocated = Number(donation.allocatedAmount || 0);

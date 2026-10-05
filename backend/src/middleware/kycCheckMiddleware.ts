@@ -21,9 +21,15 @@ export const kycCheckMiddleware = async (
       return res.status(401).json({ error: 'User not authenticated' });
     }
 
-    // Get amount from request body (assuming JSON body parsed by express.json())
-    const amount = req.body?.amount;
-    if (typeof amount !== 'number' || isNaN(amount)) {
+    // Match Joi's numeric-string coercion in createDonation so strings cannot skip KYC.
+    const rawAmount = req.body?.amount;
+    const amount =
+      typeof rawAmount === 'number'
+        ? rawAmount
+        : typeof rawAmount === 'string' && rawAmount.trim() !== ''
+          ? Number(rawAmount)
+          : Number.NaN;
+    if (!Number.isFinite(amount)) {
       // If amount is not a valid number, let the route handler's validation deal with it.
       // We'll just skip KYC check and let next() handle validation errors.
       return next();
