@@ -25,6 +25,47 @@ const RECEIPT_URL_TTL_SECONDS = 15 * 60;
 // Internal TTL for the stored path (used when we generate a fresh URL on demand)
 // The file lives permanently in the bucket; we just regenerate signed URLs.
 
+function amountToWords(amount: string): string {
+  const ones = [
+    'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+    'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
+    'seventeen', 'eighteen', 'nineteen',
+  ];
+  const tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+  const scales = ['', 'thousand', 'lakh', 'crore', 'arab', 'kharab'];
+
+  const twoDigitWords = (value: number): string => {
+    if (value < 20) return ones[value];
+    return `${tens[Math.floor(value / 10)]}${value % 10 ? ` ${ones[value % 10]}` : ''}`;
+  };
+  const threeDigitWords = (value: number): string => {
+    const hundreds = Math.floor(value / 100);
+    const remainder = value % 100;
+    return `${hundreds ? `${ones[hundreds]} hundred${remainder ? ' ' : ''}` : ''}${remainder ? twoDigitWords(remainder) : ''}`;
+  };
+
+  const [rupees, paise = '00'] = amount.split('.');
+  let remaining = BigInt(rupees);
+  const groups: string[] = [];
+  let groupIndex = 0;
+
+  while (remaining > 0n) {
+    const groupSize = groupIndex === 0 ? 1000n : 100n;
+    const group = Number(remaining % groupSize);
+    if (group) {
+      const scale = scales[groupIndex];
+      groups.unshift(`${threeDigitWords(group)}${scale ? ` ${scale}` : ''}`);
+    }
+    remaining /= groupSize;
+    groupIndex += 1;
+  }
+
+  const rupeeWords = groups.join(' ') || 'zero';
+  const paiseValue = Number(paise);
+  const paiseWords = paiseValue ? ` and ${twoDigitWords(paiseValue)} paise` : '';
+  return `${rupeeWords}${paiseWords} only`.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 /**
  * Generate the 80G HTML receipt string for a donation.
  */
@@ -37,7 +78,32 @@ function buildReceiptHtml(params: {
   paymentMethod: string;
   createdAt: Date;
   receiptNo: string;
+  purpose: string;
+  campaignCategory: string;
 }): string {
+  const escapeHtml = (value: string) =>
+    value.replace(/[&<>"']/g, (character) => {
+      const entities: Record<string, string> = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      };
+      return entities[character];
+    });
+  const safe = {
+    publicId: escapeHtml(params.publicId),
+    donorName: escapeHtml(params.donorName),
+    ngoName: escapeHtml(params.ngoName),
+    registrationNo: escapeHtml(params.registrationNo),
+    amountInr: escapeHtml(params.amountInr),
+    paymentMethod: escapeHtml(params.paymentMethod),
+    receiptNo: escapeHtml(params.receiptNo),
+    purpose: escapeHtml(params.purpose),
+    campaignCategory: escapeHtml(params.campaignCategory),
+  };
+  const amountInWords = amountToWords(params.amountInr);
   const dateStr = params.createdAt.toLocaleDateString('en-IN', {
     day: '2-digit',
     month: 'long',
@@ -48,46 +114,70 @@ function buildReceiptHtml(params: {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>80G Tax Receipt — TraceIt</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Donation Receipt — ${safe.ngoName}</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 40px; color: #1a1a1a; }
-    .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 12px; margin-bottom: 24px; }
-    .header h1 { margin: 0; font-size: 22px; }
-    .header p  { margin: 4px 0; font-size: 13px; color: #555; }
-    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-    td { padding: 8px 12px; border: 1px solid #ddd; font-size: 14px; }
-    td:first-child { font-weight: bold; width: 40%; background: #f8f8f8; }
-    .footer { margin-top: 40px; font-size: 12px; color: #888; text-align: center; }
-    .seal { margin-top: 24px; text-align: right; font-style: italic; color: #333; }
+    @page { size: A4; margin: 16mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 32px; background: #f2f4f3; color: #202824; font-family: Arial, sans-serif; }
+    .receipt { max-width: 780px; min-height: 900px; margin: 0 auto; padding: 40px 48px; background: #fff; border: 1px solid #d7dfda; }
+    .org-header { text-align: center; }
+    .org-name { margin: 0; color: #202824; font-size: 20px; font-weight: 700; }
+    .org-meta { margin: 7px 0 0; color: #202824; font-size: 13px; line-height: 1.5; }
+    .receipt-title { margin: 32px 0 22px; text-align: center; font-size: 17px; font-weight: 700; letter-spacing: 1px; }
+    .receipt-meta { display: flex; justify-content: space-between; gap: 20px; margin: 0 0 26px; font-size: 14px; }
+    .acknowledgement { margin: 0 0 20px; font-size: 15px; }
+    .payment-line { margin: 0 0 22px; font-size: 14px; line-height: 2; }
+    .amount-words { margin: 0 0 22px; font-size: 14px; }
+    .purpose { margin: 22px 0 10px; font-size: 14px; }
+    .category { margin: 0 0 30px; font-size: 14px; font-weight: 700; }
+    .receipt-panels { display: grid; grid-template-columns: minmax(180px, 0.85fr) minmax(280px, 1.6fr); gap: 30px; align-items: stretch; }
+    .amount, .approval { min-height: 130px; padding: 20px; border: 1px solid #202824; }
+    .amount { display: flex; align-items: center; justify-content: center; text-align: center; }
+    .amount-value { font-size: 21px; font-weight: 700; }
+    .approval-title { margin: 0; font-size: 14px; font-weight: 700; }
+    .signature { display: flex; justify-content: flex-end; margin-top: 90px; }
+    .signature-block { width: 230px; min-height: 80px; padding-top: 10px; text-align: left; font-size: 13px; line-height: 1.6; }
+    @media print { body { padding: 0; background: #fff; } .receipt { max-width: none; min-height: 0; padding: 0; border: 0; } }
+    @media (max-width: 600px) { body { padding: 12px; } .receipt { min-height: 0; padding: 24px 18px; } .receipt-meta { flex-direction: column; gap: 8px; } .receipt-panels { grid-template-columns: 1fr; gap: 14px; } .signature { margin-top: 50px; } }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>TraceIt — 80G Donation Receipt</h1>
-    <p>This receipt is valid for claiming tax deductions under Section 80G of the Income Tax Act, 1961.</p>
-  </div>
+  <main class="receipt">
+    <header class="org-header">
+      ${safe.ngoName !== 'NGO' ? `<h1 class="org-name">${safe.ngoName}</h1>` : ''}
+      ${safe.registrationNo !== 'N/A' ? `<p class="org-meta">Regn. No.: ${safe.registrationNo}</p>` : ''}
+    </header>
 
-  <table>
-    <tr><td>Receipt No.</td><td>${params.receiptNo}</td></tr>
-    <tr><td>Donation Reference</td><td>${params.publicId}</td></tr>
-    <tr><td>Donor Name</td><td>${params.donorName}</td></tr>
-    <tr><td>Received By (NGO)</td><td>${params.ngoName}</td></tr>
-    <tr><td>NGO Registration No.</td><td>${params.registrationNo}</td></tr>
-    <tr><td>Amount (INR)</td><td>₹${params.amountInr}</td></tr>
-    <tr><td>Payment Method</td><td>${params.paymentMethod}</td></tr>
-    <tr><td>Date of Donation</td><td>${dateStr}</td></tr>
-    <tr><td>Mode of Receipt</td><td>Online via TraceIt Platform</td></tr>
-  </table>
+    <div class="receipt-title">RECEIPT</div>
 
-  <div class="seal">
-    <p>Authorised Signatory — TraceIt</p>
-    <p>Generated on: ${new Date().toISOString()}</p>
-  </div>
+    <div class="receipt-meta">
+      <span><strong>No.:</strong> ${safe.receiptNo}</span>
+      <span><strong>Date:</strong> ${dateStr}</span>
+    </div>
 
-  <div class="footer">
-    <p>This is a computer-generated receipt and does not require a physical signature.</p>
-    <p>For queries, contact support@traceit.in</p>
-  </div>
+    <p class="acknowledgement">Received with thanks from&nbsp; ${safe.donorName !== 'Donor' ? `<strong>${safe.donorName}</strong>` : ''}
+    </p>
+    <p class="payment-line">by ${safe.paymentMethod} __________________ Bank ______________________</p>
+    <p class="amount-words">Rupees ${amountInWords}</p>
+    ${safe.purpose !== 'General donation' ? `<p class="purpose">on account of&nbsp; <strong>${safe.purpose}</strong></p>` : ''}
+    ${safe.campaignCategory !== 'Not provided' ? `<p class="category">${safe.campaignCategory}</p>` : ''}
+
+    <div class="receipt-panels">
+      <div class="amount">
+        <span class="amount-value">Rs. ${safe.amountInr}/-</span>
+      </div>
+      <div class="approval">
+        <p class="approval-title">80G Approval Details</p>
+      </div>
+    </div>
+
+    <div class="signature">
+      <div class="signature-block">
+        <strong>Authorised Signatory</strong>
+      </div>
+    </div>
+  </main>
 </body>
 </html>`;
 }
@@ -114,6 +204,12 @@ export const generateAndStoreReceipt = async (donationId: string): Promise<strin
         donor: {
           select: {
             fullName: true,
+          },
+        },
+        project: {
+          select: {
+            title: true,
+            category: true,
           },
         },
         ngo: {
@@ -144,6 +240,8 @@ export const generateAndStoreReceipt = async (donationId: string): Promise<strin
       paymentMethod: donation.paymentMethod,
       createdAt: donation.createdAt,
       receiptNo,
+      purpose: donation.project?.title ?? 'General donation',
+      campaignCategory: donation.project?.category ?? 'Not provided',
     });
 
     const buffer = Buffer.from(html, 'utf-8');

@@ -12,6 +12,7 @@ templates/*
 traceit-siem
 DEPLOYMENT_SUMMARY.MD
 Jenkinsfile
+receipt_screenshot.png
 
 
 
