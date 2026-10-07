@@ -239,18 +239,19 @@ export default function NGODashboard() {
                     : `Disbursement request for ₹${Number(d.amountInr).toLocaleString()} (${d.status})`,
                   targetAmount: Number(d.amountInr),
                   status:
-                    d.status === "SENT" || d.status === "SETTLED" || d.status === "APPROVED"
+                    d.status === "SENT" || d.status === "SETTLED"
                       ? "disbursed"
-                        : d.status === "REJECTED"
-                          ? "rejected"
-                          : d.status === "FAILED"
-                            ? "failed"
-                            : "allocated",
+                      : d.status === "REJECTED"
+                        ? "rejected"
+                        : d.status === "FAILED"
+                          ? "failed"
+                          : "allocated",
 
                   // NEW: preserve the real backend status
                   disbursementStatus: d.status,
                   disbursementType: d.disbursementType as "PROOF_OF_NEED" | "PROOF_OF_WORK",
 
+                  fieldReportUrl: d.fieldReportUrl ?? undefined,
                   proofSubmittedAt: d.proofSubmittedAt ?? undefined,
                   rejectionReason: d.rejectionReason ?? undefined,
                   txHash: d.solanaTxHash ?? undefined,
@@ -367,7 +368,7 @@ export default function NGODashboard() {
     return (camp.milestones || [])
       .filter(
         (m) =>
-          m.status === "allocated" ||
+          m.disbursementStatus === "PENDING" ||
           m.status === "rejected",
       )
       .map((m) => ({ campaign: camp, milestone: m }));
@@ -744,7 +745,8 @@ export default function NGODashboard() {
                               <Upload className="mr-2 h-4 w-4" /> Upload Proof
                             </Button>
                           )}
-                        {milestone.status === "allocated" &&
+                        {milestone.disbursementStatus === "PENDING" &&
+                          milestone.status === "allocated" &&
                           milestone.proofSubmittedAt && (
                             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-foreground/5 border border-foreground/10 text-sm font-medium text-foreground/70">
                               <Clock className="h-4 w-4 text-primary animate-pulse" />

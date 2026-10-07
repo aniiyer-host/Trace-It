@@ -43,6 +43,7 @@ export function DonateDialog({
   const [requiresKyc, setRequiresKyc] = useState(false);
   const [pan, setPan] = useState("");
   const [submittingKyc, setSubmittingKyc] = useState(false);
+  const [pollingCycle, setPollingCycle] = useState(0);
 
   const { user } = useAuthStore();
   const donationStore = useDonationStore();
@@ -94,7 +95,7 @@ export function DonateDialog({
       setCreatedDonation(newDonation);
       toast({ title: `Donation initiated for ${formatUSD(finalAmount)}!` });
 
-      const payment = await openRazorpayCheckout({
+      const checkoutResult = await openRazorpayCheckout({
         key: res.razorpayKeyId,
         amount: res.razorpayAmount,
         currency: res.razorpayCurrency,
@@ -103,7 +104,18 @@ export function DonateDialog({
         order_id: res.razorpayOrderId,
       });
 
-      if (!payment) {
+      console.info("[Razorpay Checkout Debug] Checkout returned to DonateDialog.", {
+        outcome: checkoutResult.type,
+      });
+
+      if (checkoutResult.type === "dismissed") {
+        console.info(
+          "[Razorpay Checkout Debug] DonateDialog dismissed branch executed.",
+        );
+        console.info(
+          "[Razorpay Checkout Debug] Requesting polling restart after dismissal.",
+        );
+        setPollingCycle((cycle) => cycle + 1);
         toast({
           title: "Payment cancelled",
           description: "The donation remains pending and was not marked successful.",
@@ -111,10 +123,52 @@ export function DonateDialog({
         return;
       }
 
+      if (checkoutResult.type === "payment_failed") {
+        console.info(
+          "[Razorpay Checkout Debug] DonateDialog payment_failed branch executed.",
+        );
+        console.info(
+          "[Razorpay Checkout Debug] Requesting polling restart after payment_failed.",
+        );
+        setPollingCycle((cycle) => cycle + 1);
+        if (
+          checkoutResult.razorpay_payment_id &&
+          checkoutResult.razorpay_order_id &&
+          checkoutResult.razorpay_order_id === res.razorpayOrderId
+        ) {
+          try {
+            const failed = await apiService.donations.reportPaymentFailure(newDonation.id, {
+              razorpay_payment_id: checkoutResult.razorpay_payment_id,
+              razorpay_order_id: checkoutResult.razorpay_order_id,
+            });
+            const failedDonation = {
+              ...newDonation,
+              status: failed.status,
+            };
+            setCreatedDonation(failedDonation);
+            onDonationUpdated?.(failedDonation);
+            const donations = await apiService.donations.getByUser();
+            donationStore.setDonations(donations);
+          } catch (failureError) {
+            console.error(
+              "Failed to persist Razorpay payment failure:",
+              failureError,
+            );
+          }
+        }
+        toast({
+          title: "Payment attempt not completed",
+          description:
+            "Razorpay reported that the payment attempt did not complete. The donation status will update after server confirmation.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       try {
         const verified = await apiService.donations.verifyPayment(
           newDonation.id,
-          payment,
+          checkoutResult.response,
         );
         const verifiedDonation = {
           ...newDonation,
@@ -191,6 +245,10 @@ export function DonateDialog({
   };
 
   useEffect(() => {
+    console.info("[Razorpay Checkout Debug] Donation polling effect started.", {
+      cycle: pollingCycle,
+    });
+
     if (
       !createdDonation ||
       createdDonation.status === "FAILED" ||
@@ -238,7 +296,13 @@ export function DonateDialog({
     }, 3000);
 
     return () => clearInterval(intervalId);
-  }, [createdDonation, onDonationUpdated, setDonations, user?.id]);
+  }, [
+    createdDonation,
+    onDonationUpdated,
+    pollingCycle,
+    setDonations,
+    user?.id,
+  ]);
 
   const handleDownloadReceipt = () => {
     if (!createdDonation) return;

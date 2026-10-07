@@ -37,6 +37,14 @@ export default function AttestationDetailsModal({
 }: AttestationDetailsModalProps) {
   const { toast } = useToast();
   const getAttestationDetails = () => {
+    if (donationStatus === "FAILED") {
+      return {
+        title: "Payment Failed",
+        description:
+          "Razorpay reported that this payment failed. This donation is not awaiting allocation or NGO confirmation.",
+        steps: ["You can close this view and try donating again."],
+      };
+    }
     switch (attestationStatus) {
       case 'pending':
         return {
@@ -178,7 +186,11 @@ export default function AttestationDetailsModal({
                   <strong>Payment ID:</strong> {paymentId}
                 </p>
               )}
-              {attestationStatus === 'pending' ? (
+              {donationStatus === "FAILED" ? (
+                <p className="text-xs text-muted-foreground">
+                  <strong>Donation Date:</strong> {donationDate ? new Date(donationDate).toLocaleDateString() : new Date().toLocaleDateString()}
+                </p>
+              ) : attestationStatus === 'pending' ? (
                 <>
                   <p className="text-xs text-muted-foreground">
                     <strong>Donation Date:</strong> {donationDate ? new Date(donationDate).toLocaleDateString() : new Date().toLocaleDateString()}
@@ -205,7 +217,9 @@ export default function AttestationDetailsModal({
               </Button>
             ) : (
               <p className="text-xs text-muted-foreground">
-                A receipt will be available after payment is confirmed.
+                {donationStatus === "FAILED"
+                  ? "A receipt is unavailable because this payment failed."
+                  : "A receipt will be available after payment is confirmed."}
               </p>
             )}
           </div>

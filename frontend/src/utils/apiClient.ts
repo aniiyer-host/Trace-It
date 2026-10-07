@@ -473,6 +473,17 @@ export const apiService = {
         `/donor/donations/${donationId}/verify-payment`,
         payment,
       ),
+    reportPaymentFailure: (
+      donationId: string,
+      payment: {
+        razorpay_order_id: string;
+        razorpay_payment_id: string;
+      },
+    ) =>
+      post<{ id: string; status: Donation["status"] }>(
+        `/donor/donations/${donationId}/report-payment-failure`,
+        payment,
+      ),
     getReceipt: (donationId: string) =>
       get<{ receiptUrl: string; publicDonationId: string }>(
         `/donor/receipt/${donationId}`,
@@ -641,8 +652,6 @@ export const apiService = {
     //Change any to AdminPendingDisbursement to fix LINT error
     getPendingMilestones: () =>
       get<AdminPendingDisbursement[]>("/admin/disbursements/pending"),
-    getApprovedMilestones: () =>
-      get<AdminPendingDisbursement[]>("/admin/disbursements?status=APPROVED"),
 
     approveAttestation: (attestationId: string) =>
       post(`/admin/attestations/${attestationId}/approve`),
@@ -652,8 +661,6 @@ export const apiService = {
       post(`/admin/disbursements/${milestoneId}/approve`),
     rejectMilestone: (milestoneId: string, reason: string) =>
       post(`/admin/disbursements/${milestoneId}/reject`, { reason }),
-    markDisbursementSettled: (milestoneId: string) =>
-      post(`/admin/disbursements/${milestoneId}/mark-settled`),
     getAuditLogs: (params?: {
       page?: number;
       limit?: number;

@@ -15,6 +15,7 @@ import {
   createRazorpayOrder,
   completeDonationSuccess,
   DonationPaymentError,
+  failDonation,
   getRazorpayClient,
   verifyRazorpaySignature,
 } from "../services/donationService.js";
@@ -315,6 +316,116 @@ export const verifyCheckoutPayment = async (
     if (err instanceof DonationPaymentError) {
       return res.status(err.statusCode).json({ error: err.message });
     }
+    next(err);
+  }
+};
+
+const paymentFailureSchema = Joi.object({
+  razorpay_order_id: Joi.string().required(),
+  razorpay_payment_id: Joi.string().required(),
+}).unknown(false);
+
+export const reportCheckoutPaymentFailure = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { error, value } = paymentFailureSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({ error: error.details[0].message });
+    }
+
+    const donorId = req.user?.id;
+    if (!donorId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const donationId = req.params["id"] as string;
+    const donation = await prisma.donation.findFirst({
+      where: { id: donationId, donorId },
+    });
+    if (!donation) {
+      return res.status(404).json({ error: "Donation not found" });
+    }
+
+    const { razorpay_order_id, razorpay_payment_id } = value as {
+      razorpay_order_id: string;
+      razorpay_payment_id: string;
+    };
+    if (
+      !donation.razorpayOrderId ||
+      donation.razorpayOrderId !== razorpay_order_id
+    ) {
+      return res.status(400).json({ error: "Razorpay order does not match donation" });
+    }
+
+    if (donation.status === "FAILED") {
+      return res.json({ id: donation.id, status: donation.status });
+    }
+    if (donation.status !== "INITIATED" || donation.razorpayPaymentId !== null) {
+      return res.status(409).json({
+        error: "Donation is not eligible to be marked as failed",
+        status: donation.status,
+      });
+    }
+
+    let payment;
+    try {
+      payment = await getRazorpayClient().payments.fetch(razorpay_payment_id);
+    } catch (fetchError) {
+      if (
+        typeof fetchError === "object" &&
+        fetchError !== null &&
+        "statusCode" in fetchError &&
+        typeof fetchError.statusCode === "number" &&
+        fetchError.statusCode >= 400 &&
+        fetchError.statusCode < 500
+      ) {
+        return res.status(400).json({
+          error: "Razorpay payment could not be verified",
+        });
+      }
+      throw fetchError;
+    }
+    if (
+      !payment ||
+      payment.id !== razorpay_payment_id ||
+      payment.order_id !== razorpay_order_id ||
+      payment.order_id !== donation.razorpayOrderId ||
+      payment.status !== "failed"
+    ) {
+      return res.status(400).json({ error: "Invalid Razorpay failed payment evidence" });
+    }
+
+    const result = await failDonation(
+      donation.id,
+      razorpay_order_id,
+      razorpay_payment_id,
+      {
+        actorId: donorId,
+        ipAddress: req.ip,
+        actorType: AuditActorType.USER,
+      },
+    );
+
+    if (result === "NOT_ELIGIBLE") {
+      const currentDonation = await prisma.donation.findUnique({
+        where: { id: donation.id },
+        select: { status: true },
+      });
+      return res.status(409).json({
+        error: "Donation is no longer eligible to be marked as failed",
+        status: currentDonation?.status,
+      });
+    }
+
+    return res.json({
+      id: donation.id,
+      status: "FAILED",
+      idempotent: result === "ALREADY_FAILED",
+    });
+  } catch (err) {
     next(err);
   }
 };
@@ -672,6 +783,11 @@ donorRouter.post(
   "/donations/:id/verify-payment",
   requireRole(UserRole.DONOR),
   verifyCheckoutPayment,
+);
+donorRouter.post(
+  "/donations/:id/report-payment-failure",
+  requireRole(UserRole.DONOR),
+  reportCheckoutPaymentFailure,
 );
 donorRouter.post("/kyc", requireRole(UserRole.DONOR), submitKyc);
 donorRouter.get(

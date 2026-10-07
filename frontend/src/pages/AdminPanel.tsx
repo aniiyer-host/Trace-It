@@ -250,11 +250,8 @@ export default function AdminPanel() {
     rejectAttestation,
     pendingMilestoneApprovals,
     fetchPendingMilestoneApprovals,
-    approvedMilestones,
-    fetchApprovedMilestones,
     approveMilestone,
     rejectMilestone,
-    markDisbursementSettled,
     pendingCampaigns,
     fetchPendingCampaigns,
     approveCampaign,
@@ -291,7 +288,6 @@ export default function AdminPanel() {
       loadCampaigns();
       fetchPendingAttestations();
       fetchPendingMilestoneApprovals();
-      fetchApprovedMilestones();
       fetchPendingCampaigns();
       //   loadAuditLogs();
       void (async () => {
@@ -390,19 +386,6 @@ export default function AdminPanel() {
       }
     } catch {
       toast({ title: "Approval failed", variant: "destructive" });
-    } finally {
-      setLoadingId(null);
-    }
-  };
-
-  const handleMarkSettled = async (id: string) => {
-    setLoadingId(id);
-    try {
-      await markDisbursementSettled(id);
-      await fetchApprovedMilestones();
-      toast({ title: "Disbursement marked as settled successfully!" });
-    } catch {
-      toast({ title: "Operation failed", variant: "destructive" });
     } finally {
       setLoadingId(null);
     }
@@ -604,59 +587,6 @@ export default function AdminPanel() {
                     onApprove={handleApprove}
                     onReject={handleReject}
                   />
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ZONE 1.5: Approved Disbursements (Awaiting Transfer) */}
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Approved Disbursements (Awaiting Transfer)
-          </h2>
-          <p className="text-muted-foreground">
-            Disbursements that have been approved by Admin but have not yet been marked as SETTLED.
-          </p>
-        </div>
-        <div className="w-full overflow-x-auto">
-          <table className="w-full text-sm text-left whitespace-nowrap">
-            <thead>
-              <tr className="border-b border-border/20 text-muted-foreground">
-                <th className="py-3 px-4 font-medium">Disbursement Title</th>
-                <th className="py-3 px-4 font-medium text-right">Amount</th>
-                <th className="py-3 px-4 font-medium text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.values(approvedMilestones).length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="py-8 text-center text-muted-foreground">
-                    No approved disbursements awaiting transfer.
-                  </td>
-                </tr>
-              ) : (
-                Object.values(approvedMilestones).map((ms) => (
-                  <tr key={ms.id} className="border-b border-border/10 hover:bg-muted/10 transition-colors">
-                    <td className="py-4 px-4 font-medium">
-                      <div>{ms.cohort?.name || "Manual Disbursement"}</div>
-                      <div className="text-xs text-muted-foreground">{ms.campaign?.title}</div>
-                    </td>
-                    <td className="py-4 px-4 text-right font-medium">
-                      {formatUSD(Number(ms.amountInr))}
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <Button 
-                        size="sm" 
-                        onClick={() => handleMarkSettled(ms.id)}
-                        disabled={loadingId === ms.id}
-                      >
-                        {loadingId === ms.id ? "Settling..." : "Mark as Sent & Received"}
-                      </Button>
-                    </td>
-                  </tr>
                 ))
               )}
             </tbody>

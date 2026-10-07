@@ -171,11 +171,39 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
       .send(failedBody);
     expect(failedWebhook.status).toBe(200);
 
+    const duplicateFailedWebhook = await request(app)
+      .post("/api/webhooks/razorpay")
+      .set("Content-Type", "application/json")
+      .set("x-razorpay-signature", failedSignature)
+      .send(failedBody);
+    expect(duplicateFailedWebhook.status).toBe(200);
+
     const failedDonation = await prisma.donation.findUnique({
       where: { id: donateRes.body.id },
     });
     expect(failedDonation?.status).toBe("FAILED");
     expect(failedDonation?.razorpayPaymentId).toBeNull();
+
+    const failedAuditLogs = await prisma.auditLog.findMany({
+      where: {
+        entityType: "donation",
+        entityId: donateRes.body.id,
+        action: "PAYMENT_FAILED",
+      },
+    });
+    expect(failedAuditLogs).toHaveLength(1);
+
+    const failedReceipt = await request(app)
+      .get(`/api/donor/receipt/${donateRes.body.id}`)
+      .set("Authorization", "Bearer " + donorToken);
+    expect(failedReceipt.status).toBe(400);
+    expect(failedReceipt.body.status).toBe("FAILED");
+    expect(
+      (await prisma.donation.findUnique({
+        where: { id: donateRes.body.id },
+        select: { taxReceiptUrl: true },
+      }))?.taxReceiptUrl,
+    ).toBeNull();
 
     const capturedBody = JSON.stringify({
       event: "payment.captured",
@@ -237,6 +265,15 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
     });
     expect(afterLateFailure?.status).toBe("SUCCESS");
     expect(afterLateFailure?.razorpayPaymentId).toBe(`pay_retry_${donateRes.body.id}`);
+
+    const failureAuditLogsAfterLateFailure = await prisma.auditLog.findMany({
+      where: {
+        entityType: "donation",
+        entityId: donateRes.body.id,
+        action: "PAYMENT_FAILED",
+      },
+    });
+    expect(failureAuditLogsAfterLateFailure).toHaveLength(1);
   });
 
   it("requires KYC only above ₹10,000 and rejects before creating a donation", async () => {

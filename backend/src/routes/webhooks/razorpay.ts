@@ -3,10 +3,11 @@ import { Request, Response, NextFunction, Router } from 'express';
 import { prisma } from '../../db/prisma.js';
 import crypto from 'crypto';
 import { writeAuditLog } from '../../services/auditLogService.js';
-import { AuditActorType, DonationStatus } from '../../../generated/prisma/enums.js';
+import { AuditActorType } from '../../../generated/prisma/enums.js';
 import {
   completeDonationSuccess,
   DonationPaymentError,
+  failDonation,
 } from '../../services/donationService.js';
 
 interface RawRequest extends Request {
@@ -157,30 +158,13 @@ export const razorpayWebhookHandler = async (
         where: { razorpayOrderId },
       });
 
-      if (donation && donation.status === DonationStatus.INITIATED) {
-        const failed = await prisma.donation.updateMany({
-          where: {
-            id: donation.id,
-            status: DonationStatus.INITIATED,
-            razorpayPaymentId: null,
-          },
-          data: { status: DonationStatus.FAILED },
-        });
-
-        if (failed.count === 1) {
-          void writeAuditLog({
-            actorType: AuditActorType.WEBHOOK,
-            entityType: 'donation',
-            entityId: donation.id,
-            action: 'PAYMENT_FAILED',
-            metadata: {
-              razorpayOrderId,
-              razorpayPaymentId,
-              amount: donation.amount,
-            },
-            ipAddress: req.ip,
-          });
-        }
+      if (donation) {
+        await failDonation(
+          donation.id,
+          razorpayOrderId,
+          razorpayPaymentId,
+          { ipAddress: req.ip, actorType: AuditActorType.WEBHOOK },
+        );
       }
 
       return res.status(200).json({ received: true });

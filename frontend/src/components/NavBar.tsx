@@ -1,9 +1,7 @@
 // NavBar.tsx – Professional navigation header with attestation focus
-import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { GitBranch, UserCircle, LogOut, Bell } from "lucide-react";
+import { GitBranch, LogOut, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AuthDialog } from "@/components/AuthDialog";
 import { ModeToggle } from "@/components/ModeToggle";
 import { useAuthStore } from "@/store/authStore";
 import { useNGOStore } from "@/store/ngoStore";
@@ -22,7 +20,6 @@ const NAV_LINKS = [
 export function NavBar() {
   const { user, setUser } = useAuthStore();
   const { pendingAttestations } = useNGOStore();
-  const [authOpen, setAuthOpen] = useState(false);
   const location = useLocation();
   const isNGOPage = location.pathname.startsWith("/ngo");
   const pendingCount = Object.keys(pendingAttestations).length;
@@ -82,7 +79,7 @@ export function NavBar() {
           </nav>
 
           <div className="flex items-center gap-3">
-            {user ? (
+            {user && (
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-muted-foreground mr-2">
                   {user.email}
@@ -97,15 +94,6 @@ export function NavBar() {
                   Sign Out
                 </Button>
               </div>
-            ) : (
-              <Button
-                size="sm"
-                onClick={() => setAuthOpen(true)}
-                className="gap-2"
-              >
-                <UserCircle className="h-4 w-4" />
-                Sign In
-              </Button>
             )}
             {/* Attestation badge for NGO - shows pending count */}
             {isNGOPage && pendingCount > 0 && (
@@ -119,7 +107,6 @@ export function NavBar() {
             <ModeToggle />
           </div>
         </div>
-        <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} />
       </header>
     </>
   );

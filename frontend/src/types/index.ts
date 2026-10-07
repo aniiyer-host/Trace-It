@@ -83,6 +83,7 @@ export interface Milestone {
   txHash?: string; // Solana tx hash (mock)
   approvedAt?: string; // ISO timestamp
   disbursedAt?: string; // ISO timestamp
+  fieldReportUrl?: string | null;
   proofSubmittedAt?: string;
   rejectionReason?: string;
   disbursementStatus?: DisbursementStatus;

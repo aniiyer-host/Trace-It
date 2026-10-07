@@ -92,7 +92,10 @@ export default function DonationHistoryTable({
               let displayStatus = "Awaiting Allocation";
               let statusColor = "bg-foreground/20"; // Gray/Neutral
 
-              if (hasDeliveryConfirmed) {
+              if (donation.status === "FAILED") {
+                displayStatus = "Payment Failed";
+                statusColor = "bg-red-500";
+              } else if (hasDeliveryConfirmed) {
                 displayStatus = "Delivery Confirmed";
                 statusColor = "bg-green-500";
               } else if (hasReceiptConfirmed) {

@@ -14,6 +14,15 @@ import { useCountUp } from "@/hooks/useCountUp";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
+function isFinancialDonation(donation: Donation): boolean {
+  return (
+    donation.status === "SUCCESS" ||
+    donation.status === "ALLOCATED" ||
+    donation.status === "DISBURSED" ||
+    donation.status === "DELIVERED"
+  );
+}
+
 function StatBlock({
   value,
   label,
@@ -190,7 +199,9 @@ export default function DonorDashboard() {
   // Auto-select first funded campaign on initial load if none selected
   const fundedCampaigns = useMemo(() => {
     if (!campaigns.length || !donations.length) return [];
-    const fundedIds = new Set(donations.map((d) => d.campaignId));
+    const fundedIds = new Set(
+      donations.filter(isFinancialDonation).map((d) => d.campaignId),
+    );
     return campaigns.filter((c) => fundedIds.has(c.id));
   }, [campaigns, donations]);
   //Cause of LINT error
@@ -206,7 +217,7 @@ export default function DonorDashboard() {
   }, [fundedCampaigns, selectedCampaign]);
 
   const summary = useMemo(() => {
-    const totalDonated = donations.reduce(
+    const totalDonated = donations.filter(isFinancialDonation).reduce(
       (sum, d) => sum + Number(d.amount),
       0,
     );
@@ -340,7 +351,8 @@ export default function DonorDashboard() {
                 {fundedCampaigns.map((camp) => {
                   const isSelected = selectedCampaign?.id === camp.id;
                   const campDonations = donations.filter(
-                    (d) => d.campaignId === camp.id,
+                    (d) =>
+                      d.campaignId === camp.id && isFinancialDonation(d),
                   );
                   const total = campDonations.reduce(
                     (sum, d) => sum + Number(d.amount),
@@ -592,9 +604,12 @@ function buildJourney(campaign: Campaign, donation: Donation, disbursementId: st
   const isFunded = true; // By definition, the donation exists
   
   // 2. Proof of need uploaded
-  const disbursements = (campaign as any).disbursements || campaign.milestones || [];
-  // Consider proof uploaded if a disbursement exists or was requested for this campaign
-  const hasProof = disbursements.length > 0;
+  const disbursement = campaign.milestones.find(
+    (milestone) => milestone.id === disbursementId,
+  );
+  const hasProof = Boolean(
+    disbursement?.proofSubmittedAt || disbursement?.fieldReportUrl,
+  );
 
   const atts = Array.isArray(donation.attestations)
     ? donation.attestations.filter((a: any) => a.disbursementId === disbursementId)

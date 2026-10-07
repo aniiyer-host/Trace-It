@@ -15,6 +15,7 @@ export function MilestoneTimeline({ milestones, className }: Props) {
             <ol className="relative border-l border-border/60 ml-3 space-y-6">
                 {milestones.map((ms, i) => {
                     const isLast = i === milestones.length - 1
+                    const hasProof = Boolean(ms.proofSubmittedAt || ms.fieldReportUrl)
                     return (
                         <li key={ms.id} className="ml-6">
                             {/* Progress line (dashed for future milestones) */}
@@ -51,8 +52,8 @@ export function MilestoneTimeline({ milestones, className }: Props) {
                                     <div className="flex flex-wrap gap-4">
                                         <span>Target: <strong className="text-foreground">{formatUSD(ms.targetAmount)}</strong></span>
 
-                                        {ms.proofCid && (
-                                            <span>Proof: <code className="text-primary">{ms.proofCid}</code></span>
+                                        {hasProof && (
+                                            <span className="text-emerald-600">Proof submitted</span>
                                         )}
 
                                         {ms.txHash && (
@@ -81,7 +82,7 @@ export function MilestoneTimeline({ milestones, className }: Props) {
                                     </div>
 
                                     {/* Loading state for demo purposes */}
-                                    {ms.status === 'allocated' && !ms.proofCid && (
+                                    {ms.status === 'allocated' && !hasProof && (
                                         <div className="flex items-center gap-2 mt-2">
                                             <Loader2 className="h-3 w-3 animate-spin text-primary" />
                                             <span className="text-sm text-primary">Awaiting proof submission...</span>

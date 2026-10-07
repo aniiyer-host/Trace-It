@@ -14,6 +14,14 @@ export interface CompleteDonationOptions {
   actorType?: AuditActorType;
 }
 
+export interface FailDonationOptions {
+  actorId?: string;
+  ipAddress?: string;
+  actorType?: AuditActorType;
+}
+
+export type DonationFailureResult = "FAILED" | "ALREADY_FAILED" | "NOT_ELIGIBLE";
+
 export type DonationPaymentEvidence =
   | {
       source: 'checkout' | 'webhook';
@@ -42,6 +50,61 @@ export const getRazorpayClient = () => {
   }
 
   return razorpayClient;
+};
+
+/**
+ * Atomically mark an initiated donation as failed after verified Razorpay evidence.
+ */
+export const failDonation = async (
+  donationId: string,
+  razorpayOrderId: string,
+  razorpayPaymentId: string,
+  options?: FailDonationOptions,
+): Promise<DonationFailureResult> => {
+  const transition = await prisma.donation.updateMany({
+    where: {
+      id: donationId,
+      razorpayOrderId,
+      status: DonationStatus.INITIATED,
+      razorpayPaymentId: null,
+    },
+    data: { status: DonationStatus.FAILED },
+  });
+
+  if (transition.count === 1) {
+    const donation = await prisma.donation.findUnique({
+      where: { id: donationId },
+      select: { amount: true },
+    });
+    await writeAuditLog({
+      actorType: options?.actorType ?? AuditActorType.SYSTEM,
+      actorId: options?.actorId,
+      entityType: "donation",
+      entityId: donationId,
+      action: "PAYMENT_FAILED",
+      metadata: {
+        razorpayOrderId,
+        razorpayPaymentId,
+        amount: donation?.amount,
+      },
+      ipAddress: options?.ipAddress,
+    });
+    return "FAILED";
+  }
+
+  const donation = await prisma.donation.findUnique({
+    where: { id: donationId },
+    select: { status: true, razorpayOrderId: true },
+  });
+
+  if (
+    donation?.status === DonationStatus.FAILED &&
+    donation.razorpayOrderId === razorpayOrderId
+  ) {
+    return "ALREADY_FAILED";
+  }
+
+  return "NOT_ELIGIBLE";
 };
 
 /**
