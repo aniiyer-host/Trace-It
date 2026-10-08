@@ -1,13 +1,24 @@
 import crypto from 'crypto';
 import { prisma } from '../db/prisma.js';
 import { requireEnvironmentVariable } from '../utils/envValidator.js';
-import { AuditActorType, DonationStatus } from '../../generated/prisma/enums.js';
+import {
+  AuditActorType,
+  DonationStatus,
+  ProvenanceEventType,
+} from '../../generated/prisma/enums.js';
 import Razorpay from 'razorpay';
 import { writeAuditLog } from './auditLogService.js';
 import { generateAndStoreReceipt } from './receiptService.js';
 import { notifyAdmin } from './emailService.js';
 import { getBlockchainService } from './blockchainInstance.js';
 import { addToBlockchainRetryQueue } from './blockchainRetryQueue.js';
+import {
+  canonicalizeProvenanceEvent,
+  hashProvenanceEvent,
+  serializeProvenanceEvent,
+} from '../utils/provenance.js';
+
+
 
 export interface CompleteDonationOptions {
   ipAddress?: string;
@@ -176,6 +187,7 @@ export const completeDonationSuccess = async (
   let transition;
   try {
     transition = await prisma.$transaction(async (tx) => {
+      const occurredAt = new Date();
       const claimed = await tx.donation.updateMany({
         where: {
           id: donation.id,
@@ -215,6 +227,34 @@ export const completeDonationSuccess = async (
           409,
         );
       }
+
+      const provenanceInput = {
+        eventType: ProvenanceEventType.DONATION_SUCCESS,
+        entityType: 'Donation',
+        entityId: currentDonation.id,
+        amountInr: currentDonation.amount.toFixed(2),
+        ngoId: currentDonation.ngoId,
+        campaignId: currentDonation.campaignId,
+        occurredAt,
+      };
+      const canonicalEvent = canonicalizeProvenanceEvent(provenanceInput);
+      const canonicalPayload = serializeProvenanceEvent(provenanceInput);
+      const payloadHash = hashProvenanceEvent(provenanceInput);
+
+      await tx.provenanceEvent.create({
+        data: {
+          eventType: ProvenanceEventType.DONATION_SUCCESS,
+          entityType: canonicalEvent.entityType,
+          entityId: canonicalEvent.entityId,
+          amountInr: canonicalEvent.amountInr,
+          ngoId: canonicalEvent.ngoId,
+          campaignId: canonicalEvent.campaignId,
+          occurredAt,
+          canonicalPayload,
+          payloadHash,
+          transitionKey: paymentId,
+        },
+      });
 
       return { donation: currentDonation, transitioned: true };
     });
