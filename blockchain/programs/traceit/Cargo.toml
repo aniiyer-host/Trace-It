@@ -23,11 +23,38 @@ custom-panic = []
 anchor-lang = { workspace = true, features = ["init-if-needed"] }
 
 [dev-dependencies]
-litesvm = "0.10.0"
-solana-message = "3.0.1"
-solana-transaction = "3.0.2"
-solana-signer = "3.0.0"
+serde_json = "=1.0.143"
+sha2 = "=0.10.9"
 
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
+# These host-only dependencies constrain transitive versions selected by old
+# Solana/Anchor tooling without compiling build utilities into the SBF program.
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+solana-program = { workspace = true }
+syn = { workspace = true }
+thiserror = { workspace = true }
+thiserror-impl = { workspace = true }
+quote = { workspace = true }
+unicode-segmentation = { workspace = true }
+unicode-ident = { workspace = true }
+hashbrown = { workspace = true }
+indexmap = { workspace = true }
+ppv-lite86 = { workspace = true }
+ryu = { workspace = true }
+bumpalo = { workspace = true }
+cc = { workspace = true }
+jobserver = { workspace = true }
+proc-macro2 = { workspace = true }
+log = { workspace = true }
+toml_edit = { workspace = true }
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+zeroize_derive = { workspace = true }
+proc-macro-crate = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+bitflags = { workspace = true }
+borsh = { workspace = true }
+borsh-derive = { workspace = true }
+bytemuck_derive = { workspace = true }
+blake3 = { workspace = true }
+cpufeatures = { workspace = true }

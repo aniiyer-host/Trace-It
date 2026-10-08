@@ -5,6 +5,8 @@ set -e
 LEDGER=/tmp/traceit-test-ledger
 PROGRAM_ID="5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3"
 SO_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/target/deploy/traceit.so"
+ANCHOR_PROGRAM_ID="4qLwniS2NeDrqftgb83GbYVHWVbBBbUcjDR1Ncm5GCHX"
+ANCHOR_SO_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/target/deploy/traceit_anchor.so"
 WALLET_PUBKEY=$(solana-keygen pubkey ~/.config/solana/devnet-traceit.json)
 LOG=/tmp/traceit-validator.log
 
@@ -12,11 +14,18 @@ LOG=/tmp/traceit-validator.log
 pkill -f solana-test-validator 2>/dev/null || true
 sleep 1
 
+# Ensure program binary is built
+if [ ! -f "$SO_PATH" ] || [ ! -f "$ANCHOR_SO_PATH" ]; then
+  echo "Program binary missing. Building programs with anchor build..."
+  (cd "$(dirname "${BASH_SOURCE[0]}")/.." && anchor build)
+fi
+
 # Start validator in background
 solana-test-validator \
   --ledger "$LEDGER" \
   --mint "$WALLET_PUBKEY" \
   --bpf-program "$PROGRAM_ID" "$SO_PATH" \
+  --bpf-program "$ANCHOR_PROGRAM_ID" "$ANCHOR_SO_PATH" \
   --reset \
   --quiet \
   >"$LOG" 2>&1 &

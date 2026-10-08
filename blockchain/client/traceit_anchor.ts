@@ -1,0 +1,579 @@
+export type TraceitAnchor = {
+  "version": "0.1.0",
+  "name": "traceit_anchor",
+  "instructions": [
+    {
+      "name": "initializeConfig",
+      "accounts": [
+        {
+          "name": "config",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "setPaused",
+      "accounts": [
+        {
+          "name": "config",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "proposeAuthority",
+      "accounts": [
+        {
+          "name": "config",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": [
+        {
+          "name": "newAuthority",
+          "type": "publicKey"
+        }
+      ]
+    },
+    {
+      "name": "acceptAuthority",
+      "accounts": [
+        {
+          "name": "config",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "pendingAuthority",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "recordAnchor",
+      "accounts": [
+        {
+          "name": "config",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "anchorRecord",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "batchKey",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "auditRoot",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "startSequence",
+          "type": "u64"
+        },
+        {
+          "name": "endSequence",
+          "type": "u64"
+        },
+        {
+          "name": "eventCount",
+          "type": "u32"
+        },
+        {
+          "name": "schemaVersion",
+          "type": "u16"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "anchorConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "publicKey"
+          },
+          {
+            "name": "pendingAuthority",
+            "type": {
+              "option": "publicKey"
+            }
+          },
+          {
+            "name": "version",
+            "type": "u16"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "anchorRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "batchKey",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "auditRoot",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "startSequence",
+            "type": "u64"
+          },
+          {
+            "name": "endSequence",
+            "type": "u64"
+          },
+          {
+            "name": "eventCount",
+            "type": "u32"
+          },
+          {
+            "name": "schemaVersion",
+            "type": "u16"
+          },
+          {
+            "name": "authority",
+            "type": "publicKey"
+          },
+          {
+            "name": "anchoredAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "The signer is not authorized for this operation"
+    },
+    {
+      "code": 6001,
+      "name": "ProgramPaused",
+      "msg": "Anchor creation is paused"
+    },
+    {
+      "code": 6002,
+      "name": "ZeroRoot",
+      "msg": "The audit root cannot be all zeroes"
+    },
+    {
+      "code": 6003,
+      "name": "EmptyBatch",
+      "msg": "The anchor batch cannot be empty"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidRange",
+      "msg": "The sequence range is invalid"
+    },
+    {
+      "code": 6005,
+      "name": "CountMismatch",
+      "msg": "The event count does not match the sequence range"
+    },
+    {
+      "code": 6006,
+      "name": "ArithmeticOverflow",
+      "msg": "Sequence arithmetic overflowed"
+    },
+    {
+      "code": 6007,
+      "name": "UnsupportedSchemaVersion",
+      "msg": "The schema version is not supported"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidAuthority",
+      "msg": "The proposed authority is invalid"
+    },
+    {
+      "code": 6009,
+      "name": "AuthorityUnchanged",
+      "msg": "The proposed authority is already active"
+    },
+    {
+      "code": 6010,
+      "name": "IntegrityConflict",
+      "msg": "An existing anchor conflicts with the submitted immutable fields"
+    }
+  ]
+};
+
+export const IDL: TraceitAnchor = {
+  "version": "0.1.0",
+  "name": "traceit_anchor",
+  "instructions": [
+    {
+      "name": "initializeConfig",
+      "accounts": [
+        {
+          "name": "config",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "setPaused",
+      "accounts": [
+        {
+          "name": "config",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "proposeAuthority",
+      "accounts": [
+        {
+          "name": "config",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": [
+        {
+          "name": "newAuthority",
+          "type": "publicKey"
+        }
+      ]
+    },
+    {
+      "name": "acceptAuthority",
+      "accounts": [
+        {
+          "name": "config",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "pendingAuthority",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "recordAnchor",
+      "accounts": [
+        {
+          "name": "config",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "anchorRecord",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "batchKey",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "auditRoot",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "startSequence",
+          "type": "u64"
+        },
+        {
+          "name": "endSequence",
+          "type": "u64"
+        },
+        {
+          "name": "eventCount",
+          "type": "u32"
+        },
+        {
+          "name": "schemaVersion",
+          "type": "u16"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "anchorConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "publicKey"
+          },
+          {
+            "name": "pendingAuthority",
+            "type": {
+              "option": "publicKey"
+            }
+          },
+          {
+            "name": "version",
+            "type": "u16"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "anchorRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "batchKey",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "auditRoot",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "startSequence",
+            "type": "u64"
+          },
+          {
+            "name": "endSequence",
+            "type": "u64"
+          },
+          {
+            "name": "eventCount",
+            "type": "u32"
+          },
+          {
+            "name": "schemaVersion",
+            "type": "u16"
+          },
+          {
+            "name": "authority",
+            "type": "publicKey"
+          },
+          {
+            "name": "anchoredAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Unauthorized",
+      "msg": "The signer is not authorized for this operation"
+    },
+    {
+      "code": 6001,
+      "name": "ProgramPaused",
+      "msg": "Anchor creation is paused"
+    },
+    {
+      "code": 6002,
+      "name": "ZeroRoot",
+      "msg": "The audit root cannot be all zeroes"
+    },
+    {
+      "code": 6003,
+      "name": "EmptyBatch",
+      "msg": "The anchor batch cannot be empty"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidRange",
+      "msg": "The sequence range is invalid"
+    },
+    {
+      "code": 6005,
+      "name": "CountMismatch",
+      "msg": "The event count does not match the sequence range"
+    },
+    {
+      "code": 6006,
+      "name": "ArithmeticOverflow",
+      "msg": "Sequence arithmetic overflowed"
+    },
+    {
+      "code": 6007,
+      "name": "UnsupportedSchemaVersion",
+      "msg": "The schema version is not supported"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidAuthority",
+      "msg": "The proposed authority is invalid"
+    },
+    {
+      "code": 6009,
+      "name": "AuthorityUnchanged",
+      "msg": "The proposed authority is already active"
+    },
+    {
+      "code": 6010,
+      "name": "IntegrityConflict",
+      "msg": "An existing anchor conflicts with the submitted immutable fields"
+    }
+  ]
+};

@@ -1,13 +1,12 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
-import { Traceit } from "../target/types/traceit";
 import { expect } from "chai";
 import crypto from "crypto";
+import { getTraceitProgram } from "./support/program";
 
 describe("traceit", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-  const program = anchor.workspace.Traceit as Program<Traceit>;
+  const program = getTraceitProgram(provider);
 
   const donationId = `d-${Date.now().toString().slice(-8)}`;
   const donorIdHash = crypto

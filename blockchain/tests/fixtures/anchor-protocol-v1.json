@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "valid": [
+    {
+      "name": "one_event",
+      "schemaVersion": 1,
+      "startSequence": "1",
+      "endSequence": "1",
+      "eventCount": 1,
+      "eventHashesHex": [
+        "cab02d7ebb287e01583c599da145b22bba94659816d8817e05ff5951557aafa89efb8014b6b685a1b8a5b199fda12dcf9bdf2dc0e083c18ff8bd10dcf463212f"
+      ],
+      "auditRootHex": "3df3dd9181cf62a3bf174b09b9fc643d6e663d1eab2e11bcad51999f5166a054c3dd0fb221bad583285aa20d7a731ef7f1c007d3158677224689f0a56169d2fc",
+      "batchKeyHex": "430fa57ce041dae314858d51f60d664548df2ae412ba56df5b8821f51b6cdc18"
+    },
+    {
+      "name": "multiple_events",
+      "schemaVersion": 1,
+      "startSequence": "42",
+      "endSequence": "44",
+      "eventCount": 3,
+      "eventHashesHex": [
+        "fbb54bd643642f502f9155a524e5bf4b8815131ecbd9f44b2a5525e22cd0e96b0e82efbf215231a2134d34cd9dbabe496d91830cb75bdbcc030136eb9cc52024",
+        "d65eb60ce58cf4ce03149bddc141f052995cec5953c680b01f94094d210a1755ba956c66d61fca4502c035eb78a4358b04d6ad1e3c53100c87528bb8d341a466",
+        "abd92e32e215a81f6268407386f72f8082889c72cf74f80c9443ddb414a9164e87eee4764570701160a931fd1ead169312c3de84d203de7c0442d663bc19af93"
+      ],
+      "auditRootHex": "0b193cd34ee7360229fe7c4b8799cd2bf36c7eaa7273858eac27aac304caf0bd9ad3ec2e70443f0f84429f53533940a85601550dce79a309f3ec7e6477e0d46c",
+      "batchKeyHex": "a6915b71ed47fb244f3267b9a3aa0f1d1ab880caa536fa1e1112326b0903a6b4"
+    },
+    {
+      "name": "maximum_sequence",
+      "schemaVersion": 1,
+      "startSequence": "18446744073709551615",
+      "endSequence": "18446744073709551615",
+      "eventCount": 1,
+      "eventHashesHex": [
+        "e580e5ef183b6de1aed2ed4884bd21b8d8aa457f217c20098bb7487b6d77b56660fdfb0fbcbf37727f5a05033c3bbbc7bc4a843577018378073aeefed9559910"
+      ],
+      "auditRootHex": "31d5b83d943fa1a9a9fd9d8ecc6f8033428f01ba97d702ec1a5c0053e8df3df95211447af41d1726d552f964331dc06d7c79f02b016ecf3c148baf28ed776978",
+      "batchKeyHex": "811393b467cb2c4bb466edca7b0b41cdbeeaaa224ad7f6fa7b7e8114634058e8"
+    }
+  ],
+  "invalid": [
+    { "name": "empty_batch", "expectedError": "EMPTY_BATCH" },
+    { "name": "zero_root", "expectedError": "ZERO_ROOT" },
+    { "name": "invalid_range", "expectedError": "INVALID_RANGE" },
+    { "name": "count_mismatch", "expectedError": "COUNT_MISMATCH" },
+    {
+      "name": "altered_root",
+      "expectedError": "AUDIT_ROOT_MISMATCH",
+      "sourceVector": "multiple_events",
+      "auditRootHex": "0b193cd34ee7360229fe7c4b8799cd2bf36c7eaa7273858eac27aac304caf0bd9ad3ec2e70443f0f84429f53533940a85601550dce79a309f3ec7e6477e0d46d"
+    }
+  ]
+}
