@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { CheckCircle2, Copy, Check } from 'lucide-react'
+import { Copy, Check } from 'lucide-react'
 
 interface BeneficiaryWalletDialogProps {
   onWalletCreated: (walletId: string) => void
@@ -115,9 +115,7 @@ export function BeneficiaryWalletDialog({
           <>
             <DialogHeader className="mb-6">
               <div className="flex items-center gap-3">
-                <div className="bg-emerald-500/10 p-2 rounded-full">
-                  <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-500" />
-                </div>
+                <span aria-hidden="true" className="h-2 w-2 rounded-full bg-trust-green" />
                 <DialogTitle className="text-xl font-semibold tracking-tight">
                   Wallet ID Generated
                 </DialogTitle>
@@ -137,7 +135,7 @@ export function BeneficiaryWalletDialog({
                 >
                   {copied ? (
                     <>
-                      <Check className="h-4 w-4 mr-1.5 text-emerald-500" />
+                      <Check className="h-4 w-4 mr-1.5 text-primary" />
                       Copied!
                     </>
                   ) : (

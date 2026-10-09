@@ -32,7 +32,7 @@ function formatTimeAgo(date: string): string {
 
 export function ActivityFeed({ activities, className }: Props) {
   return (
-    <Card className={cn('glass p-6', className)}>
+    <Card className={cn('border border-border bg-card p-6 shadow-sm', className)}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-lg">Recent Activity</h3>
         <Button variant="outline" size="sm" onClick={() => {

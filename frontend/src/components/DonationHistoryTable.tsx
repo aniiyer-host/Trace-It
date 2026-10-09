@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import type { Donation } from "@/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/hooks/use-toast";
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface DonationHistoryTableProps {
   donations: Donation[];
@@ -35,7 +36,7 @@ export default function DonationHistoryTable({
     return (
       <div className="space-y-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="glass rounded-xl h-48 animate-pulse" />
+          <div key={i} className="bg-card border border-border rounded-xl h-24 animate-pulse" />
         ))}
       </div>
     );
@@ -43,7 +44,7 @@ export default function DonationHistoryTable({
 
   if (donations.length === 0) {
     return (
-      <div className="glass p-8 text-center">
+      <div className="bg-card border border-border rounded-xl p-8 text-center">
         <DollarSign className="h-8 w-8 text-primary mx-auto mb-4" />
         <h3 className="font-semibold mb-3">No Donations Yet</h3>
         <p className="text-muted-foreground">
@@ -64,24 +65,29 @@ export default function DonationHistoryTable({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-4 overflow-x-auto">
-        <table className="w-full">
-          <caption className="text-left text-sm font-medium text-muted-foreground mb-2">
+      <p className="text-xs text-muted-foreground md:hidden">
+        Scroll horizontally to see all donation details.
+      </p>
+        <Table
+          scrollableLabel="Donation history table"
+          className="min-w-[900px]"
+        >
+          <TableCaption className="text-left text-sm font-medium text-muted-foreground mb-4">
             Showing {donations.length} donation
             {donations.length === 1 ? "" : "s"}
-          </caption>
-          <thead>
-            <tr>
-              <th className="text-left">Campaign</th>
-              <th className="text-center">Total Amount</th>
-              <th className="text-center">Allocated</th>
-              <th className="text-center">Status</th>
-              <th className="text-center">Attestation</th>
-              <th className="text-center">Date</th>
-              <th className="text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
+          </TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-left">Campaign</TableHead>
+              <TableHead className="text-right">Total Amount</TableHead>
+              <TableHead className="text-right">Allocated</TableHead>
+              <TableHead className="text-center">Status</TableHead>
+              <TableHead className="text-center">Attestation</TableHead>
+              <TableHead className="text-center">Date</TableHead>
+              <TableHead className="text-center">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {donations.map((donation) => {
               const attestations = Array.isArray(donation.attestations) ? donation.attestations : [];
               
@@ -94,16 +100,16 @@ export default function DonationHistoryTable({
 
               if (donation.status === "FAILED") {
                 displayStatus = "Payment Failed";
-                statusColor = "bg-red-500";
+                statusColor = "bg-destructive";
               } else if (hasDeliveryConfirmed) {
                 displayStatus = "Delivery Confirmed";
-                statusColor = "bg-green-500";
+                statusColor = "bg-trust-green";
               } else if (hasReceiptConfirmed) {
                 displayStatus = "Receipt Confirmed";
-                statusColor = "bg-blue-500";
+                statusColor = "bg-trust-green";
               } else if (hasPendingReceipt) {
                 displayStatus = "Pending NGO Signature";
-                statusColor = "bg-yellow-500";
+                statusColor = "bg-primary";
               }
 
               const attestationStatus = hasDeliveryConfirmed
@@ -134,21 +140,21 @@ export default function DonationHistoryTable({
               const total = Number(donation.amount);
 
               return (
-                <tr key={donation.id} className="border-t">
-                  <td className="font-medium text-left max-w-xs truncate py-4">
+                <TableRow key={donation.id}>
+                  <TableCell className="font-medium text-left max-w-xs truncate py-4">
                     {donation.campaignTitle ||
                       `Campaign ${donation.campaignId?.substring(0, 8)}`}
-                  </td>
-                  <td className="text-center font-medium py-4">
+                  </TableCell>
+                  <TableCell className="text-right font-medium py-4 tabular-nums">
                     ₹{total.toLocaleString()}
-                  </td>
-                  <td className="text-center font-medium py-4 text-primary">
+                  </TableCell>
+                  <TableCell className="text-right font-medium py-4 text-primary tabular-nums">
                     ₹{allocated.toLocaleString()}
-                  </td>
-                  <td className="text-center py-4">
+                  </TableCell>
+                  <TableCell className="text-center py-4">
                     <StatusBadge status={donation.status} size="sm" />
-                  </td>
-                  <td className="text-center py-4">
+                  </TableCell>
+                  <TableCell className="text-center py-4">
                     <button
                       onClick={() => onViewAttestation(attestationData)}
                       className="flex items-center justify-center gap-2 text-xs font-medium w-full hover:opacity-80"
@@ -156,11 +162,11 @@ export default function DonationHistoryTable({
                       <span className={cn("w-2 h-2 rounded-full inline-block", statusColor)} />
                       {displayStatus}
                     </button>
-                  </td>
-                  <td className="text-center text-xs py-4">
+                  </TableCell>
+                  <TableCell className="text-center text-xs py-4">
                     {new Date(donation.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="text-center py-4">
+                  </TableCell>
+                  <TableCell className="text-center py-4">
                     <div className="flex items-center gap-3 justify-center">
                       <button
                         onClick={() => onViewAttestation(attestationData)}
@@ -190,13 +196,12 @@ export default function DonationHistoryTable({
                         </a>
                       )}
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
     </div>
   );
 }

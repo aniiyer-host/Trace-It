@@ -9,7 +9,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Loader2, MapPin, Users } from "lucide-react";
+import { Loader2, MapPin, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface PublicAttestation {
@@ -132,7 +132,7 @@ export default function AttestationVerify() {
       <header className="bg-primary/5 text-primary/50 border-b border-border/20">
         <div className="container max-w-4xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold gradient-text">
+            <h1 className="text-2xl font-bold text-foreground">
               Attestation Verification
             </h1>
             <div className="text-sm text-muted-foreground">
@@ -147,8 +147,8 @@ export default function AttestationVerify() {
         <div className="space-y-8">
           {/* Attestation Header */}
           <div className="space-y-4">
-            <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto" />
-            <h2 className="text-3xl font-bold text-emerald-500">
+            <h2 className="flex items-center justify-center gap-3 text-3xl font-bold text-trust-green">
+              <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-trust-green" />
               Attestation Verified
             </h2>
             <p className="lg:text-xl text-muted-foreground max-w-2xl mx-auto">
@@ -158,7 +158,7 @@ export default function AttestationVerify() {
           </div>
 
           {/* Attestation Details */}
-          <Card className="glass">
+          <Card className="border border-border bg-card shadow-sm">
             <CardHeader className="flex flex-col space-y-2">
               <CardTitle className="text-xl font-semibold">
                 Attestation Details
@@ -202,7 +202,8 @@ export default function AttestationVerify() {
                 <div className="space-y-3 text-sm">
                   <p>
                     <strong>On-Chain Status:</strong>{" "}
-                    <span className="text-emerald-600">
+                    <span className="inline-flex items-center gap-2 text-trust-green">
+                      <span aria-hidden="true" className="h-2 w-2 rounded-full bg-trust-green" />
                       Confirmed & Immutable
                     </span>
                   </p>
@@ -240,7 +241,7 @@ export default function AttestationVerify() {
           </Card>
 
           {/* How it works */}
-          <Card className="glass">
+          <Card className="border border-border bg-card shadow-sm">
             <CardHeader className="flex flex-col space-y-2">
               <CardTitle className="text-xl font-semibold">
                 How Attestation Verification Works

@@ -27,7 +27,7 @@ export function AnalyticsCard({
   const variantColorsMap = new Map([
     ['primary', 'text-primary border-primary/20'],
     ['secondary', 'text-muted-foreground border-muted/20'],
-    ['success', 'text-emerald-400 border-emerald-500/20'],
+    ['success', 'text-primary border-primary/20'],
     ['warning', 'text-amber-400 border-amber-500/20']
   ])
 
@@ -35,7 +35,7 @@ export function AnalyticsCard({
   const variantStyle = variantColorsMap.get(variant) ?? variantColorsMap.get('primary')!
 
   return (
-    <Card className={cn('glass p-6 hover:border-primary/40 transition-colors border', variantStyle)}>
+    <Card className={cn('border border-border bg-card p-6 shadow-sm transition-colors hover:border-primary/40', variantStyle)}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <Icon className={cn('h-5 w-5', variantStyle.split(' ')[0])} />
@@ -48,7 +48,7 @@ export function AnalyticsCard({
         </div>
         {trend && (
           <div className="flex items-center gap-2 text-xs">
-            <span className={trend.isPositive ? 'text-emerald-500' : 'text-destructive-500'}>
+            <span className={trend.isPositive ? 'text-primary' : 'text-destructive'}>
               {trend.isPositive ? '↑' : '↓'}
             </span>
             <span>{trend.value}</span>

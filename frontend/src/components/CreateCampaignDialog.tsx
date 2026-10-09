@@ -95,7 +95,7 @@ export function CreateCampaignDialog({ open, onClose, onSuccess }: Props) {
       }
 
       toast({
-        title: "Campaign created and submitted! 🎉",
+        title: "Campaign created and submitted!",
         description:
           "Your campaign has been sent to the Admin queue for verification & approval.",
       });
@@ -141,7 +141,7 @@ export function CreateCampaignDialog({ open, onClose, onSuccess }: Props) {
         {step === "wallet-check" ? (
           <>
             <DialogHeader>
-              <DialogTitle className="gradient-text text-xl flex items-center gap-2">
+              <DialogTitle className="text-xl flex items-center gap-2 font-semibold text-foreground">
                 <Target className="h-5 w-5 text-primary" /> Campaign Beneficiary
               </DialogTitle>
               <DialogDescription>
@@ -190,7 +190,7 @@ export function CreateCampaignDialog({ open, onClose, onSuccess }: Props) {
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle className="gradient-text text-xl flex items-center gap-2">
+              <DialogTitle className="text-xl flex items-center gap-2 font-semibold text-foreground">
                 <Plus className="h-5 w-5 text-primary" /> Create New Campaign
               </DialogTitle>
               <DialogDescription>
@@ -237,7 +237,7 @@ export function CreateCampaignDialog({ open, onClose, onSuccess }: Props) {
                       key={cat.id}
                       type="button"
                       size="sm"
-                      variant={category === cat.id ? "default" : "outline"}
+                      variant={category === cat.id ? "primary" : "outline"}
                       onClick={() => setCategory(cat.id)}
                       className="text-xs justify-start"
                     >
@@ -289,7 +289,7 @@ export function CreateCampaignDialog({ open, onClose, onSuccess }: Props) {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="bg-primary text-primary-foreground"
+                  variant="primary"
                 >
                   {loading ? (
                     <>

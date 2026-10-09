@@ -1,6 +1,6 @@
 // NavBar.tsx – Professional navigation header with attestation focus
 import { NavLink, useLocation } from "react-router-dom";
-import { GitBranch, LogOut, Bell } from "lucide-react";
+import { LogOut, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/ModeToggle";
 import { useAuthStore } from "@/store/authStore";
@@ -31,15 +31,19 @@ export function NavBar() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md">
+      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/90">
         <div className="container max-w-6xl mx-auto flex h-14 items-center justify-between px-4">
           {/* Logo */}
-          <NavLink
-            to="/"
-            className="flex items-center gap-2 font-extrabold text-lg"
-          >
-            <GitBranch className="h-5 w-5 text-primary" />
-            <span className="gradient-text">TraceIt</span>
+          <NavLink to="/" className="flex items-center">
+            <img
+              src="/TraceIt.jpeg"
+              alt=""
+              aria-hidden="true"
+              className="h-9 w-9 rounded-md object-cover"
+            />
+            <span className="ml-2 text-lg font-semibold tracking-tight text-foreground">
+              TraceIt
+            </span>
           </NavLink>
 
           {/* Nav */}
@@ -65,10 +69,10 @@ export function NavBar() {
                   to={finalTo}
                   end={end}
                   className={({ isActive }) =>
-                    `px-3 py-1.5 rounded-md text-sm transition-colors ${
+                    `border-b-2 px-3 py-1.5 text-sm transition-colors ${
                       isActive
-                        ? "bg-primary/15 text-primary font-medium"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                        ? "border-primary text-foreground font-medium"
+                        : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
                     }`
                   }
                 >
@@ -99,7 +103,7 @@ export function NavBar() {
             {isNGOPage && pendingCount > 0 && (
               <div className="flex items-center gap-2">
                 <Bell className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium text-primary bg-primary/20 rounded-full px-2 py-0.5">
+                <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-sm font-medium text-primary">
                   {pendingCount}
                 </span>
               </div>

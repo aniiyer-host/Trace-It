@@ -43,7 +43,7 @@ export function ImpactMetrics({ className }: Props) {
     <div className={className}>
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map((metric, index) => (
-          <Card key={index} className="glass p-6 hover:border-primary/40 transition-colors">
+          <Card key={index} className="border border-border bg-card p-6 shadow-sm transition-colors hover:border-primary/40">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                 <metric.icon className={`h-5 w-5 text-primary`} />
@@ -54,7 +54,7 @@ export function ImpactMetrics({ className }: Props) {
               </div>
               {metric.trend && (
                 <div className="flex items-center gap-2 text-xs">
-                  <span className={metric.trend.isPositive ? 'text-emerald-500' : 'text-destructive-500'}>
+                  <span className={metric.trend.isPositive ? 'text-primary' : 'text-destructive'}>
                     {metric.trend.isPositive ? '↑' : '↓'}
                   </span>
                   <span>{metric.trend.value}</span>

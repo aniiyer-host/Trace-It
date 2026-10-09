@@ -13,8 +13,10 @@ export function StatusBadge({ status, className }: Props) {
   let dotColor = 'bg-gray-400'
   let label = normStatus.charAt(0) + normStatus.slice(1).toLowerCase()
 
-  if (normStatus === 'SUCCESS' || normStatus === 'DELIVERED' || normStatus === 'ACTIVE') {
-    dotColor = 'bg-green-500'
+  if (normStatus === 'SUCCESS' || normStatus === 'DELIVERED' || normStatus === 'VERIFIED') {
+    dotColor = 'bg-trust-green'
+  } else if (normStatus === 'ACTIVE' || normStatus === 'ALLOCATED' || normStatus === 'DISBURSED') {
+    dotColor = 'bg-primary'
   } else if (normStatus === 'PENDING' || normStatus === 'INITIATED' || normStatus === 'PENDING_APPROVAL') {
     dotColor = 'bg-yellow-500'
   } else if (normStatus === 'FAILED' || normStatus === 'REJECTED') {
@@ -36,6 +38,7 @@ export function StatusBadge({ status, className }: Props) {
   if (normStatus === 'VERIFIED') label = 'Verified'
   if (normStatus === 'ALLOCATED') label = 'Allocated'
   if (normStatus === 'DISBURSED') label = 'Disbursed'
+  if (normStatus === 'FULLY FUNDED') label = 'Fully Funded'
 
   return (
     <span className={cn('flex items-center gap-2 text-xs font-medium', className)}>

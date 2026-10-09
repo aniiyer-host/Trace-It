@@ -164,7 +164,7 @@ export default function AttestationSignDialog({
               className={cn(
                 "flex flex-col items-start p-4 rounded-xl border text-left transition-all",
                 attestationType === "receipt"
-                  ? "border-primary bg-primary/5 text-primary"
+                  ? "border-trust-attestation-receipt bg-trust-attestation-receipt-tint text-foreground"
                   : "border-foreground/10 text-foreground/50 hover:border-foreground/30 hover:bg-foreground/[0.02]",
               )}
             >
@@ -183,7 +183,7 @@ export default function AttestationSignDialog({
               className={cn(
                 "flex flex-col items-start p-4 rounded-xl border text-left transition-all",
                 attestationType === "delivery"
-                  ? "border-emerald-500 bg-emerald-500/5 text-emerald-600 dark:text-emerald-500"
+                  ? "border-trust-attestation-delivery bg-trust-attestation-delivery-tint text-foreground"
                   : "border-foreground/10 text-foreground/50 hover:border-foreground/30 hover:bg-foreground/[0.02]",
               )}
             >
@@ -223,9 +223,9 @@ export default function AttestationSignDialog({
                 <span
                   className={cn(
                     "font-bold",
-                    attestationType === "receipt"
-                      ? "text-primary"
-                      : "text-emerald-500",
+                    attestationType === "delivery"
+                      ? "text-trust-attestation-delivery"
+                      : "text-trust-attestation-receipt",
                   )}
                 >
                   {attestationType.toUpperCase()}_CONFIRMATION
@@ -303,7 +303,8 @@ export default function AttestationSignDialog({
                 (attestationType === "delivery" && beneficiaryId.trim() === "")
               }
               size="lg"
-              className="sm:w-auto w-full bg-foreground text-background hover:bg-foreground/90 font-semibold"
+              variant="primary"
+              className="sm:w-auto w-full font-semibold"
             >
               {loading ? (
                 <>

@@ -452,7 +452,7 @@ export default function DonorDashboard() {
               </div>
 
               {/* Fade for mobile scroll indication */}
-              <div className="absolute right-0 top-0 bottom-8 w-12 bg-gradient-to-l from-background to-transparent pointer-events-none lg:hidden" />
+              <div className="absolute right-0 top-0 bottom-8 w-12 bg-background/80 pointer-events-none lg:hidden" />
             </div>
           </div>
 

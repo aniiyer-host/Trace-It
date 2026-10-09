@@ -1,4 +1,3 @@
-import { Clock, CheckCircle2, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AttestationVerificationBadgeProps {
@@ -14,81 +13,44 @@ interface AttestationVerificationBadgeProps {
 export default function AttestationVerificationBadge({
   attestationStatus,
   onClick,
-  size = "md",
 }: AttestationVerificationBadgeProps) {
-  // const sizeConfig: Record<string, { width: number; height: number }> = {
-  //   sm: { width: 16, height: 16 },
-  //   md: { width: 20, height: 20 },
-  //   lg: { width: 24, height: 24 },
-  // }
-  const sizeClass =
-    size === "sm" ? "h-4 w-4" : size === "lg" ? "h-6 w-6" : "h-5 w-5";
-
-  // const { width, height } = sizeConfig[size]
-
   const getIconAndColor = () => {
     switch (attestationStatus) {
       case "pending":
-        return {
-          icon: <Clock className="h-4 w-4" />,
-          bg: "bg-yellow-50",
-          color: "text-yellow-500",
-          text: "Pending NGO Confirmation",
-        };
+        return { dot: "bg-primary", text: "Pending NGO Confirmation" };
       case "receipt_confirmed":
-        return {
-          icon: (
-            <>
-              <CheckCircle2 className="h-4 w-4 mr-1" />
-              <Shield className="h-4 w-4" />
-            </>
-          ),
-          bg: "bg-emerald-50",
-          color: "text-emerald-500",
-          text: "NGO Confirmed Receipt",
-        };
+        return { dot: "bg-trust-green", text: "NGO Confirmed Receipt" };
       case "delivery_confirmed":
-        return {
-          icon: (
-            <>
-              <CheckCircle2 className="h-4 w-4 mr-1" />
-              <Shield className="h-4 w-4" />
-            </>
-          ),
-          bg: "bg-emerald-50",
-          color: "text-emerald-500",
-          text: "Delivery Confirmed",
-        };
+        return { dot: "bg-trust-green", text: "Delivery Confirmed" };
       case "loading":
-        return {
-          icon: <Clock className="h-4 w-4 animate-spin" />,
-          bg: "bg-muted/50",
-          color: "text-muted-foreground",
-          text: "Verifying...",
-        };
+        return { dot: "bg-muted-foreground", text: "Verifying..." };
     }
   };
 
-  const { icon, bg, color, text } = getIconAndColor();
-
-  return (
-    <div
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium",
-        bg,
-        color,
-        "cursor-pointer hover:bg-muted/50",
-        onClick && "hover:underline",
-      )}
-      title={text}
-      role="button"
-      tabIndex={onClick ? 0 : -1}
-    >
-      <div className={`flex ${sizeClass} items-center justify-center`}>
-        {icon}
-      </div>
+  const { dot, text } = getIconAndColor();
+  const content = (
+    <>
+      <span aria-hidden="true" className={cn("h-2 w-2 rounded-full", dot)} />
       <span>{text}</span>
-    </div>
+    </>
+  );
+  const className = cn(
+    "inline-flex items-center gap-2 text-sm font-medium",
+    onClick && "cursor-pointer hover:underline",
+  );
+
+  return onClick ? (
+    <button
+      type="button"
+      onClick={onClick}
+      className={className}
+      title={text}
+    >
+      {content}
+    </button>
+  ) : (
+    <span className={className} title={text}>
+      {content}
+    </span>
   );
 }

@@ -1,4 +1,3 @@
-import { RefreshCw, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface HashVerificationBadgeProps {
@@ -10,77 +9,44 @@ interface HashVerificationBadgeProps {
 export default function HashVerificationBadge({
   hashStatus,
   onClick,
-  size = "md",
 }: HashVerificationBadgeProps) {
-  const sizeConfig: Record<string, { width: number; height: number }> = {
-    sm: { width: 16, height: 16 },
-    md: { width: 20, height: 20 },
-    lg: { width: 24, height: 24 },
-  };
-
-  // const { width, height } = sizeConfig[size]
-
-  const { width, height } =
-    size === "sm"
-      ? sizeConfig.sm
-      : size === "md"
-        ? sizeConfig.md
-        : sizeConfig.lg;
   const getIconAndColor = () => {
     switch (hashStatus) {
       case "pending":
-        return {
-          icon: <RefreshCw className="h-4 w-4" />,
-          bg: "bg-blue-50",
-          color: "text-blue-500",
-          text: "Hash Verification Pending",
-        };
+        return { dot: "bg-primary", text: "Hash Verification Pending" };
       case "verified":
-        return {
-          icon: <CheckCircle2 className="h-4 w-4" />,
-          bg: "bg-emerald-50",
-          color: "text-emerald-500",
-          text: "Hash Verified",
-        };
+        return { dot: "bg-trust-green", text: "Hash Verified" };
       case "failed":
-        return {
-          icon: <AlertTriangle className="h-4 w-4" />,
-          bg: "bg-destructive/50",
-          color: "text-destructive",
-          text: "Hash Verification Failed",
-        };
+        return { dot: "bg-destructive", text: "Hash Verification Failed" };
       case "loading":
-        return {
-          icon: <Loader2 className="h-4 w-4 animate-spin" />,
-          bg: "bg-muted/50",
-          color: "text-muted-foreground",
-          text: "Verifying Hash...",
-        };
+        return { dot: "bg-muted-foreground", text: "Verifying Hash..." };
     }
   };
 
-  const { icon, bg, color, text } = getIconAndColor();
-
-  return (
-    <div
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium",
-        bg,
-        color,
-        "cursor-pointer hover:bg-muted/50",
-        onClick && "hover:underline",
-      )}
-      title={text}
-      role="button"
-      tabIndex={onClick ? 0 : -1}
-    >
-      <div
-        className={`flex h-${height} w-${width} items-center justify-center`}
-      >
-        {icon}
-      </div>
+  const { dot, text } = getIconAndColor();
+  const content = (
+    <>
+      <span aria-hidden="true" className={cn("h-2 w-2 rounded-full", dot)} />
       <span>{text}</span>
-    </div>
+    </>
+  );
+  const className = cn(
+    "inline-flex items-center gap-2 text-sm font-medium",
+    onClick && "cursor-pointer hover:underline",
+  );
+
+  return onClick ? (
+    <button
+      type="button"
+      onClick={onClick}
+      className={className}
+      title={text}
+    >
+      {content}
+    </button>
+  ) : (
+    <span className={className} title={text}>
+      {content}
+    </span>
   );
 }

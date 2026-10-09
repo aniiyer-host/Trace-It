@@ -66,10 +66,11 @@ export function NgoDirectory() {
             >
               <div>
                 <div className="flex items-center gap-2 mb-4">
-                  <span className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
+                  <span className="w-2 h-2 rounded-full bg-trust-green shrink-0" />
                   <h2 className="text-xl font-bold text-foreground truncate">
                     {ngo.name}
                   </h2>
+                  <span className="text-xs font-medium text-trust-green">Verified</span>
                 </div>
                 
                 <div className="space-y-2 mb-6">

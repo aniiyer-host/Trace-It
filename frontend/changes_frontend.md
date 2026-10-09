@@ -4,6 +4,61 @@ This document logs all modifications made to the frontend to complete the Phase 
 
 ## Changes
 
+### Navbar Brand Mark
+- **File:** `frontend/src/components/NavBar.tsx` (lines 2, 37-48)
+- **Before:** Used the unrelated `GitBranch` icon and a plain `TraceIt` wordmark.
+- **After:** Replaced it with a compact `ShieldCheck` mark in the existing primary color token and refined wordmark spacing/weight. Navigation targets and behavior are unchanged.
+
+### Navbar Active Link
+- **File:** `frontend/src/components/NavBar.tsx` (lines 69-74)
+- **Before:** The active link used a filled `bg-primary/15` background with blue text.
+- **After:** Removed the blue fill; active navigation now uses primary-colored text with a thin primary underline. Inactive links keep a muted text treatment and show a subtle border on hover.
+
+### Navbar Brand and Active Color Refinement
+- **File:** `frontend/src/components/NavBar.tsx` (lines 2, 37-42, 67-73)
+- **Before:** The brand used a blue shield tile, while the active link used blue text and underline.
+- **After:** Removed the icon/tile completely and restyled the brand as a typographic `TraceIt` wordmark, using the existing theme-aware warm `trust-accent` for “It”. The active link label is now foreground-colored with a thin warm-accent underline. The existing `trust-accent` token has separate light/dark values, so this adapts with the theme without hardcoded colors.
+
+### Navbar Active Indicator Neutralization
+- **File:** `frontend/src/components/NavBar.tsx` (active `NavLink` class)
+- **Before:** The active-page underline used the warm `trust-accent`.
+- **After:** Replaced the accent underline with a subtle `foreground/40` underline; active text remains foreground-colored. This avoids adding a competing hue and adapts automatically to light and dark themes.
+
+### Create Campaign Action Color
+- **Files:** `frontend/src/pages/NGODashboard.tsx` (desktop and mobile Create Campaign buttons); `frontend/src/components/CreateCampaignDialog.tsx` (form submit button)
+- **Before:** Campaign creation actions used the blue primary button treatment.
+- **After:** Switched all three campaign creation actions to the existing `heavy` button variant (`bg-foreground text-background`). This uses the established financial-action tier and adapts automatically to light and dark themes.
+
+### Attestation Sign & Release Action Color
+- **File:** `frontend/src/pages/NGODashboard.tsx` (attestation action button)
+- **Before:** “Sign & Release” used the blue primary button treatment.
+- **After:** Switched it to the existing `heavy` button variant (`bg-foreground text-background`) so the high-consequence signing action has a restrained, high-contrast appearance in both themes.
+
+### Trace-It Logo and Theme-Aware Green Action Palette
+- **Logo:** Copied the supplied root `TraceIt.jpeg` asset to `frontend/public/TraceIt.jpeg` and displayed it beside the navbar label.
+- **Theme tokens:** Added theme-specific HSL properties in `frontend/src/index.css` and exposed them through `frontend/tailwind.config.js`. This palette was subsequently refined below to use the supplied teal/cyan in light mode and a slightly stronger green in dark mode.
+- **Shared action style:** Added the theme-aware `trust` button variant in `frontend/src/components/ui/button.tsx`.
+- **Applied to campaign and disbursement actions:** Updated desktop/mobile Create Campaign, Create & Submit Campaign, Request Disbursement, and funded campaign indicators in `NGODashboard.tsx`, `CreateCampaignDialog.tsx`, `DisbursementRequestDialog.tsx`, and `DonationCard.tsx`.
+- **Applied to proof upload:** Updated the Upload Proof/Resubmit Proof actions, proof submission button, file-picker labels, drop-zone borders, focus states, and progress indicator in `NGODashboard.tsx` and `ProofUploadDialog.tsx`.
+- **Applied to attestations and status accents:** Updated Sign & Release and Sign & Broadcast, receipt/delivery selection states, navbar active underline and notification badge, selected NGO sidebar row, and completed status indicators in `NGODashboard.tsx`, `AttestationSignDialog.tsx`, `NavBar.tsx`, `StatusBadge.tsx`, `DonationHistoryTable.tsx`, `MilestoneTimeline.tsx`, and `lib/utils.ts`. Small text remains foreground-colored for readability.
+
+### Refined Theme Palette and Distinct Attestation Colors
+- **Files:** `frontend/src/index.css`, `frontend/tailwind.config.js`, `frontend/src/pages/NGODashboard.tsx`, `frontend/src/components/AttestationSignDialog.tsx`
+- **Light theme:** Replaced the prior green action shade with the supplied teal `#0D7377` and white text; uses darker teal `#095B5F` on hover, cyan `#14FFEC` for focus, and a soft teal tint for selection.
+- **Dark theme:** Slightly strengthened the action/accent green from `#B0DB9C` to `#B7E89B`; retained dark action text `#14210E`, hover `#CAE8BD`, and selected background `#26381D`.
+- **Attestation distinction:** Receipt and Delivery cards now use separate left-border and heading colors. In light mode they use teal and charcoal; in dark mode they use two distinct greens. The attestation type selector and payload label use the same corresponding color scheme.
+- **Dark-mode attestation contrast refinement:** Delivery's dark-theme accent was too similar to Receipt in the rendered UI. Changed only the dark Delivery accent to muted teal `#7FC7BD`; Receipt remains `#B7E89B`, and all light-theme attestation colors remain unchanged.
+
+### Trace-It Favicon
+- **File:** `frontend/index.html`
+- **Before:** The page referenced the default `/favicon.svg`.
+- **After:** The favicon now points to `/TraceIt.jpeg`, matching the supplied navbar logo.
+
+### Navbar Wordmark Spelling
+- **File:** `frontend/src/components/NavBar.tsx`
+- **Before:** The logo label read `Trace-It`.
+- **After:** Updated the label to `TraceIt`, matching the requested brand spelling.
+
 ### 1. Updated `ngoStore.ts`
 
 - **Replaced mock functions with `apiClient`:** Removed `fetchCampaigns`, `approveMilestone`, `uploadMilestoneProof`, `createAttestation`, etc., from `mockApi` and replaced them with `apiService`.
@@ -1815,3 +1870,45 @@ FILE: `frontend/src/components/DonationHistoryTable.tsx`
 - **File & Lines:** `backend/src/routes/charity.ts`, lines 1104-1110
 - **Problem:** Multer's `fileSize` limit only applies per-file, meaning a malicious user could bypass the frontend UI and upload ten 9.9MB files in one request, consuming ~100MB of RAM.
 - **Why this fixes it:** Added a post-parsing manual check inside `uploadDisbursementProof` that sums all file sizes. If the total exceeds 10MB, the backend returns a 400 error immediately, preventing the large payload from proceeding.
+# Frontend UI/UX Changes Log
+
+## Change 1: Update Global Background & Remove Prohibited CSS Utilities
+- **File:** `frontend/src/index.css`
+- **Description:** Updated the light mode `--background` to the warm off-white token (`40 20% 98%`). Removed the decorative `radial-gradient` backgrounds on the `body`. Removed `.glass` and `.gradient-text` utility classes to strictly enforce the "Living Trust" design system. (Dark mode background was left unchanged as requested).
+
+## Change 2: Clean up DonationCard.tsx (Glassmorphism & Shadows)
+- **File:** `frontend/src/components/DonationCard.tsx`
+- **Description:**
+  - Removed the `glass` prop entirely.
+  - Replaced heavy `shadow-[0_10px_30px...]` and `rounded-[2.5rem]` with clean `border border-border shadow-sm rounded-xl`.
+  - Removed `backdrop-blur-md` and `bg-background/90` from the category badge.
+  - Updated progress bar to use `bg-primary` for non-completed states, and `bg-green-700` for fully funded.
+  - Simplified the "Fully Funded" indicator to avoid translucent `/10` backgrounds and pill shapes (`rounded-full`), using `bg-green-50` and `rounded-md`.
+
+## Change 3: Refactor DonationHistoryTable.tsx to Standard Table UI
+- **File:** `frontend/src/components/DonationHistoryTable.tsx`
+- **Description:**
+  - Replaced the native `<table>`, `<thead>`, `<tbody>`, `<tr>`, `<td>` elements with the shadcn `Table`, `TableHeader`, `TableRow`, `TableHead`, `TableBody`, and `TableCell` components to enforce standard row-only borders (`border-b`) without vertical borders.
+  - Right-aligned financial amount columns and applied the `tabular-nums` class.
+  - Replaced `glass` and `animate-pulse` classes in the empty and loading states with standard `bg-card border border-border` styling.
+
+## Living Trust UI/UX Follow-up (2026-10-09)
+
+The existing light/dark theme definitions in `frontend/src/index.css` were intentionally left unchanged. Primary action buttons use the existing theme-aware `trust-action` tokens: teal in light mode and the established violet-blue in dark mode, matching the supplied screenshots. No GSAP timeline, ScrollTrigger, or homepage animation sequence was changed.
+
+### Color and status semantics
+- Replaced decorative green progress/trend/active accents with `primary` in `Login.tsx`, `Signup.tsx`, `AnalyticsCard.tsx`, `ImpactMetrics.tsx`, and `pages/AdminPanel.tsx`. The NGO directory's green dot now explicitly labels its verified state and uses `trust-green`.
+- Changed completed donation, attestation, hash, and disbursement feedback to a minimal dot-and-text treatment using `trust-green`; pending/active states use `primary`. Removed emoji feedback and the obsolete colored status-class map.
+- Removed the funded campaign pill and category badge banner. Campaign category is now a neutral text label, and “Fully Funded” uses `StatusBadge`.
+- Refactored `AttestationVerificationBadge` and `HashVerificationBadge` to display text with a status dot. Clickable instances use semantic buttons; non-clickable instances remain text.
+- Replaced ad-hoc green badges and colored banners in attestation verification, beneficiary wallet, system status, and campaign/disbursement UI with token-based status text or indicators.
+
+### Buttons and component primitives
+- `components/ui/button.tsx`: Primary now uses existing `trust-action` / `trust-action-foreground` / `trust-action-hover` tokens, preserving the provided light/dark button colors. The screenshot's signing and upload actions, along with campaign and other primary actions, use this variant; the heavy variant remains available for financial actions that call for it.
+- `components/ui/badge.tsx`: Removed pill shape, border, and filled backgrounds; badge variants now render as neutral text.
+- Reduced dialog and toast elevation to `shadow-sm`; removed card hover shadow and image/CTA scale animations from `DonationCard`.
+- Kept the theme-aware light and dark palette values in `index.css` intact.
+
+### Donation table and motion accessibility
+- `components/ui/table.tsx` and `DonationHistoryTable.tsx`: Added a labeled, keyboard-focusable horizontal scroll region, a mobile-only scroll hint, and a minimum table width while preserving the existing shared table, right-aligned tabular currency, and row-only borders.
+- Added the site's reduced-motion CSS override and Framer Motion user preference configuration. This does not alter the homepage GSAP timeline or its scrolling animation.

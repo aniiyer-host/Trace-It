@@ -1,5 +1,5 @@
 // MilestoneTimeline – Enhanced vertical progress tracker with better visualizations
-import { ExternalLink, Loader2, CheckCircle } from 'lucide-react'
+import { ExternalLink, Loader2 } from 'lucide-react'
 import { StatusBadge } from '@/components/StatusBadge'
 import { formatUSD, shortenHash } from '@/lib/utils'
 import type { Milestone } from '@/types'
@@ -22,7 +22,7 @@ export function MilestoneTimeline({ milestones, className }: Props) {
                             {!isLast && (
                                 <div className={`
                                     absolute -left-1.5 top-8 bottom-0 w-px
-                                    ${ms.status === 'delivered' ? 'border-primary' : 'border-dashed border-border/50'}
+                                    ${ms.status === 'delivered' ? 'border-trust-green' : 'border-dashed border-border/50'}
                                 `} />
                             )}
 
@@ -30,16 +30,16 @@ export function MilestoneTimeline({ milestones, className }: Props) {
                             <span
                                 className={`
                                     absolute -left-2.5 flex h-7 w-7 items-center justify-center rounded-full ring-4 ring-background text-xs font-bold
-                                    ${ms.status === 'delivered' ? 'bg-emerald-500 text-background' :
-                                      ms.status === 'disbursed' ? 'bg-teal-500 text-background' :
-                                      ms.status === 'allocated' ? 'bg-blue-500 text-background' :
+                                    ${ms.status === 'delivered' ? 'bg-trust-green text-background' :
+                                      ms.status === 'disbursed' ? 'bg-primary text-primary-foreground' :
+                                      ms.status === 'allocated' ? 'bg-primary text-primary-foreground' :
                                       'bg-muted text-muted-foreground'}
                                 `}
                             >
                                 {i + 1}
                             </span>
 
-                            <div className="glass rounded-lg p-5 space-y-3 border border-border/40">
+                            <div className="rounded-lg border border-border bg-card p-5 shadow-sm space-y-3">
                                 <div className="flex flex-wrap items-center gap-2 justify-between">
                                     <div className="flex-1 min-w-0">
                                         <h4 className="font-semibold text-sm">{ms.title}</h4>
@@ -53,7 +53,7 @@ export function MilestoneTimeline({ milestones, className }: Props) {
                                         <span>Target: <strong className="text-foreground">{formatUSD(ms.targetAmount)}</strong></span>
 
                                         {hasProof && (
-                                            <span className="text-emerald-600">Proof submitted</span>
+                                            <span className="text-foreground">Proof submitted</span>
                                         )}
 
                                         {ms.txHash && (
@@ -98,8 +98,8 @@ export function MilestoneTimeline({ milestones, className }: Props) {
 
                                     {ms.disbursementStatus === 'SETTLED' && (
                                         <div className="flex items-center gap-2 mt-2">
-                                            <CheckCircle className="h-4 w-4 text-emerald-500" />
-                                            <span className="text-sm text-emerald-500 font-medium">Funds transferred successfully</span>
+                                            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-trust-green" />
+                                            <span className="text-sm text-trust-green font-medium">Funds transferred successfully</span>
                                         </div>
                                     )}
                                 </div>

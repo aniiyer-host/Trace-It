@@ -81,7 +81,7 @@ export default function Login() {
                   initial={{ scaleX: 0 }} 
                   animate={{ scaleX: 1 }} 
                   transition={{ duration: 1.2, ease: "easeInOut" }}
-                  className="h-full bg-emerald-500 origin-left"
+                  className="h-full bg-primary origin-left"
                 />
               </div>
             </motion.div>

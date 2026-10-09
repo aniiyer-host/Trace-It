@@ -41,11 +41,3 @@ export function mockTxHash(seed?: string): string {
 export function explorerUrl(txHash: string): string {
     return `https://explorer.solana.com/tx/${txHash}?cluster=devnet`
 }
-
-/** Status colour map for badges */
-export const STATUS_COLORS: Record<string, string> = {
-    pending: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
-    allocated: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-    disbursed: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-    delivered: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-}

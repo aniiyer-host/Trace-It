@@ -72,7 +72,7 @@ function ActionRow({
         <span className="flex flex-col gap-1 text-sm">
           <span className="flex items-center gap-2">
             <span
-              className={`h-1.5 w-1.5 rounded-full ${item.type === "milestone" ? "bg-primary" : "bg-emerald-500"}`}
+              className="h-1.5 w-1.5 rounded-full bg-primary"
             />
             {item.type === "milestone"
               ? "Disbursement Proof"
@@ -149,7 +149,7 @@ function ActionRow({
             <Button
               size="sm"
               variant="ghost"
-              className="text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10"
+              className="text-primary hover:text-primary/80 hover:bg-primary/10"
               onClick={() => onApprove(item.id, item.type)}
               disabled={anyLoading}
             >
@@ -165,7 +165,7 @@ function ActionRow({
 
       {/* Proof URLs Modal */}
       <Dialog open={proofUrls !== null} onOpenChange={() => setProofUrls(null)}>
-        <DialogContent className="glass border-border/60">
+        <DialogContent className="border border-border bg-card shadow-sm">
           <DialogHeader>
             <DialogTitle>Disbursement Proof Documents</DialogTitle>
             <DialogDescription>
@@ -217,7 +217,7 @@ function CampaignRow({ campaign }: { campaign: Campaign }) {
       <td className="py-4 px-4">
         <span className="flex items-center gap-2 text-sm">
           <span
-            className={`h-1.5 w-1.5 rounded-full ${Number(campaign.raisedAmount) >= Number(campaign.targetAmount) ? "bg-emerald-500" : "bg-primary"}`}
+            className="h-1.5 w-1.5 rounded-full bg-primary"
           />
           {Number(campaign.raisedAmount) >= Number(campaign.targetAmount)
             ? "Funded"
@@ -524,7 +524,7 @@ export default function AdminPanel() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10"
+                        className="text-primary hover:text-primary/80 hover:bg-primary/10"
                         disabled={approvingCampId === camp.id}
                         onClick={() => handleApproveCampaign(camp.id)}
                       >

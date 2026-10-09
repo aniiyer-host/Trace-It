@@ -330,7 +330,7 @@ export default function Home() {
               <span className="text-sm font-bold tracking-[0.3em] uppercase mb-6 animate-pulse">
                 Scroll to experience
               </span>
-              <div className="w-[2px] h-32 bg-gradient-to-b from-foreground/40 to-transparent rounded-full" />
+              <div className="w-[2px] h-32 bg-foreground/20 rounded-full" />
             </div>
           </div>
 
@@ -354,7 +354,7 @@ export default function Home() {
                   }}
                   className="absolute inset-0 flex flex-col items-center justify-center text-center opacity-0"
                 >
-                  <div className="w-32 h-32 rounded-full bg-foreground/5 backdrop-blur-xl border border-foreground/10 flex items-center justify-center text-foreground mb-12 shadow-2xl">
+                  <div className="w-32 h-32 rounded-full bg-card border border-border flex items-center justify-center text-foreground mb-12 shadow-sm">
                     <step.icon className="w-16 h-16" />
                   </div>
                   <h2 className="text-6xl md:text-8xl font-bold tracking-tighter text-foreground mb-8 text-balance leading-none">
@@ -449,11 +449,11 @@ export default function Home() {
               </p>
               <div className="pt-12">
                 <Button
-                  className="group bg-foreground text-background hover:bg-foreground/90 text-2xl px-12 py-10 h-auto rounded-full font-bold transition-transform hover:scale-[0.98] shadow-2xl"
+                  className="group bg-foreground text-background hover:bg-foreground/90 text-2xl px-12 py-10 h-auto rounded-full font-bold shadow-sm"
                   onClick={() => navigate("/donor")}
                 >
                   Start Donating{" "}
-                  <ArrowRight className="ml-4 w-8 h-8 group-hover:translate-x-2 transition-transform" />
+                  <ArrowRight className="ml-4 w-8 h-8" />
                 </Button>
               </div>
             </div>

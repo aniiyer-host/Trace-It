@@ -47,7 +47,7 @@ export default function MilestoneApprovalDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass max-w-md">
+      <DialogContent className="max-w-md border border-border bg-card shadow-sm">
         <DialogHeader>
           <DialogTitle className="text-xl">Approve Milestone</DialogTitle>
           <DialogDescription>

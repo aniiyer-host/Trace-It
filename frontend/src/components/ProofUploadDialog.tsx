@@ -110,9 +110,9 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="glass border-border/60 max-w-2xl">
+      <DialogContent className="border border-border bg-card shadow-sm max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="gradient-text text-xl">
+          <DialogTitle className="text-foreground text-xl font-semibold">
             Upload Disbursement Proof
           </DialogTitle>
           <DialogDescription className="text-muted-foreground flex items-center gap-2">
@@ -125,7 +125,7 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
 
         <div className="space-y-6">
           {/* Milestone Info Card */}
-          <div className="glass rounded-lg p-5 border border-border/40">
+          <div className="bg-card rounded-lg p-5 border border-border shadow-sm">
             <div className="flex flex-col space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-lg">{milestone?.title}</h3>
@@ -166,7 +166,7 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
           <div className="space-y-4">
             {/* File drop zone (enhanced visual) */}
             <div 
-              className="border-2 border-dashed border-border rounded-lg p-8 text-center text-muted-foreground hover:border-primary/50 transition-colors relative overflow-hidden"
+              className="border-2 border-dashed border-primary/40 rounded-lg p-8 text-center text-muted-foreground hover:border-primary transition-colors relative overflow-hidden"
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
@@ -191,14 +191,11 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
                 }
               }}
             >
-              <div className="absolute inset-0 -z-10">
-                <div className="w-full h-full bg-gradient-to-r from-primary/5 to-teal/5" />
-              </div>
               <Upload className="h-10 w-10 mx-auto mb-4 opacity-60" />
               <div className="text-sm font-medium mb-2">
                 {selectedFiles.length > 0 ? (
                   <div className="flex flex-col items-center gap-1">
-                    <span className="text-primary font-semibold">Selected {selectedFiles.length} file{selectedFiles.length === 1 ? '' : 's'}:</span>
+                    <span className="text-foreground font-semibold">Selected {selectedFiles.length} file{selectedFiles.length === 1 ? '' : 's'}:</span>
                     <ul className="text-xs text-muted-foreground max-h-24 overflow-y-auto space-y-1">
                       {selectedFiles.map((f, i) => (
                         <li key={i} className="truncate max-w-[300px] bg-foreground/5 px-2 py-1 rounded">{f.name}</li>
@@ -213,7 +210,7 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
                 PDF, PNG, JPEG supported • Max 10 files (up to 10MB combined)
               </p>
               {/* Optional file input */}
-              <label className="mt-4 flex items-center justify-center px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg cursor-pointer max-w-xs mx-auto">
+              <label className="mt-4 flex items-center justify-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer max-w-xs mx-auto focus-within:ring-2 focus-within:ring-primary">
                 {selectedFiles.length > 0 ? "Add/Change Files" : "Browse Files"}
                 <input
                   type="file"
@@ -245,13 +242,13 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
               </label>
             </div>
             {milestone.disbursementType === "PROOF_OF_WORK" && (
-              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center text-muted-foreground hover:border-primary/50 transition-colors relative overflow-hidden mt-4">
+              <div className="border-2 border-dashed border-primary/40 rounded-lg p-8 text-center text-muted-foreground hover:border-primary transition-colors relative overflow-hidden mt-4">
                 <p className="text-sm font-medium">
                   {geotagFile
                     ? `Geotag Selected: ${geotagFile.name}`
                     : "Secondary Proof: Geotagged Image (Optional)"}
                 </p>
-                <label className="mt-3 flex items-center justify-center px-4 py-2 text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg cursor-pointer">
+                <label className="mt-3 flex items-center justify-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-muted cursor-pointer focus-within:ring-2 focus-within:ring-primary">
                   {geotagFile ? "Change Image" : "Browse Images"}
                   <input
                     type="file"
@@ -281,7 +278,7 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
               <div className="space-y-2">
                 <div className="w-full bg-muted/5 rounded-full h-2.5 overflow-hidden">
                   <div
-                    className="bg-primary h-full transition_all duration-500"
+                    className="bg-primary h-full transition-all duration-500"
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
@@ -301,7 +298,7 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
                 placeholder="Describe what was achieved, how funds were used, and any relevant details..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-md border border-border bg-muted/30 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-md border border-border bg-muted/30 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
               />
               {description.length > 0 && (
                 <p className="text-xs text-muted-foreground mt-1">
@@ -312,6 +309,7 @@ export function ProofUploadDialog({ data, open, onClose, onSuccess }: Props) {
 
             {/* Submit Button */}
             <Button
+              variant="primary"
               className="w-full"
               onClick={handleUpload}
               disabled={loading || !description.trim()}

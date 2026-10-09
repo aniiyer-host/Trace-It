@@ -137,7 +137,7 @@ function BeneficiaryIdReveal({ campaignId }: { campaignId: string }) {
         className="h-8 w-8 rounded-r-md rounded-l-none border-l-0 bg-background hover:bg-foreground/5"
       >
         {copied ? (
-          <Check className="h-3.5 w-3.5 text-emerald-500" />
+          <Check className="h-3.5 w-3.5 text-primary" />
         ) : (
           <Copy className="h-3.5 w-3.5 text-muted-foreground" />
         )}
@@ -420,7 +420,8 @@ export default function NGODashboard() {
         <div className="mb-4 hidden md:block">
           <Button
             onClick={() => setCreateCampaignOpen(true)}
-            className="w-full bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center gap-2"
+            variant="primary"
+            className="w-full flex items-center justify-center gap-2"
             size="sm"
           >
             <Plus className="h-4 w-4" /> Create Campaign
@@ -433,7 +434,7 @@ export default function NGODashboard() {
             className={cn(
               "snap-start shrink-0 flex items-center justify-between md:w-full text-left py-4 px-6 md:px-4 text-sm font-semibold transition-colors outline-none",
               selectedView === "inbox"
-                ? "text-foreground border-b-2 md:border-b-0 md:border-l-2 border-foreground"
+                ? "text-foreground bg-primary/10 border-b-2 md:border-b-0 md:border-l-2 border-primary"
                 : "text-foreground/50 border-b-2 md:border-b-0 md:border-l-2 border-transparent hover:text-foreground",
             )}
           >
@@ -589,7 +590,8 @@ export default function NGODashboard() {
                 </div>
                 <Button
                   onClick={() => setCreateCampaignOpen(true)}
-                  className="sm:hidden bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2"
+                  variant="primary"
+                  className="sm:hidden flex items-center gap-2"
                 >
                   <Plus className="h-4 w-4" /> Create Campaign
                 </Button>
@@ -621,8 +623,8 @@ export default function NGODashboard() {
                         className={cn(
                           "group flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 rounded-xl bg-foreground/[0.04] dark:bg-foreground/[0.06] border border-foreground/5 border-l-4 transition-colors",
                           isDelivery
-                            ? "border-l-blue-500"
-                            : "border-l-emerald-500",
+                            ? "border-l-trust-attestation-delivery"
+                            : "border-l-trust-attestation-receipt",
                         )}
                       >
                         <div className="space-y-1">
@@ -630,8 +632,8 @@ export default function NGODashboard() {
                             className={cn(
                               "text-sm font-semibold tracking-widest uppercase",
                               isDelivery
-                                ? "text-blue-600 dark:text-blue-500"
-                                : "text-emerald-600 dark:text-emerald-500",
+                                ? "text-trust-attestation-delivery"
+                                : "text-trust-attestation-receipt",
                             )}
                           >
                             {isDelivery
@@ -663,7 +665,8 @@ export default function NGODashboard() {
                         <Button
                           onClick={() => handleAttestationSelect(attestation)}
                           size="lg"
-                          className="w-full sm:w-auto bg-primary text-primary-foreground hover:bg-primary/90"
+                          variant="primary"
+                          className="w-full sm:w-auto"
                         >
                           Sign & Release
                         </Button>
@@ -685,7 +688,7 @@ export default function NGODashboard() {
                     milestone.status === "allocated"
                       ? "border-l-primary"
                       : milestone.status === "delivered"
-                        ? "border-l-emerald-500"
+                        ? "border-l-trust-green"
                         : "border-l-foreground/20";
 
                   return (
@@ -721,7 +724,8 @@ export default function NGODashboard() {
                         {milestone.status === "rejected" && (
                           <Button
                             size="lg"
-                            className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                            variant="primary"
+                            className="w-full"
                             onClick={() => {
                               setProofCampaign(campaign);
                               setProofMs(milestone);
@@ -735,7 +739,8 @@ export default function NGODashboard() {
                           !milestone.proofSubmittedAt && (
                             <Button
                               size="lg"
-                              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                              variant="primary"
+                              className="w-full"
                               onClick={() => {
                                 setProofCampaign(campaign);
                                 setProofMs(milestone);
@@ -762,8 +767,8 @@ export default function NGODashboard() {
                           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-foreground/5 border border-foreground/10 text-sm font-medium text-foreground/70">
                             {["SENT", "SETTLED"].includes(milestone.disbursementStatus || "") ? (
                               <>
-                                <CheckCircle className="h-4 w-4 text-emerald-500" />
-                                Funds transferred successfully
+                                <span aria-hidden="true" className="h-2 w-2 rounded-full bg-trust-green" />
+                                <span className="text-trust-green">Funds transferred successfully</span>
                               </>
                             ) : (
                               <>
@@ -778,7 +783,8 @@ export default function NGODashboard() {
                             "confirmed" && (
                             <Button
                               size="lg"
-                              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                              variant="primary"
+                              className="w-full"
                               onClick={() => {
                                 handleAttestationSelect({
                                   id: `mock-${milestone.id}`,
@@ -880,7 +886,7 @@ export default function NGODashboard() {
                 ) && (
                   <Button
                     onClick={() => setDisbursementOpen(true)}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    variant="primary"
                   >
                     Request Disbursement
                   </Button>

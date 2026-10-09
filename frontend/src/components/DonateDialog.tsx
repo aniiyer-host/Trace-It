@@ -381,9 +381,9 @@ export function DonateDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="glass border-border/60 max-w-md">
+      <DialogContent className="border border-border bg-card shadow-sm max-w-md">
         <DialogHeader>
-          <DialogTitle className="gradient-text text-xl">
+          <DialogTitle className="text-xl font-semibold text-foreground">
             Donate to Campaign
           </DialogTitle>
           <DialogDescription>{campaign?.title}</DialogDescription>
@@ -429,9 +429,9 @@ export function DonateDialog({
           <div className="text-center space-y-4 py-4">
             {createdDonation.status === "SUCCESS" ? (
               <>
-                <p className="text-4xl">🎉</p>
-                <p className="font-semibold text-emerald-400">
-                  Payment Confirmed!
+                <p className="flex items-center justify-center gap-2 font-semibold text-trust-green">
+                  <span aria-hidden="true" className="h-2 w-2 rounded-full bg-trust-green" />
+                  Payment Confirmed
                 </p>
                 <p className="text-sm text-muted-foreground">
                   Tx:{" "}
@@ -549,7 +549,7 @@ export function DonateDialog({
                   <Button
                     key={a}
                     size="sm"
-                    variant={amount === a && !custom ? "default" : "outline"}
+                    variant={amount === a && !custom ? "primary" : "outline"}
                     onClick={() => {
                       setAmount(a);
                       setCustom("");

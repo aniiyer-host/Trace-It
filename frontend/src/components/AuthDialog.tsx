@@ -41,9 +41,9 @@ export function AuthDialog({ open, onClose }: Props) {
 
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="glass border-border/60 max-w-sm">
+            <DialogContent className="max-w-sm border border-border bg-card shadow-sm">
                 <DialogHeader>
-                    <DialogTitle className="gradient-text text-xl">Sign In / Sign Up</DialogTitle>
+                    <DialogTitle className="text-xl font-semibold text-foreground">Sign In / Sign Up</DialogTitle>
                     <DialogDescription>Enter your email and password to access the donation network.</DialogDescription>
                 </DialogHeader>
 

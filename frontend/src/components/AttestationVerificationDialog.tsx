@@ -7,7 +7,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, Shield } from "lucide-react";
+import { Loader2, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiService } from "@/utils/apiClient";
 import type { Donation, Attestation } from "@/types";
@@ -50,7 +50,7 @@ export default function AttestationVerificationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass max-w-xl">
+      <DialogContent className="max-w-xl border border-border bg-card shadow-sm">
         <DialogHeader>
           <DialogTitle className="text-xl">Verify Attestation</DialogTitle>
           <DialogDescription>
@@ -62,11 +62,11 @@ export default function AttestationVerificationDialog({
           <div className="space-y-6 p-6">
             <div className="space-y-4">
               <div className="flex items-center space-x-4">
-                <div className="flex h-10 w-10 items-center justify-center bg-emerald-50 text-emerald-500 rounded-full">
-                  <CheckCircle2 className="h-5 w-5" />
-                </div>
                 <div>
-                  <h3 className="font-semibold">Attestation Verified</h3>
+                  <h3 className="flex items-center gap-2 font-semibold text-trust-green">
+                    <span aria-hidden="true" className="h-2 w-2 rounded-full bg-trust-green" />
+                    Attestation Verified
+                  </h3>
                   <p className="text-muted-foreground">
                     This attestation is valid and permanently stored on the
                     Solana blockchain.
@@ -109,7 +109,10 @@ export default function AttestationVerificationDialog({
                   <div className="space-y-2 text-sm">
                     <p>
                       <strong>On-Chain Status:</strong>{" "}
-                      <span className="text-emerald-600">Confirmed</span>
+                      <span className="inline-flex items-center gap-2 text-trust-green">
+                        <span aria-hidden="true" className="h-2 w-2 rounded-full bg-trust-green" />
+                        Confirmed
+                      </span>
                     </p>
                     <p>
                       <strong>Immutability:</strong> This attestation cannot be

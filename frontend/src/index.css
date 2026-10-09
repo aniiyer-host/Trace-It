@@ -17,7 +17,7 @@ html::-webkit-scrollbar {
 @layer base {
   /* ── Light mode ─────────────────────────────────────────────── */
   :root {
-    --background:        0 0% 100%;        /* pure white        */
+    --background:        40 20% 98%;       /* warm off-white    */
     --foreground:        220 15% 15%;      /* dark slate        */
 
     --card:              0 0% 100%;
@@ -43,7 +43,7 @@ html::-webkit-scrollbar {
 
     --border:            210 15% 85%;      /* light border      */
     --input:             210 15% 85%;      /* light input       */
-    --ring:              210 60% 45%;      /* professional blue */
+    --ring:              175.1 100% 53.9%; /* #14FFEC */
 
     --radius:            0.5rem;
 
@@ -52,7 +52,17 @@ html::-webkit-scrollbar {
     --trust-navy: 222 47% 11%;   /* Deep navy */
     --trust-green: 142 71% 25%;  /* Restrained verification green */
     --trust-text: 220 15% 15%;   /* Near black */
-    --trust-accent: 25 85% 55%;  /* Warm accent (orange/rust) */
+    --trust-action: 182.3 80.3% 25.9%;     /* #0D7377 */
+    --trust-action-foreground: 0 0% 100%;
+    --trust-action-hover: 182.8 82.7% 20.4%; /* #095B5F */
+    --trust-accent: 182.3 80.3% 25.9%;      /* #0D7377 */
+    --trust-soft: 175.1 100% 53.9%;         /* #14FFEC */
+    --trust-tint: 174.8 51.1% 91.2%;        /* soft teal tint */
+    --trust-selected: 174.8 51.1% 91.2%;    /* soft teal tint */
+    --trust-attestation-receipt: 182.3 80.3% 25.9%; /* #0D7377 */
+    --trust-attestation-delivery: 0 0% 19.6%;       /* #323232 */
+    --trust-attestation-receipt-tint: 174.8 51.1% 91.2%;
+    --trust-attestation-delivery-tint: 0 0% 95%;
     --trust-surface: 0 0% 100%;  /* Pure white surface for cards */
     --trust-border: 220 15% 90%; /* Light border */
   }
@@ -68,8 +78,8 @@ html::-webkit-scrollbar {
     --popover:           220 15% 12%;       /* dark popover      */
     --popover-foreground: 210 15% 90%;     /* light gray        */
 
-    --primary:           210 60% 55%;      /* brighter blue     */
-    --primary-foreground: 220 15% 10%;     /* very dark blue    */
+    --primary:           238.5 100% 69.4%; /* #6367FF */
+    --primary-foreground: 0 0% 0%;
 
     --secondary:         220 15% 12%;       /* dark secondary    */
     --secondary-foreground: 210 15% 85%;   /* light gray        */
@@ -77,22 +87,32 @@ html::-webkit-scrollbar {
     --muted:             220 15% 15%;       /* slightly lighter  */
     --muted-foreground:  210 10% 60%;      /* medium gray       */
 
-    --accent:            150 50% 55%;      /* teal green        */
-    --accent-foreground: 220 15% 10%;      /* very dark blue    */
+    --accent:            232.2 100% 75.9%; /* #8494FF */
+    --accent-foreground: 0 0% 0%;
 
     --destructive:       0 70% 50%;        /* red               */
     --destructive-foreground: 0 0% 100%;
 
     --border:            220 15% 20%;      /* dark border       */
     --input:             220 15% 20%;      /* dark input        */
-    --ring:              210 60% 50%;      /* brighter blue     */
+    --ring:              250.2 100% 87.3%; /* #C9BEFF */
 
     /* Living Trust Theme Tokens (Dark Mode) */
     --trust-bg: 220 10% 4%;     /* Near-black charcoal background */
     --trust-navy: 40 20% 98%;    /* Off-white text over navy */
     --trust-green: 142 71% 45%;  /* Lighter verification green for dark mode */
     --trust-text: 210 15% 90%;   /* Off-white text */
-    --trust-accent: 25 85% 65%;  /* Lighter warm accent */
+    --trust-action: 238.5 100% 69.4%;       /* #6367FF */
+    --trust-action-foreground: 0 0% 0%;
+    --trust-action-hover: 232.2 100% 75.9%; /* #8494FF */
+    --trust-accent: 250.2 100% 87.3%;       /* #C9BEFF */
+    --trust-soft: 303.3 100% 92.9%;         /* #FFDBFD */
+    --trust-tint: 250 40% 20%;
+    --trust-selected: 250 40% 20%;
+    --trust-attestation-receipt: 232.2 100% 75.9%; /* #8494FF */
+    --trust-attestation-delivery: 303.3 100% 92.9%; /* #FFDBFD */
+    --trust-attestation-receipt-tint: 238 35% 18%;
+    --trust-attestation-delivery-tint: 303 30% 18%;
     --trust-surface: 222 47% 11%; /* Slightly lighter navy for cards */
     --trust-border: 222 47% 20%; /* Dark border */
   }
@@ -110,33 +130,10 @@ html::-webkit-scrollbar {
   }
 }
 
-/* Subtle page background — light mode */
-body {
-  background-image:
-    radial-gradient(ellipse 70% 40% at 50% -10%, hsl(155 38% 40% / 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 30% at 80% 90%, hsl(37 75% 52% / 0.05) 0%, transparent 60%);
-}
 
-/* Subtle page background — dark mode */
-.dark body {
-  background-image: none;
-}
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { @apply bg-transparent; }
 ::-webkit-scrollbar-thumb { @apply bg-primary/30 rounded-full; }
 ::-webkit-scrollbar-thumb:hover { @apply bg-primary/60; }
-
-/* Glass card effect */
-.glass {
-  @apply bg-card/80 backdrop-blur-sm border border-border/60;
-}
-
-/* Gradient text — adapts to mode */
-.gradient-text {
-  @apply bg-gradient-to-r from-[hsl(155_38%_42%)] to-[hsl(37_75%_52%)] bg-clip-text text-transparent;
-}
-.dark .gradient-text {
-  @apply from-[hsl(155_38%_60%)] to-[hsl(37_75%_62%)];
-}

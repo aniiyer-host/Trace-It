@@ -32,7 +32,7 @@ export function AdminPanel({ className }: Props) {
   // }, [])
 
   return (
-    <Card className={cn('glass p-6', className)}>
+    <Card className={cn('border border-border bg-card p-6 shadow-sm', className)}>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <h3 className="text-xl font-semibold">Platform Overview</h3>
@@ -89,13 +89,14 @@ export function AdminPanel({ className }: Props) {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm">Blockchain Connection</span>
-              <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400">
+              <span className="flex items-center gap-2 text-xs font-medium text-primary">
+                <span aria-hidden="true" className="h-2 w-2 rounded-full bg-primary" />
                 Connected
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm">API Availability</span>
-              <span className="px-3 py-1 rounded-full text-xs font-muted-foreground bg-muted/20">
+              <span className="text-xs text-muted-foreground">
                 99.9% Uptime
               </span>
             </div>

@@ -103,7 +103,7 @@ export default function DisbursementRequestDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass max-w-md">
+      <DialogContent className="max-w-md border border-border bg-card shadow-sm">
         <DialogHeader>
           <DialogTitle className="text-xl">Request Disbursement</DialogTitle>
           <DialogDescription>
@@ -201,6 +201,7 @@ export default function DisbursementRequestDialog({
             <Button
               onClick={() => void handleRequestDisbursement()}
               disabled={loading}
+              variant="primary"
               className="w-full md:w-auto"
             >
               {loading ? (
