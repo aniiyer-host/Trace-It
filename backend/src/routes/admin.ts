@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction, Router } from "express";
 import { prisma } from "../db/prisma.js";
+import { Prisma } from "../../generated/prisma/client.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
 import {
@@ -10,12 +11,17 @@ import {
   CampaignStatus,
   KycStatus,
   GovernmentRequestStatus,
-  DocumentType,
   AttestationStatus,
+  ProvenanceEventType,
 } from "../../generated/prisma/enums.js";
 import { writeAuditLog } from "../services/auditLogService.js";
 import { allocateDonation } from "../services/statusService.js";
-import { getBlockchainService } from "../services/blockchainInstance.js";
+import {
+  canonicalizeProvenanceEvent,
+  hashProvenanceEvent,
+  serializeProvenanceEvent,
+} from "../utils/provenance.js";
+
 import { StorageService } from "../services/storageService.js";
 
 const adminRouter = Router();
@@ -47,267 +53,172 @@ export const approveDisbursement = async (
       return res.status(400).json({ error: "Disbursement is not PENDING" });
     }
 
-    // Calculate if this is the final disbursement
-    const approvedDisbursements = await prisma.disbursement.aggregate({
-      where: { 
-        campaignId: disbursement.campaignId,
-        status: { in: ["APPROVED", "SENT", "SETTLED"] }
-      },
-      _sum: { amountInr: true }
-    });
-    
-    const totalDisbursed = Number(approvedDisbursements._sum.amountInr || 0) + Number(disbursement.amountInr);
-    const raised = Number(disbursement.campaign.raisedAmount);
-    const isFinalDisbursement = totalDisbursed >= raised;
-
-    // Update disbursement
-    const updated = await prisma.disbursement.update({
-      where: { id: disbursementId },
-      data: {
-        status: DisbursementStatus.APPROVED,
-        approvedBy: adminId,
-        approvedAt: new Date(),
-        isFinalDisbursement: isFinalDisbursement
-      },
-    });
-
-    if (isFinalDisbursement) {
-      await prisma.campaign.update({
-        where: { id: disbursement.campaignId },
-        data: { status: "COMPLETED" }
-      });
-    }
-
-    // BLOCKCHAIN INTEGRATION: Record disbursement on-chain after approval (non-blocking)
-    // We don't await this to avoid slowing down the approval process
-    // Only run in non-test environments to avoid initialization errors during testing
-    if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
-      const recordDisbursementOnChain = async () => {
-        try {
-          const blockchainService = await getBlockchainService();
-          if (!blockchainService) {
-            console.warn(
-              "[Blockchain] Service not available — skipping on-chain recording",
-            );
-            return;
-          }
-
-          // We need the transaction hash of the actual funds transfer.
-          // For now, we assume that the disbursement record already has the solanaTxHash
-          // populated by a previous step (e.g., when funds are sent).
-          // If not, we skip and log a warning.
-          if (!disbursement.solanaTxHash) {
-            console.warn(
-              `Disbursement ${disbursementId} has no solanaTxHash. Skipping on-chain recording.`,
-            );
-            return;
-          }
-
-          // Convert amountInr to paisa (u64)
-          const amountPaisa = Math.round(Number(disbursement.amountInr) * 100);
-
-          const result = await blockchainService.recordDisbursement({
-            disbursementId: disbursement.id,
-            ngoId: disbursement.ngoId,
-            cohortId: disbursement.cohortId ?? "",
-            amountInr: Number(disbursement.amountInr),
-            currency: "INR",
-            timestamp: disbursement.createdAt, // Or use updatedAt? We'll use createdAt for now.
-            transactionHash: disbursement.solanaTxHash,
-          });
-
-          if (result.success) {
-            await writeAuditLog({
-              actorType: AuditActorType.USER,
-              actorId: adminId,
-              entityType: "disbursement",
-              entityId: disbursement.id,
-              action: "BLOCKCHAIN_DISBURSEMENT_RECORDED",
-              metadata: {
-                disbursementId: disbursement.id,
-                transactionHash: result.txHash,
-                ngoId: disbursement.ngoId,
-                cohortId: disbursement.cohortId,
-                amountInr: Number(disbursement.amountInr),
-              },
-            });
-            console.info(
-              `Blockchain disbursement recorded for disbursement ${disbursement.id}: ${result.txHash}`,
-            );
-          } else {
-            console.error(
-              `Failed to record disbursement ${disbursement.id} on-chain: ${result.error}`,
-            );
-
-            // Add to retry queue for disbursement recording
-            await addToBlockchainRetryQueue({
-              donationId: disbursement.id, // Using disbursementId as the key for the retry queue
-              error: result.error ?? "Unknown blockchain error",
-              retryCount: 0,
-              type: "DISBURSEMENT_RECORDING",
-            });
-
-            await writeAuditLog({
-              actorType: AuditActorType.USER,
-              actorId: adminId,
-              entityType: "disbursement",
-              entityId: disbursement.id,
-              action: "BLOCKCHAIN_DISBURSEMENT_RECORDING_FAILED",
-              metadata: {
-                disbursementId: disbursement.id,
-                error: result.error,
-              },
-            });
-          }
-        } catch (error) {
-          console.error(
-            "Error in blockchain disbursement recording integration:",
-            error,
-          );
-          // Don't fail the disbursement approval if blockchain integration fails
-        }
-      };
-      // Fire and forget
-      recordDisbursementOnChain();
-    }
-
-    // BLOCKCHAIN INTEGRATION: Update donation status to ALLOCATED on-chain (non-blocking)
-    // We don't await this to avoid slowing down the disbursement approval process
-    // Only run in non-test environments to avoid initialization errors during testing
-    if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
-      const updateDonationStatusOnChain = async () => {
-        try {
-          const blockchainService = await getBlockchainService();
-          if (!blockchainService) {
-            console.warn(
-              "[Blockchain] Service not available — skipping on-chain recording",
-            );
-            return;
-          }
-
-          // Find associated donations for this disbursement
-          const donations = await prisma.donation.findMany({
-            where: {
-              campaignId: disbursement.campaignId,
-              status: "SUCCESS",
-            },
-            include: {
-              ngo: true,
-            },
-          });
-
-          // Update each donation in the campaign to ALLOCATED status
-          for (const donation of donations) {
-            if (donation.solanaTxHash) {
-              // Only update if already recorded on-chain
-              const result = await blockchainService.updateDonationStatus(
-                donation.id,
-                2, // ALLOCATED status
-              );
-
-              if (result.success) {
-                await writeAuditLog({
-                  actorType: AuditActorType.USER,
-                  actorId: adminId,
-                  entityType: "donation",
-                  entityId: donation.id,
-                  action: "BLOCKCHAIN_STATUS_UPDATE",
-                  metadata: {
-                    donationId: donation.id,
-                    transactionHash: result.txHash,
-                    newStatus: "ALLOCATED",
-                  },
-                });
-              } else {
-                console.error(
-                  `Failed to update donation ${donation.id} status on-chain: ${result.error}`,
-                );
-
-                // Add to retry queue for status updates
-                await addToBlockchainRetryQueue({
-                  donationId: donation.id,
-                  error: result.error ?? "Unknown blockchain error",
-                  retryCount: 0,
-                  type: "STATUS_UPDATE",
-                  targetStatus: 2,
-                });
-              }
-            } else {
-              console.warn(
-                `Donation ${donation.id} not yet recorded on-chain, skipping status update`,
-              );
-            }
-          }
-        } catch (error) {
-          console.error(
-            "Error in blockchain status update integration:",
-            error,
-          );
-          // Don't fail the disbursement approval if blockchain integration fails
-        }
-      };
-      // Fire and forget
-      updateDonationStatusOnChain();
-    }
-
-    // Allocate donations up to the disbursed amount
-    const donations = await prisma.donation.findMany({
-      where: {
-        campaignId: disbursement.campaignId,
-        status: { in: ["SUCCESS", "ALLOCATED", "DISBURSED", "DELIVERED"] }
-      },
-      orderBy: { createdAt: "asc" },
-    });
-
-    let remainingToAllocate = Number(disbursement.amountInr);
-
-    for (const donation of donations) {
-      if (remainingToAllocate <= 0) break;
-
-      const availableInDonation = Number(donation.amount) - Number(donation.allocatedAmount);
-      if (availableInDonation <= 0) continue;
-
-      const amountToAllocate = Math.min(availableInDonation, remainingToAllocate);
-
-      // Create DonationAllocation record
-      await prisma.donationAllocation.create({
+    const transactionResult = await prisma.$transaction(async (tx) => {
+      const approvedAt = new Date();
+      const claimed = await tx.disbursement.updateMany({
+        where: {
+          id: disbursementId,
+          status: DisbursementStatus.PENDING,
+        },
         data: {
-          donationId: donation.id,
-          disbursementId: disbursement.id,
-          amount: amountToAllocate,
-        }
+          status: DisbursementStatus.APPROVED,
+          approvedBy: adminId,
+          approvedAt,
+        },
       });
 
-      // Update donation allocatedAmount and status
-      const newAllocatedAmount = Number(donation.allocatedAmount) + amountToAllocate;
-      let newStatus = donation.status;
-      
-      if (donation.status === "SUCCESS") {
-        newStatus = "ALLOCATED";
+      if (claimed.count !== 1) {
+        return { claimed: false as const };
       }
 
-      await prisma.donation.update({
-        where: { id: donation.id },
-        data: { 
-          allocatedAmount: newAllocatedAmount,
-          status: newStatus 
-        }
+      const lockedCampaign = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT "id"
+        FROM "campaigns"
+        WHERE "id" = ${disbursement.campaignId}
+        FOR UPDATE
+      `;
+      if (lockedCampaign.length !== 1) {
+        throw new Error("Campaign not found after approval claim");
+      }
+
+      const approvedDisbursement = await tx.disbursement.findUnique({
+        where: { id: disbursementId },
+        include: { campaign: true },
       });
 
-      // Create Attestation for this donor/disbursement
-      await prisma.attestation.create({
-        data: {
-          donationId: donation.id,
-          disbursementId: disbursement.id,
-          type: "RECEIPT",
-          allocatedAmount: amountToAllocate,
-          requestedBy: donation.donorId,
-          status: "PENDING",
-        }
+      if (!approvedDisbursement) {
+        throw new Error("Disbursement not found after approval claim");
+      }
+
+      const approvedDisbursements = await tx.disbursement.aggregate({
+        where: {
+          id: { not: disbursementId },
+          campaignId: approvedDisbursement.campaignId,
+          status: { in: ["APPROVED", "SENT", "SETTLED"] },
+        },
+        _sum: { amountInr: true },
       });
 
-      remainingToAllocate -= amountToAllocate;
+      const totalDisbursed = (
+        approvedDisbursements._sum.amountInr ?? new Prisma.Decimal(0)
+      ).plus(approvedDisbursement.amountInr);
+      const isFinalDisbursement = totalDisbursed.greaterThanOrEqualTo(
+        approvedDisbursement.campaign.raisedAmount,
+      );
+
+      const updated = await tx.disbursement.update({
+        where: { id: disbursementId },
+        data: { isFinalDisbursement },
+      });
+
+      if (isFinalDisbursement) {
+        await tx.campaign.update({
+          where: { id: approvedDisbursement.campaignId },
+          data: { status: "COMPLETED" },
+        });
+      }
+
+      const donations = await tx.donation.findMany({
+        where: {
+          campaignId: approvedDisbursement.campaignId,
+          status: { in: ["SUCCESS", "ALLOCATED", "DISBURSED", "DELIVERED"] },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+
+      let remainingToAllocate = approvedDisbursement.amountInr;
+
+      for (const donation of donations) {
+        if (remainingToAllocate.lessThanOrEqualTo(0)) break;
+
+        const availableInDonation = donation.amount.minus(
+          donation.allocatedAmount,
+        );
+        if (availableInDonation.lessThanOrEqualTo(0)) continue;
+
+        const amountToAllocate = availableInDonation.lessThan(
+          remainingToAllocate,
+        )
+          ? availableInDonation
+          : remainingToAllocate;
+        const occurredAt = new Date();
+
+        await tx.donationAllocation.create({
+          data: {
+            donationId: donation.id,
+            disbursementId: approvedDisbursement.id,
+            amount: amountToAllocate,
+          },
+        });
+
+        const newAllocatedAmount = donation.allocatedAmount.plus(
+          amountToAllocate,
+        );
+        const newStatus =
+          donation.status === "SUCCESS" ? "ALLOCATED" : donation.status;
+
+        const donationUpdate = await tx.donation.updateMany({
+          where: {
+            id: donation.id,
+            allocatedAmount: donation.allocatedAmount,
+          },
+          data: {
+            allocatedAmount: newAllocatedAmount,
+            status: newStatus,
+          },
+        });
+        if (donationUpdate.count !== 1) {
+          throw new Error("Donation allocation conflicted with another approval");
+        }
+
+        await tx.attestation.create({
+          data: {
+            donationId: donation.id,
+            disbursementId: approvedDisbursement.id,
+            type: "RECEIPT",
+            allocatedAmount: amountToAllocate,
+            requestedBy: donation.donorId,
+            status: "PENDING",
+          },
+        });
+
+        const provenanceInput = {
+          eventType: ProvenanceEventType.DONATION_ALLOCATED,
+          entityType: "Donation",
+          entityId: donation.id,
+          amountInr: amountToAllocate.toFixed(2),
+          ngoId: donation.ngoId,
+          campaignId: donation.campaignId,
+          occurredAt,
+        };
+        const canonicalEvent = canonicalizeProvenanceEvent(provenanceInput);
+
+        await tx.provenanceEvent.create({
+          data: {
+            eventType: ProvenanceEventType.DONATION_ALLOCATED,
+            entityType: canonicalEvent.entityType,
+            entityId: canonicalEvent.entityId,
+            amountInr: canonicalEvent.amountInr,
+            ngoId: canonicalEvent.ngoId,
+            campaignId: canonicalEvent.campaignId,
+            occurredAt,
+            canonicalPayload: serializeProvenanceEvent(provenanceInput),
+            payloadHash: hashProvenanceEvent(provenanceInput),
+            transitionKey: approvedDisbursement.id,
+          },
+        });
+
+        remainingToAllocate = remainingToAllocate.minus(amountToAllocate);
+      }
+
+      return { claimed: true as const, updated };
+    });
+
+    if (!transactionResult.claimed) {
+      return res.status(400).json({ error: "Disbursement is not PENDING" });
     }
+
+    const updated = transactionResult.updated;
 
     // Write audit log
     await writeAuditLog({
@@ -461,97 +372,7 @@ export const approveNgo = async (
       metadata: {},
     });
 
-    // BLOCKCHAIN INTEGRATION: Register NGO on-chain after approval (non-blocking)
-    // We don't await this to avoid slowing down the approval process
-    // Only run in non-test environments to avoid initialization errors during testing
-    if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
-      const registerNgoOnChain = async () => {
-        try {
-          const blockchainService = await getBlockchainService();
-          if (!blockchainService) {
-            console.warn(
-              "[Blockchain] Service not available — skipping on-chain recording",
-            );
-            return;
-          }
 
-          // Find the latest NGO verification document (NGO_CERT) owned by this NGO
-          const verificationDoc = await prisma.document.findFirst({
-            where: {
-              ownerId: ngoId,
-              documentType: DocumentType.NGO_CERT,
-            },
-            orderBy: {
-              createdAt: "desc",
-            },
-          });
-
-          if (!verificationDoc) {
-            console.warn(
-              `No verification document found for NGO ${ngoId}. Skipping on-chain registration.`,
-            );
-            return;
-          }
-
-          const metadataHash = verificationDoc.sha512Hash;
-
-          const result = await blockchainService.registerNgo({
-            ngoId,
-            metadataHash,
-          });
-
-          if (result.success) {
-            await writeAuditLog({
-              actorType: AuditActorType.USER,
-              actorId: adminId,
-              entityType: "ngo",
-              entityId: ngoId,
-              action: "BLOCKCHAIN_NGO_REGISTERED",
-              metadata: {
-                ngoId: ngoId,
-                transactionHash: result.txHash,
-                metadataHash,
-              },
-            });
-            console.info(
-              `Blockchain NGO registration successful for NGO ${ngoId}: ${result.txHash}`,
-            );
-          } else {
-            console.error(
-              `Failed to register NGO ${ngoId} on-chain: ${result.error}`,
-            );
-
-            // Add to retry queue for NGO registration
-            await addToBlockchainRetryQueue({
-              donationId: ngoId, // Using ngoId as the key for the retry queue (though it's not a donation, we can adapt the queue)
-              error: result.error ?? "Unknown blockchain error",
-              retryCount: 0,
-              type: "NGO_REGISTRATION",
-            });
-
-            await writeAuditLog({
-              actorType: AuditActorType.USER,
-              actorId: adminId,
-              entityType: "ngo",
-              entityId: ngoId,
-              action: "BLOCKCHAIN_NGO_REGISTRATION_FAILED",
-              metadata: {
-                ngoId: ngoId,
-                error: result.error,
-              },
-            });
-          }
-        } catch (error) {
-          console.error(
-            "Error in blockchain NGO registration integration:",
-            error,
-          );
-          // Don't fail the NGO approval if blockchain integration fails
-        }
-      };
-      // Fire and forget
-      registerNgoOnChain();
-    }
 
     res.json(updated);
   } catch (err) {
@@ -1372,45 +1193,6 @@ export const rejectDisbursement = async (
     next(err);
   }
 };
-
-// ---------------------------------------------------------------------------
-// Helper function for retry queue
-// ---------------------------------------------------------------------------
-async function addToBlockchainRetryQueue(data: {
-  donationId: string;
-  error: string;
-  retryCount: number;
-  type?: string;
-  targetStatus?: number;
-}): Promise<void> {
-  try {
-    // Create or update retry queue entry
-    await prisma.blockchainRetryQueue.upsert({
-      where: { donationId: data.donationId },
-      update: {
-        error: data.error,
-        retryCount: data.retryCount + 1,
-        lastAttempt: new Date(),
-        updatedAt: new Date(),
-      },
-      create: {
-        donationId: data.donationId,
-        error: data.error,
-        retryCount: data.retryCount + 1,
-        lastAttempt: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    });
-
-    console.log(
-      `Added donation ${data.donationId} to blockchain retry queue (attempt ${data.retryCount + 1})`,
-    );
-  } catch (queueError) {
-    console.error(`Failed to add to retry queue:`, queueError);
-    // Don't fail the operation if queue fails
-  }
-}
 
 // GET /disbursements/:id/proof-url - generate a short-lived signed URL for the proof file
 // Reason: fieldReportUrl stored in the DB is a raw S3 storage path (e.g.
