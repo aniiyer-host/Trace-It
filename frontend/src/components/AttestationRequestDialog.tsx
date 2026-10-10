@@ -52,7 +52,8 @@ export default function AttestationRequestDialog({
           <DialogTitle className="text-xl">Request NGO Attestation</DialogTitle>
           <DialogDescription>
             Request the NGO to confirm receipt of funds for this donation.
-            Once confirmed, the attestation will be stored on-chain.
+            Once confirmed, the attestation will be recorded in the Trace-It
+            database.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 p-6">
@@ -75,7 +76,8 @@ export default function AttestationRequestDialog({
                 The NGO will receive a notification to confirm receipt of funds.
               </li>
               <li>
-                Upon confirmation, an attestation will be generated and stored on-chain.
+                Upon confirmation, an attestation will be generated and stored
+                in the Trace-It database.
               </li>
               <li>
                 You will be able to verify this attestation anytime.

@@ -23,7 +23,7 @@ export default function AttestationVerificationDialog({
   open,
   onOpenChange,
 }: AttestationVerificationDialogProps) {
-  const [attestation, setAttestation] = useState<Attestation | null>(null);
+  const [attestations, setAttestations] = useState<Attestation[]>([]);
   const [verifying, setVerifying] = useState(false);
   const { toast } = useToast();
 
@@ -32,10 +32,18 @@ export default function AttestationVerificationDialog({
     try {
       // const result = await getAttestationByDonationId(donation.id, 'receipt')
       const result = await apiService.donations.getAttestation(donation.id);
-      setAttestation(result);
+      setAttestations(result);
+      if (result.length === 0) {
+        toast({
+          title: "No attestation record found",
+          variant: "destructive",
+        });
+        return;
+      }
       toast({
-        title: "Attestation verified successfully!",
-        description: "The attestation is valid and stored on-chain.",
+        title: "Attestation record found",
+        description:
+          "A matching attestation record was found in the Trace-It database. This does not verify a cryptographic signature or blockchain anchor.",
       });
     } catch (error) {
       console.error("Failed to verify attestation:", error);
@@ -54,22 +62,21 @@ export default function AttestationVerificationDialog({
         <DialogHeader>
           <DialogTitle className="text-xl">Verify Attestation</DialogTitle>
           <DialogDescription>
-            Verify the NGO attestation for this donation stored on the
-            blockchain.
+            Check whether an NGO attestation record exists for this donation.
           </DialogDescription>
         </DialogHeader>
-        {attestation ? (
+        {attestations.length > 0 ? (
           <div className="space-y-6 p-6">
-            <div className="space-y-4">
+            {attestations.map((attestation) => (
+            <div key={attestation.id} className="space-y-4">
               <div className="flex items-center space-x-4">
                 <div className="flex h-10 w-10 items-center justify-center bg-emerald-50 text-emerald-500 rounded-full">
                   <CheckCircle2 className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="font-semibold">Attestation Verified</h3>
+                  <h3 className="font-semibold">Attestation record found</h3>
                   <p className="text-muted-foreground">
-                    This attestation is valid and permanently stored on the
-                    Solana blockchain.
+                    This attestation record exists in the Trace-It database.
                   </p>
                 </div>
               </div>
@@ -83,16 +90,16 @@ export default function AttestationVerificationDialog({
                     </p>
                     <p>
                       <strong>Type:</strong>{" "}
-                      {attestation.type === "receipt"
+                      {attestation.type.toUpperCase() === "RECEIPT"
                         ? "Receipt Confirmation"
                         : "Delivery Confirmation"}
                     </p>
                     <p>
-                      <strong>Attested By:</strong> {attestation.attestedBy}
+                      <strong>Status:</strong> {attestation.status}
                     </p>
                     <p>
                       <strong>Timestamp:</strong>{" "}
-                      {new Date(attestation.attestedAt).toLocaleString()}
+                      {new Date(attestation.createdAt).toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -100,7 +107,7 @@ export default function AttestationVerificationDialog({
                 <div className="space-y-3">
                   <p className="font-medium">Attestation Statement:</p>
                   <p className="text-muted-foreground bg-muted/50 p-4 rounded">
-                    {attestation.statement}
+                    This record is stored in the Trace-It database.
                   </p>
                 </div>
 
@@ -108,16 +115,16 @@ export default function AttestationVerificationDialog({
                   <p className="font-medium">Verification Information:</p>
                   <div className="space-y-2 text-sm">
                     <p>
-                      <strong>On-Chain Status:</strong>{" "}
-                      <span className="text-emerald-600">Confirmed</span>
+                      <strong>Database Status:</strong>{" "}
+                      <span className="text-emerald-600">Record found</span>
                     </p>
                     <p>
-                      <strong>Immutability:</strong> This attestation cannot be
-                      modified or deleted once stored on-chain.
+                      <strong>Integrity:</strong> This lookup confirms database
+                      existence only.
                     </p>
                     <p>
-                      <strong>Verification Method:</strong> Cryptographic
-                      signature verification using NGO's public key.
+                      <strong>Not verified:</strong> No cryptographic signature
+                      or blockchain anchor was checked.
                     </p>
                   </div>
                 </div>
@@ -132,13 +139,14 @@ export default function AttestationVerificationDialog({
                 </Button>
               </div>
             </div>
+            ))}
           </div>
         ) : (
           <div className="space-y-6 p-6">
             {verifying ? (
               <div className="flex items-center justify-center space-x-4">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                <p className="text-sm">Verifying attestation on-chain...</p>
+                <p className="text-sm">Checking the database record...</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -149,8 +157,8 @@ export default function AttestationVerificationDialog({
                   <div>
                     <h3 className="font-semibold">Ready to Verify</h3>
                     <p className="text-muted-foreground">
-                      Click verify to check the attestation stored on the
-                      blockchain.
+                      Click verify to check whether an attestation record exists
+                      in the Trace-It database.
                     </p>
                   </div>
                 </div>
@@ -179,18 +187,16 @@ export default function AttestationVerificationDialog({
                   <p className="font-medium">Verification Process:</p>
                   <ol className="list-decimal list-inside space-y-2 text-sm">
                     <li>
-                      Retrieve the attestation from on-chain storage using its
-                      ID.
+                      Retrieve the attestation record from the Trace-It database.
                     </li>
                     <li>
-                      Verify the cryptographic signature using the NGO's public
-                      key.
+                      Confirm that the database returned a matching record.
                     </li>
                     <li>
                       Confirm the attestation matches the donation details.
                     </li>
                     <li>
-                      Check that the attestation has not been tampered with.
+                      No cryptographic or blockchain tamper check is performed.
                     </li>
                   </ol>
                 </div>
