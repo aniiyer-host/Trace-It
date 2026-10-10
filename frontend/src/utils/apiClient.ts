@@ -458,7 +458,7 @@ export const apiService = {
     create: (donationData: {
       campaignId: string;
       ngoId: string;
-      amount: number;
+      amount: number | string;
       paymentMethod: string;
     }) => post<DonationCreateResponse>("/donor/donate", donationData),
     verifyPayment: (

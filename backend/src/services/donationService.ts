@@ -7,6 +7,7 @@ import {
   ProvenanceEventType,
 } from '../../generated/prisma/enums.js';
 import Razorpay from 'razorpay';
+import { Prisma } from '../../generated/prisma/client.js';
 import { writeAuditLog } from './auditLogService.js';
 import { generateAndStoreReceipt } from './receiptService.js';
 import { notifyAdmin } from './emailService.js';
@@ -17,6 +18,7 @@ import {
   hashProvenanceEvent,
   serializeProvenanceEvent,
 } from '../utils/provenance.js';
+import { MonetaryInputError, parseInrAmount } from '../utils/money.js';
 
 
 
@@ -147,13 +149,14 @@ export const completeDonationSuccess = async (
     evidence.source === 'simulation'
       ? `pay_sim_${donation.id.replace(/-/g, '')}`
       : evidence.razorpayPaymentId;
+  const expectedAmount = parseInrAmount(donation.amount.toFixed(2));
   const amountPaise =
     evidence.source === 'simulation'
-      ? Math.round(Number(donation.amount) * 100)
+      ? expectedAmount.amountPaise
       : evidence.amountPaise;
   const currency =
     evidence.source === 'simulation' ? donation.currencyCode : evidence.currency;
-  const expectedAmountPaise = Math.round(Number(donation.amount) * 100);
+  const expectedAmountPaise = expectedAmount.amountPaise;
 
   if (
     !orderId ||
@@ -280,7 +283,7 @@ export const completeDonationSuccess = async (
   const updatedDonation = transition.donation;
 
   // 2. AML flag check: if amount > 100,000 INR
-  if (Number(updatedDonation.amount) > 100000) {
+  if (updatedDonation.amount.greaterThan(new Prisma.Decimal('100000'))) {
     void writeAuditLog({
       actorType: AuditActorType.SYSTEM,
       entityType: 'donation',
@@ -441,18 +444,18 @@ export const completeDonationSuccess = async (
  * @returns Order object from Razorpay
  */
 export const createRazorpayOrder = async (
-  amountInr: number,
+  amountInr: unknown,
   donationId: string,
 ) => {
   // Razorpay expects amount in the smallest currency unit (paise for INR)
-  const amountInPaise = Math.round(amountInr * 100);
-
-  if (
-    !Number.isSafeInteger(amountInPaise) ||
-    amountInPaise <= 0 ||
-    amountInPaise / 100 !== amountInr
-  ) {
-    throw new DonationPaymentError('Donation amount must be a valid INR amount');
+  let amountInPaise: number;
+  try {
+    amountInPaise = parseInrAmount(amountInr).amountPaise;
+  } catch (error) {
+    if (error instanceof MonetaryInputError) {
+      throw new DonationPaymentError('Donation amount must be a valid INR amount');
+    }
+    throw error;
   }
 
   return getRazorpayClient().orders.create({

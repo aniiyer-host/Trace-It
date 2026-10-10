@@ -18,6 +18,7 @@ import { getBlockchainService } from "../services/blockchainInstance.js";
 import { addToBlockchainRetryQueue } from "../services/blockchainRetryQueue.js";
 import { allocateDonation } from "../services/statusService.js";
 import { HashService } from "../services/hashService.js";
+import { MonetaryInputError, parseInrAmount } from "../utils/money.js";
 import {
   AttestationType,
   AttestationStatus,
@@ -652,17 +653,24 @@ export const createDisbursement = async (
       });
     }
 
-    const requestedAmount = Number(amountInr);
-    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
-      return res
-        .status(400)
-        .json({ error: "amountInr must be a positive number" });
+    let requestedAmount;
+    try {
+      requestedAmount = parseInrAmount(amountInr);
+    } catch (error) {
+      if (error instanceof MonetaryInputError) {
+        return res
+          .status(400)
+          .json({ error: "amountInr must be a positive number" });
+      }
+      throw error;
     }
 
-    if (requestedAmount > Number(campaign.raisedAmount)) {
-      return res.status(400).json({
-        error: "amountInr cannot exceed the campaign amount raised",
-      });
+    if (requestedAmount.decimal.greaterThan(campaign.raisedAmount)) {
+      return res
+        .status(400)
+        .json({
+          error: "amountInr cannot exceed the campaign amount raised",
+        });
     }
 
     if (cohortId) {
@@ -685,7 +693,7 @@ export const createDisbursement = async (
         campaignId: targetCampaignId,
         ngoId: userId,
         cohortId: cohortId || null,
-        amountInr: new Prisma.Decimal(requestedAmount.toString()),
+        amountInr: requestedAmount.decimal,
         fieldReportUrl: fieldReportUrl || null,
         status: DisbursementStatus.PENDING,
         disbursementType: disbursementType || "PROOF_OF_NEED",
@@ -698,7 +706,10 @@ export const createDisbursement = async (
       entityType: "disbursement",
       entityId: disbursement.id,
       action: "DISBURSEMENT_CREATED",
-      metadata: { campaignId: targetCampaignId, amountInr: requestedAmount },
+      metadata: {
+        campaignId: targetCampaignId,
+        amountInr: requestedAmount.decimal.toFixed(2),
+      },
     });
 
     res.status(201).json(disbursement);
