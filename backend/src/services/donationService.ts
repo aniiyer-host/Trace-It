@@ -11,8 +11,6 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { writeAuditLog } from './auditLogService.js';
 import { generateAndStoreReceipt } from './receiptService.js';
 import { notifyAdmin } from './emailService.js';
-import { getBlockchainService } from './blockchainInstance.js';
-import { addToBlockchainRetryQueue } from './blockchainRetryQueue.js';
 import {
   canonicalizeProvenanceEvent,
   hashProvenanceEvent,
@@ -349,91 +347,7 @@ export const completeDonationSuccess = async (
       });
     });
 
-  // 5. Record on Solana Blockchain (only in non-test / when enabled)
-  if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
-    try {
-      const blockchainService = await getBlockchainService();
-      if (blockchainService) {
-        const donationData = {
-          donationId: updatedDonation.id,
-          donorUserId: updatedDonation.donorId,
-          ngoId: updatedDonation.ngoId,
-          campaignId: updatedDonation.campaignId ?? '',
-          amountInr: Number(updatedDonation.amount),
-          currency: 'INR',
-          timestamp: new Date(),
-        };
 
-        const blockchainResult = await blockchainService.recordDonation(donationData);
-
-        if (blockchainResult.success) {
-          await prisma.donation.update({
-            where: { id: updatedDonation.id },
-            data: { solanaTxHash: blockchainResult.txHash },
-          });
-
-          await writeAuditLog({
-            actorType: AuditActorType.SYSTEM,
-            entityType: 'donation',
-            entityId: updatedDonation.id,
-            action: 'BLOCKCHAIN_RECORD_SUCCESS',
-            metadata: {
-              donationId: updatedDonation.id,
-              transactionHash: blockchainResult.txHash,
-            },
-            ipAddress: options?.ipAddress,
-          });
-
-          console.info(`Blockchain recording successful for donation ${updatedDonation.id}: ${blockchainResult.txHash}`);
-        } else {
-          console.error(`Blockchain recording failed for donation ${updatedDonation.id}: ${blockchainResult.error}`);
-
-          await addToBlockchainRetryQueue({
-            donationId: updatedDonation.id,
-            error: blockchainResult.error ?? 'Unknown error',
-            retryCount: 0,
-            operationType: 'RECORD_DONATION',
-          });
-
-          await writeAuditLog({
-            actorType: AuditActorType.SYSTEM,
-            entityType: 'donation',
-            entityId: updatedDonation.id,
-            action: 'BLOCKCHAIN_RECORD_FAILED',
-            metadata: {
-              donationId: updatedDonation.id,
-              error: blockchainResult.error,
-            },
-            ipAddress: options?.ipAddress,
-          });
-        }
-      } else {
-        console.warn('[Blockchain] Service not available — skipping on-chain recording');
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`Blockchain service error for donation ${updatedDonation.id}:`, error);
-
-      await addToBlockchainRetryQueue({
-        donationId: updatedDonation.id,
-        error: errorMessage,
-        retryCount: 0,
-        operationType: 'RECORD_DONATION',
-      });
-
-      await writeAuditLog({
-        actorType: AuditActorType.SYSTEM,
-        entityType: 'donation',
-        entityId: updatedDonation.id,
-        action: 'BLOCKCHAIN_SERVICE_ERROR',
-        metadata: {
-          donationId: updatedDonation.id,
-          error: errorMessage,
-        },
-        ipAddress: options?.ipAddress,
-      });
-    }
-  }
 
   return updatedDonation;
 };

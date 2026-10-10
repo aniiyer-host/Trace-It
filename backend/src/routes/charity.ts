@@ -14,8 +14,8 @@ import {
   AuditActorType,
 } from "../../generated/prisma/enums.js";
 import { writeAuditLog } from "../services/auditLogService.js";
-import { getBlockchainService } from "../services/blockchainInstance.js";
-import { addToBlockchainRetryQueue } from "../services/blockchainRetryQueue.js";
+
+
 import { allocateDonation } from "../services/statusService.js";
 import { HashService } from "../services/hashService.js";
 import { MonetaryInputError, parseInrAmount } from "../utils/money.js";
@@ -25,75 +25,6 @@ import {
 } from "../../generated/prisma/enums.js";
 const charityRouter = Router();
 
-// Helper function to handle blockchain operations (fire and forget)
-const handleBlockchainOperation = async (
-  operationFn: (service: any) => Promise<any>,
-  operationName: string,
-  entityType: string,
-  entityId: string,
-  adminId: string,
-) => {
-  // Only run in non-test environments to avoid initialization errors during testing
-  if (process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID) {
-    return;
-  }
-
-  try {
-    const blockchainService = await getBlockchainService();
-    if (blockchainService) {
-      const result = await operationFn(blockchainService);
-
-      if (result.success) {
-        await writeAuditLog({
-          actorType: AuditActorType.USER,
-          actorId: adminId,
-          entityType,
-          entityId,
-          action: `BLOCKCHAIN_${operationName.toUpperCase()}_SUCCESS`,
-          metadata: {
-            entityId,
-            transactionHash: result.txHash,
-          },
-        });
-        console.info(
-          `Blockchain ${operationName} successful: ${result.txHash}`,
-        );
-      } else {
-        console.error(`Failed to ${operationName} on-chain: ${result.error}`);
-
-        await addToBlockchainRetryQueue({
-          donationId: entityId,
-          error: result.error ?? "Unknown blockchain error",
-          retryCount: 0,
-        });
-
-        await writeAuditLog({
-          actorType: AuditActorType.USER,
-          actorId: adminId,
-          entityType,
-          entityId,
-          action: `BLOCKCHAIN_${operationName.toUpperCase()}_FAILED`,
-          metadata: {
-            entityId,
-            error: result.error,
-          },
-        });
-      }
-    } else {
-      console.warn(
-        `[Blockchain] Service not available — skipping on-chain recording for ${operationName}`,
-      );
-    }
-  } catch (error) {
-    console.error(`Blockchain invocation error for ${operationName}:`, error);
-
-    await addToBlockchainRetryQueue({
-      donationId: entityId,
-      error: error instanceof Error ? error.message : "Unknown fatal error",
-      retryCount: 0,
-    });
-  }
-};
 
 // POST /onboard - update NGO profile details
 export const onboardNgo = async (
@@ -566,19 +497,7 @@ export const uploadCohortProof = [
         },
       });
 
-      handleBlockchainOperation(
-        async (blockchainService) => {
-          return await blockchainService.registerCohort({
-            cohortId,
-            ngoId: userId,
-            metadataHash: sha512DocHash,
-          });
-        },
-        "COHORT_REGISTRATION",
-        "cohort",
-        cohortId,
-        userId,
-      );
+
 
       await writeAuditLog({
         actorType: AuditActorType.USER,

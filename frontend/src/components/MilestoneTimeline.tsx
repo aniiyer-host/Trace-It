@@ -1,7 +1,7 @@
 // MilestoneTimeline – Enhanced vertical progress tracker with better visualizations
-import { ExternalLink, Loader2, CheckCircle } from 'lucide-react'
+import { Loader2, CheckCircle } from 'lucide-react'
 import { StatusBadge } from '@/components/StatusBadge'
-import { formatUSD, shortenHash } from '@/lib/utils'
+import { formatUSD } from '@/lib/utils'
 import type { Milestone } from '@/types'
 
 interface Props {
@@ -56,17 +56,7 @@ export function MilestoneTimeline({ milestones, className }: Props) {
                                             <span className="text-emerald-600">Proof submitted</span>
                                         )}
 
-                                        {ms.txHash && (
-                                            <a
-                                                href={`https://explorer.solana.com/tx/${ms.txHash}?cluster=devnet`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex items-center gap-1 text-primary hover:underline"
-                                            >
-                                                <ExternalLink className="h-3 w-3" />
-                                                {shortenHash(ms.txHash)}
-                                            </a>
-                                        )}
+
 
                                         {ms.approvedAt && (
                                             <span>
