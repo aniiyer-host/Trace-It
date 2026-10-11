@@ -1,0 +1,3 @@
+# No changes required to stop-validator.sh
+# The script already uses the same lock directory as start-validator.sh
+# and does not depend on wallet paths or build processes.

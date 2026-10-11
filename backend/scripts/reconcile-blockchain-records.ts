@@ -1,8 +1,11 @@
 #!/usr/bin/env ts-node
-import { getBlockchainService } from '../src/services/blockchainInstance';
-import { prisma } from '../src/db/prisma';
-import { writeAuditLog } from '../src/services/auditLogService';
-import { AuditActorType } from '../../../generated/prisma/enums';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+import { getBlockchainService } from '../src/services/blockchainInstance.js';
+import { prisma } from '../src/db/prisma.js';
+import { writeAuditLog } from '../src/services/auditLogService.js';
+import { AuditActorType, DonationStatus } from '../generated/prisma/enums.js';
+import { MAX_BLOCKCHAIN_RETRIES } from '../src/services/blockchainRetryProcessor.js';
 
 async function main() {
   console.log('Starting blockchain reconciliation process...');
@@ -12,7 +15,7 @@ async function main() {
   // Find donations that are SUCCESS or higher but missing solanaTxHash
   const donationsNeedingRecording = await prisma.donation.findMany({
     where: {
-      status: { in: [1, 2, 3, 4] }, // SUCCESS or higher
+      status: { in: [DonationStatus.SUCCESS, DonationStatus.ALLOCATED, DonationStatus.DISBURSED, DonationStatus.DELIVERED] }, // SUCCESS or higher
       solanaTxHash: null
     },
     include: {
@@ -29,58 +32,41 @@ async function main() {
     try {
       console.log(`Processing donation ${donation.id} for recording...`);
 
-      const donationData = {
-        donationId: donation.id,
-        donorUserId: donation.donorId,
-        ngoId: donation.ngoId,
-        campaignId: donation.campaignId ?? '',
-        amountInr: donation.amount.toNumber(),
-        currency: 'INR',
-        timestamp: new Date(donation.createdAt)
-      };
+      console.log(`Checking queue for donation ${donation.id}...`);
 
-      const result = await blockchainService.recordDonation(donationData);
+      const existingQueue = await prisma.blockchainRetryQueue.findUnique({
+        where: { donationId: donation.id }
+      });
 
-      if (result.success) {
-        // Update donation with transaction hash
-        await prisma.donation.update({
-          where: { id: donation.id },
-          data: { solanaTxHash: result.txHash }
-        });
-
-        await writeAuditLog({
-          actorType: AuditActorType.SYSTEM,
-          entityType: 'donation',
-          entityId: donation.id,
-          action: 'BLOCKCHAIN_RECONCILE_RECORD',
-          metadata: {
-            donationId: donation.id,
-            transactionHash: result.txHash
-          },
-          ipAddress: 'reconciliation-script',
-        });
-
-        console.log(`✓ Successfully recorded donation ${donation.id}: ${result.txHash}`);
-        recordedCount++;
+      if (!existingQueue) {
+        try {
+          await prisma.blockchainRetryQueue.create({
+            data: {
+              donationId: donation.id,
+              operationType: 'RECORD_DONATION',
+              lastAttempt: new Date(0), // Ready immediately
+              error: 'Enqueued by reconciliation script'
+            }
+          });
+          console.log(`✓ Enqueued missing donation ${donation.id} to retry queue.`);
+          recordedCount++;
+        } catch (createError: any) {
+          if (createError?.code === 'P2002') {
+            // Concurrent reconciliation run already enqueued this donation — safe to ignore.
+            console.log(`ℹ Donation ${donation.id} was concurrently enqueued. Skipping.`);
+          } else {
+            throw createError; // Re-throw so the outer catch handles it.
+          }
+        }
       } else {
-        console.error(`✗ Failed to record donation ${donation.id}: ${result.error}`);
-
-        await writeAuditLog({
-          actorType: AuditActorType.SYSTEM,
-          entityType: 'donation',
-          entityId: donation.id,
-          action: 'BLOCKCHAIN_RECONCILE_FAILED',
-          metadata: {
-            donationId: donation.id,
-            error: result.error
-          },
-          ipAddress: 'reconciliation-script',
-        });
-
-        failedCount++;
+        if (existingQueue.retryCount >= MAX_BLOCKCHAIN_RETRIES) {
+          console.log(`⚠ Donation ${donation.id} is in terminal state in retry queue. Skipping.`);
+        } else {
+          console.log(`ℹ Donation ${donation.id} is already active in retry queue. Skipping.`);
+        }
       }
-    } catch (error) {
-      console.error(`✗ Unexpected error processing donation ${donation.id}:`, error);
+    } catch (error: any) {
+      console.error(`✗ Unexpected error queueing donation ${donation.id}:`, error);
 
       await writeAuditLog({
         actorType: AuditActorType.SYSTEM,
@@ -104,7 +90,7 @@ async function main() {
   // Also check for donations that need status updates
   const donationsNeedingStatusUpdate = await prisma.donation.findMany({
     where: {
-      status: { in: [2, 3, 4] }, // ALLOCATED or higher
+      status: { in: [DonationStatus.ALLOCATED, DonationStatus.DISBURSED, DonationStatus.DELIVERED] }, // ALLOCATED or higher
       solanaTxHash: { not: null }
     }
   });
@@ -190,8 +176,8 @@ async function main() {
   `);
 }
 
-// Run if executed directly
-if (require.main === module) {
+// Run if executed directly (ESM-compatible, path-normalised guard)
+if (process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1])) {
   main().catch(error => {
     console.error('Fatal error in reconciliation script:', error);
     process.exit(1);

@@ -14,8 +14,7 @@ import {
   validateSection12Registration,
   validateSection80GRegistration,
   validateDarpanId,
-  validateCSRRegistration,
-  normalizeInput
+  validateCSRRegistration
 } from "@/utils/validation";
 
 const ProfileFormSchema = z.object({

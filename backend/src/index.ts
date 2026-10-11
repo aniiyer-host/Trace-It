@@ -15,6 +15,7 @@ import webhookRoutes from "./routes/webhooks/razorpay.js";
 
 import { errorHandler } from "./middleware/errorHandler.js";
 import { notFound } from "./middleware/notFound.js";
+import BlockchainRetryProcessor from "./services/blockchainRetryProcessor.js";
 
 import { validateEnvironment } from "./utils/envValidator.js";
 
@@ -93,10 +94,43 @@ app.use(errorHandler);
 //   res.status(200).json({ status: "healthy" });
 // });
 
+// if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
+//   app.listen(PORT, () => {
+//     console.log(`Server is running on port ${PORT}`);
+//   });
+// }
+
+
 if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
+
+  let blockchainProcessor: InstanceType<typeof BlockchainRetryProcessor> | undefined;
+
+  if (process.env.SOLANA_WALLET_KEYPAIR_PATH) {
+    blockchainProcessor = new BlockchainRetryProcessor();
+
+    void blockchainProcessor.start().catch((error) => {
+      console.error("[Blockchain] Retry processor stopped unexpectedly:", error);
+    });
+  } else {
+    console.warn(
+      "[Blockchain] Retry processor not started: SOLANA_WALLET_KEYPAIR_PATH is not configured."
+    );
+  }
+
+  const shutdown = () => {
+    blockchainProcessor?.stop();
+
+    server.close(() => {
+      process.exit(0);
+    });
+  };
+
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 }
+
 
 export default app;

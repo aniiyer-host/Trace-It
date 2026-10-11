@@ -2,25 +2,103 @@
 # Start solana-test-validator with the traceit program pre-loaded
 set -e
 
+# Configuration
 LEDGER=/tmp/traceit-test-ledger
 PROGRAM_ID="5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3"
 SO_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/target/deploy/traceit.so"
 ANCHOR_PROGRAM_ID="4qLwniS2NeDrqftgb83GbYVHWVbBBbUcjDR1Ncm5GCHX"
 ANCHOR_SO_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/target/deploy/traceit_anchor.so"
-WALLET_PUBKEY=$(solana-keygen pubkey ~/.config/solana/devnet-traceit.json)
+WALLET_PATH="/home/aaditya/.config/solana/devnet-traceit.json"
+WALLET_PUBKEY=$(solana-keygen pubkey "$WALLET_PATH")
 LOG=/tmp/traceit-validator.log
+LOCK_DIR="/tmp/traceit-validator-lock"
+LOCK_FILE="$LOCK_DIR/lock"
 
-# Kill any existing validator
-pkill -f solana-test-validator 2>/dev/null || true
-sleep 1
-
-# Ensure program binary is built
-if [ ! -f "$SO_PATH" ] || [ ! -f "$ANCHOR_SO_PATH" ]; then
-  echo "Program binary missing. Building programs with anchor build..."
-  (cd "$(dirname "${BASH_SOURCE[0]}")/.." && anchor build)
+# Validate wallet exists and matches test workflow expectation
+if [ ! -f "$WALLET_PATH" ]; then
+  echo "Error: Wallet not found at $WALLET_PATH"
+  echo "Please ensure the wallet exists and matches the test workflow configuration."
+  exit 1
 fi
 
+# Create lock directory safely (atomic operation)
+if mkdir "$LOCK_DIR" 2>/dev/null; then
+  # Successfully acquired lock
+  trap 'rm -rf "$LOCK_DIR"' EXIT
+else
+  # Check if another process holds the lock
+  if [ -f "$LOCK_FILE" ]; then
+    OTHER_PID=$(cat "$LOCK_FILE")
+    # Verify if the process is actually running and is our validator
+    if ps -p "$OTHER_PID" >/dev/null 2>&1; then
+      # Check if it's actually our validator by examining command line
+      if [ -r "/proc/$OTHER_PID/cmdline" ]; then
+        CMDLINE=$(tr '\0' ' ' < "/proc/$OTHER_PID/cmdline")
+        if [[ "$CMDLINE" == *"solana-test-validator"* && "$CMDLINE" == *"--ledger $LEDGER"* ]]; then
+          echo "Validator is already running (PID: $OTHER_PID)"
+          exit 0
+        fi
+      fi
+    fi
+    # If we get here, the lock is stale - remove it and try to acquire
+    rm -rf "$LOCK_DIR"
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+      trap 'rm -rf "$LOCK_DIR"' EXIT
+    else
+      echo "Failed to acquire lock after cleaning stale lock"
+      exit 1
+    fi
+  else
+    # No PID file but directory exists - edge case
+    rm -rf "$LOCK_DIR"
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+      trap 'rm -rf "$LOCK_DIR"' EXIT
+    else
+      echo "Failed to acquire lock"
+      exit 1
+    fi
+  fi
+fi
+
+# Ensure program binary is built (no fallback to host build)
+if [ ! -f "$SO_PATH" ] || [ ! -f "$ANCHOR_SO_PATH" ]; then
+  echo "Error: Program binary missing. Please run 'npm run build' to build the programs."
+  echo "Expected files:"
+  echo "  $SO_PATH"
+  echo "  $ANCHOR_SO_PATH"
+  exit 1
+fi
+
+# Kill any existing validator that matches our exact configuration
+if [ -f "$LOCK_FILE" ]; then
+  EXISTING_PID=$(cat "$LOCK_FILE")
+  if ps -p "$EXISTING_PID" >/dev/null 2>&1; then
+    if [ -r "/proc/$EXISTING_PID/cmdline" ]; then
+      EXISTING_CMDLINE=$(tr '\0' ' ' < "/proc/$EXISTING_PID/cmdline")
+      if [[ "$EXISTING_CMDLINE" == *"solana-test-validator"* && "$EXISTING_CMDLINE" == *"--ledger $LEDGER"* ]]; then
+        echo "Stopping existing validator (PID: $EXISTING_PID)"
+        kill "$EXISTING_PID" 2>/dev/null || true
+        # Wait for process to terminate
+        for i in $(seq 1 10); do
+          if ! ps -p "$EXISTING_PID" >/dev/null 2>&1; then
+            break
+          fi
+          sleep 0.5
+        done
+        # Force kill if still running
+        if ps -p "$EXISTING_PID" >/dev/null 2>&1; then
+          kill -9 "$EXISTING_PID" 2>/dev/null || true
+        fi
+      fi
+    fi
+  fi
+fi
+
+# Clean up any old log
+rm -f "$LOG"
+
 # Start validator in background
+echo "Starting Solana validator..."
 solana-test-validator \
   --ledger "$LEDGER" \
   --mint "$WALLET_PUBKEY" \
@@ -31,9 +109,10 @@ solana-test-validator \
   >"$LOG" 2>&1 &
 
 VALIDATOR_PID=$!
+echo "$VALIDATOR_PID" > "$LOCK_FILE"
 echo "Validator PID: $VALIDATOR_PID"
 
-# Wait until RPC is healthy
+# Wait until RPC is healthy with exponential backoff
 echo "Waiting for validator to start..."
 for i in $(seq 1 30); do
   if curl -sf -X POST http://127.0.0.1:8899 \

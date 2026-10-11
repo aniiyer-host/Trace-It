@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+# REVIEW ONLY: proposed Trace-It local-validator startup script.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BLOCKCHAIN_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+LOCK_DIR="/tmp/traceit-validator-lock"
+PID_FILE="$LOCK_DIR/pid"
+LEDGER_FILE="$LOCK_DIR/ledger"
+LOG="/tmp/traceit-validator.log"
+
+PROGRAM_ID="5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3"
+ANCHOR_PROGRAM_ID="4qLwniS2NeDrqftgb83GbYVbBBbUcjDR1Ncm5GCHX"
+
+SO_PATH="$BLOCKCHAIN_DIR/target/deploy/traceit.so"
+ANCHOR_SO_PATH="$BLOCKCHAIN_DIR/target/deploy/traceit_anchor.so"
+WALLET_PATH="${ANCHOR_WALLET:-$HOME/.config/solana/devnet-traceit.json}"
+
+validator_matches() {
+  local pid="$1"
+  local args
+
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  args="$(ps -p "$pid" -o command= 2>/dev/null)" || return 1
+
+  [[ "$args" == *solana-test-validator* &&
+     "$args" == *"--ledger $LEDGER"* ]]
+}
+
+remove_lock_if_safe() {
+  # Only remove our lock when the tracked process is confirmed absent
+  # and the directory contains exactly the two files we created.
+  if [[ -n "${VALIDATOR_PID:-}" ]] &&
+     ps -p "$VALIDATOR_PID" >/dev/null 2>&1; then
+    echo "Process still exists; preserving lock at $LOCK_DIR." >&2
+    return 1
+  fi
+
+  if [[ -f "$PID_FILE" && -f "$LEDGER_FILE" ]] &&
+     [[ "$(cat "$PID_FILE")" == "${VALIDATOR_PID:-}" ]] &&
+     [[ "$(cat "$LEDGER_FILE")" == "$LEDGER" ]]; then
+    rm "$PID_FILE" "$LEDGER_FILE"
+    rmdir "$LOCK_DIR" 2>/dev/null || {
+      echo "Lock directory contains unexpected files; inspect $LOCK_DIR." >&2
+      return 1
+    }
+  else
+    echo "Lock ownership cannot be verified; preserving $LOCK_DIR." >&2
+    return 1
+  fi
+}
+
+VALIDATOR_PID=""
+LEDGER=""
+
+cleanup_failed_start() {
+  local status=$?
+  trap - EXIT
+
+  if [[ "$status" -eq 0 ]]; then
+    return
+  fi
+
+  if [[ -z "$VALIDATOR_PID" ]]; then
+    # No validator was launched; remove only our empty lock directory.
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+    exit "$status"
+  fi
+
+  if ! ps -p "$VALIDATOR_PID" >/dev/null 2>&1; then
+    remove_lock_if_safe || true
+  elif validator_matches "$VALIDATOR_PID"; then
+    kill "$VALIDATOR_PID" 2>/dev/null || true
+
+    for _ in {1..10}; do
+      if ! ps -p "$VALIDATOR_PID" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 0.5
+    done
+
+    if ps -p "$VALIDATOR_PID" >/dev/null 2>&1 &&
+       validator_matches "$VALIDATOR_PID"; then
+      kill -9 "$VALIDATOR_PID" 2>/dev/null || true
+      sleep 1
+    fi
+
+    if ! ps -p "$VALIDATOR_PID" >/dev/null 2>&1; then
+      remove_lock_if_safe || true
+    else
+      echo "Could not confirm shutdown; preserving lock." >&2
+    fi
+  else
+    echo "Cannot verify validator identity; preserving lock." >&2
+  fi
+
+  exit "$status"
+}
+
+[[ -f "$WALLET_PATH" ]] || {
+  echo "Wallet not found: $WALLET_PATH" >&2
+  exit 1
+}
+[[ -f "$SO_PATH" && -f "$ANCHOR_SO_PATH" ]] || {
+  echo "Required program binaries are missing; no build was started." >&2
+  exit 1
+}
+
+WALLET_PUBKEY="$(solana-keygen pubkey "$WALLET_PATH")"
+
+# Acquire lock before choosing and recording a unique disposable ledger.
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  echo "Lock already exists; inspect $LOCK_DIR before proceeding." >&2
+  exit 1
+fi
+
+LEDGER="/tmp/traceit-test-ledger-$$"
+if [[ -e "$LEDGER" ]]; then
+  echo "Ledger path already exists; refusing to reuse it: $LEDGER" >&2
+  rmdir "$LOCK_DIR"
+  exit 1
+fi
+
+VALIDATOR_PID=""
+trap cleanup_failed_start EXIT
+
+printf '%s\n' "$LEDGER" > "$LEDGER_FILE"
+
+echo "Starting validator with a new ledger: $LEDGER"
+echo "Log: $LOG"
+
+solana-test-validator \
+  --ledger "$LEDGER" \
+  --mint "$WALLET_PUBKEY" \
+  --bpf-program "$PROGRAM_ID" "$SO_PATH" \
+  --bpf-program "$ANCHOR_PROGRAM_ID" "$ANCHOR_SO_PATH" \
+  --quiet > "$LOG" 2>&1 &
+
+VALIDATOR_PID=$!
+printf '%s\n' "$VALIDATOR_PID" > "$PID_FILE"
+echo "Validator PID: $VALIDATOR_PID"
+
+for _ in {1..30}; do
+  if ! ps -p "$VALIDATOR_PID" >/dev/null 2>&1; then
+    echo "Validator exited before becoming healthy." >&2
+    break
+  fi
+
+  if validator_matches "$VALIDATOR_PID" &&
+     curl -sf -X POST http://127.0.0.1:8899 \
+       -H "Content-Type: application/json" \
+       -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' |
+       grep -q '"ok"'; then
+    trap - EXIT
+    echo "Validator is healthy."
+    exit 0
+  fi
+
+  sleep 1
+done
+
+echo "Validator failed to become healthy. Log follows:" >&2
+cat "$LOG" >&2
+exit 1

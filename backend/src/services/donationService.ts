@@ -257,6 +257,16 @@ export const completeDonationSuccess = async (
         },
       });
 
+      await tx.blockchainRetryQueue.create({
+        data: {
+          donationId: currentDonation.id,
+          operationType: 'RECORD_DONATION',
+          retryCount: 0,
+          lastAttempt: new Date(0), // Immediate eligibility
+          error: 'Enqueued from payment success'
+        },
+      });
+
       return { donation: currentDonation, transitioned: true };
     });
   } catch (error) {
