@@ -197,7 +197,7 @@ describe('BlockchainService & HashService Unit Tests', () => {
         //   2. programId matches  (correct program)
         //   3. accounts[0] equals the expected PDA  (correct account)
         //   4. coder.decode returns { name: 'recordDonation' }  (correct instruction)
-        jest.spyOn(service.connection, 'getParsedTransaction').mockResolvedValue({
+        jest.spyOn((service as any).connection, 'getParsedTransaction').mockResolvedValue({
           meta: { err: null },
           transaction: {
             message: {
@@ -257,7 +257,7 @@ describe('BlockchainService & HashService Unit Tests', () => {
         
         // Scenario 2: Verification fails (wrong instruction)
         getSignaturesMock.mockReset().mockResolvedValueOnce([{ signature: 'fake_creation' }]);
-        const getParsedTransactionMock = jest.spyOn(service.connection, 'getParsedTransaction').mockResolvedValue({
+        const getParsedTransactionMock = jest.spyOn((service as any).connection, 'getParsedTransaction').mockResolvedValue({
           meta: { err: null },
           transaction: {
             message: {

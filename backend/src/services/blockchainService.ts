@@ -167,7 +167,9 @@ export class BlockchainService {
           if ('accounts' in ix && ix.accounts.some(acc => acc.equals(pda))) {
             if ('data' in ix && typeof ix.data === 'string') {
               try {
-                const decoded = this.program!.coder.instruction.decode(
+                const decoded = (this.program!.coder.instruction as unknown as {
+                  decode: (instruction: Buffer | string) => { name: string } | null;
+                }).decode(
                   anchor.utils.bytes.bs58.decode(ix.data)
                 );
                 if (decoded && decoded.name === 'recordDonation') {
