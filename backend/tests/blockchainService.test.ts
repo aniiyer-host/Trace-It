@@ -152,13 +152,13 @@ describe('BlockchainService & HashService Unit Tests', () => {
           walletKeypairJson: validKeypairBytes,
           hmacSecret,
         });
-        
+
         // Mock connection methods safely
         // @ts-ignore
         getAccountInfoMock = jest.spyOn(service.connection, 'getAccountInfo').mockResolvedValue(null);
         // @ts-ignore
         getSignaturesMock = jest.spyOn(service.connection, 'getSignaturesForAddress').mockResolvedValue([]);
-        
+
         // Mock program property to prevent throw
         (service as any).program = {
           methods: {
@@ -181,7 +181,7 @@ describe('BlockchainService & HashService Unit Tests', () => {
 
         // Force account to exist (idempotency trigger)
         getAccountInfoMock.mockResolvedValue({ data: Buffer.from([]) });
-        
+
         // Page 1: full 1000 with a distinct last signature so the cursor is unambiguous.
         // Page 2: partial (< 1000) — signals end of history; loop exits after this page.
         const page1Sigs = [
@@ -238,7 +238,7 @@ describe('BlockchainService & HashService Unit Tests', () => {
 
       it('returns null txHash safely when RPC signature fetch fails or verification fails', async () => {
         getAccountInfoMock.mockResolvedValue({ data: Buffer.from([]) });
-        
+
         // Scenario 1: RPC Failure
         getSignaturesMock.mockRejectedValueOnce(new Error('RPC node timed out'));
 
@@ -254,7 +254,7 @@ describe('BlockchainService & HashService Unit Tests', () => {
 
         expect(result.success).toBe(true);
         expect(result.txHash).toBeNull();
-        
+
         // Scenario 2: Verification fails (wrong instruction)
         getSignaturesMock.mockReset().mockResolvedValueOnce([{ signature: 'fake_creation' }]);
         const getParsedTransactionMock = jest.spyOn((service as any).connection, 'getParsedTransaction').mockResolvedValue({

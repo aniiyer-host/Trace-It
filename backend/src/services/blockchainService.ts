@@ -153,7 +153,7 @@ export class BlockchainService {
         if (sigs.length < 1000) break; // Reached end of history
         before = lastSignature;
       }
-      
+
       if (!lastSignature) return null;
 
       // Verify the candidate transaction

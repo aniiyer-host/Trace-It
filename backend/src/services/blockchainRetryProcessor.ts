@@ -178,7 +178,7 @@ export class BlockchainRetryProcessor {
               updatedAt: new Date()
             }
           });
-          
+
           await writeAuditLog({
             actorType: AuditActorType.SYSTEM,
             entityType: 'donation',
