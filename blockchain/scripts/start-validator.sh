@@ -8,7 +8,7 @@ PROGRAM_ID="5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3"
 SO_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/target/deploy/traceit.so"
 ANCHOR_PROGRAM_ID="4qLwniS2NeDrqftgb83GbYVHWVbBBbUcjDR1Ncm5GCHX"
 ANCHOR_SO_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/target/deploy/traceit_anchor.so"
-WALLET_PATH="/home/aaditya/.config/solana/devnet-traceit.json"
+WALLET_PATH="$HOME/.config/solana/devnet-traceit.json"
 WALLET_PUBKEY=$(solana-keygen pubkey "$WALLET_PATH")
 LOG=/tmp/traceit-validator.log
 LOCK_DIR="/tmp/traceit-validator-lock"
@@ -24,7 +24,7 @@ fi
 # Create lock directory safely (atomic operation)
 if mkdir "$LOCK_DIR" 2>/dev/null; then
   # Successfully acquired lock
-  trap 'rm -rf "$LOCK_DIR"' EXIT
+  :
 else
   # Check if another process holds the lock
   if [ -f "$LOCK_FILE" ]; then
@@ -32,8 +32,8 @@ else
     # Verify if the process is actually running and is our validator
     if ps -p "$OTHER_PID" >/dev/null 2>&1; then
       # Check if it's actually our validator by examining command line
-      if [ -r "/proc/$OTHER_PID/cmdline" ]; then
-        CMDLINE=$(tr '\0' ' ' < "/proc/$OTHER_PID/cmdline")
+      if [ -n "$(ps -p "$OTHER_PID" -o command= 2>/dev/null)" ]; then
+        CMDLINE=$(ps -p "$OTHER_PID" -o command= 2>/dev/null || true)
         if [[ "$CMDLINE" == *"solana-test-validator"* && "$CMDLINE" == *"--ledger $LEDGER"* ]]; then
           echo "Validator is already running (PID: $OTHER_PID)"
           exit 0
@@ -43,7 +43,8 @@ else
     # If we get here, the lock is stale - remove it and try to acquire
     rm -rf "$LOCK_DIR"
     if mkdir "$LOCK_DIR" 2>/dev/null; then
-      trap 'rm -rf "$LOCK_DIR"' EXIT
+      # Lock acquired
+      :
     else
       echo "Failed to acquire lock after cleaning stale lock"
       exit 1
@@ -52,13 +53,22 @@ else
     # No PID file but directory exists - edge case
     rm -rf "$LOCK_DIR"
     if mkdir "$LOCK_DIR" 2>/dev/null; then
-      trap 'rm -rf "$LOCK_DIR"' EXIT
+      # Lock acquired
+      :
     else
       echo "Failed to acquire lock"
       exit 1
     fi
   fi
 fi
+
+# Remove an empty lock if startup exits before recording a PID.
+cleanup_start_lock() {
+  if [ ! -f "$LOCK_FILE" ]; then
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+  fi
+}
+trap cleanup_start_lock EXIT
 
 # Ensure program binary is built (no fallback to host build)
 if [ ! -f "$SO_PATH" ] || [ ! -f "$ANCHOR_SO_PATH" ]; then
@@ -73,8 +83,8 @@ fi
 if [ -f "$LOCK_FILE" ]; then
   EXISTING_PID=$(cat "$LOCK_FILE")
   if ps -p "$EXISTING_PID" >/dev/null 2>&1; then
-    if [ -r "/proc/$EXISTING_PID/cmdline" ]; then
-      EXISTING_CMDLINE=$(tr '\0' ' ' < "/proc/$EXISTING_PID/cmdline")
+    if [ -n "$(ps -p "$EXISTING_PID" -o command= 2>/dev/null)" ]; then
+      EXISTING_CMDLINE=$(ps -p "$EXISTING_PID" -o command= 2>/dev/null || true)
       if [[ "$EXISTING_CMDLINE" == *"solana-test-validator"* && "$EXISTING_CMDLINE" == *"--ledger $LEDGER"* ]]; then
         echo "Stopping existing validator (PID: $EXISTING_PID)"
         kill "$EXISTING_PID" 2>/dev/null || true
@@ -126,4 +136,11 @@ done
 
 echo "Validator failed to start. Log:"
 cat "$LOG"
+
+# Stop only the process we launched, after verifying its command.
+CMDLINE=$(ps -p "$VALIDATOR_PID" -o command= 2>/dev/null || true)
+if [[ "$CMDLINE" == *"solana-test-validator"* && "$CMDLINE" == *"--ledger $LEDGER"* ]]; then
+  kill "$VALIDATOR_PID" 2>/dev/null || true
+fi
+rm -rf "$LOCK_DIR"
 exit 1

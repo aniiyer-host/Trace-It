@@ -519,6 +519,8 @@ model ProvenanceEvent {
   occurredAt       DateTime
   canonicalPayload String
   payloadHash      String
+  previous_hash    String?  // For legacy rows: stores payloadHash of previous event (incorrect). For new chain: stores chainHash of previous event or NULL.
+  chainHash        String?    // SHA-512 chain hash: commits to event data + previous chain link. NULL for legacy rows.
   transitionKey    String
 
   anchorStatus     AnchorStatus        @default(PENDING)

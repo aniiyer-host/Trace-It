@@ -2,6 +2,92 @@ import crypto from "node:crypto";
 
 export const PROVENANCE_SCHEMA_VERSION = 1 as const;
 
+/**
+ * Computes the advisory lock key for the provenance chain.
+ * Uses the first 64 bits of the MD5 hash of the namespace string,
+ * converted to a signed 64-bit integer.
+ */
+export function computeProvenanceLockKey(namespace: string): bigint {
+  const hashBuffer = crypto.createHash('md5').update(namespace).digest();
+  const unsignedValue = hashBuffer.readBigUInt64BE(0);
+  return BigInt.asIntN(64, unsignedValue);
+}
+
+/**
+ * Validates a SHA-512 digest represented as 128 lowercase hexadecimal characters.
+ */
+function decodeSha512Hex(name: string, value: string): Buffer {
+  if (typeof value !== "string" || !/^[0-9a-f]{128}$/.test(value)) {
+    throw new Error(
+    name === "previousChainHash"
+    ? "Invalid previousChainHash: must be 128 lowercase hex characters"
+    : `${name} must be exactly 128 lowercase hex characters`,
+    );
+  }
+
+  const decoded = Buffer.from(value, "hex");
+
+  // Defensive check: the encoding must represent exactly 64 bytes.
+  if (decoded.length !== 64) {
+    throw new Error(`${name} must decode to exactly 64 bytes`);
+  }
+
+  return decoded;
+}
+
+/**
+ * Computes a chain hash from an already-computed payload hash.
+ *
+ * Formula:
+ * SHA-512(
+ *   UTF8("TRACEIT_CHAIN_V1") ||
+ *   u16BE(schemaVersion) ||
+ *   payloadHashBytes ||
+ *   previousChainHashBytes
+ * )
+ *
+ * A null predecessor represents genesis and is encoded as 64 zero bytes.
+ */
+export function computeChainHashFromPayloadHash(
+  payloadHashHex: string,
+  previousChainHashHex: string | null,
+): string {
+  const payloadHashBytes = decodeSha512Hex("payloadHash", payloadHashHex);
+
+  const previousChainHashBytes =
+    previousChainHashHex === null
+      ? Buffer.alloc(64, 0)
+      : decodeSha512Hex("previousChainHash", previousChainHashHex);
+
+  const schemaVersionBytes = Buffer.alloc(2);
+  schemaVersionBytes.writeUInt16BE(PROVENANCE_SCHEMA_VERSION, 0);
+
+  const hashInput = Buffer.concat([
+    Buffer.from("TRACEIT_CHAIN_V1", "utf8"),
+    schemaVersionBytes,
+    payloadHashBytes,
+    previousChainHashBytes,
+  ]);
+
+  return crypto.createHash("sha512").update(hashInput).digest("hex");
+}
+
+/**
+ * Computes the chain hash for a provenance event.
+ */
+export function computeChainHash(
+  provenanceEventInput: ProvenanceEventInput,
+  previousChainHashHex: string | null,
+): string {
+  const payloadHashHex = hashProvenanceEvent(provenanceEventInput);
+
+  return computeChainHashFromPayloadHash(
+    payloadHashHex,
+    previousChainHashHex,
+  );
+}
+
+
 export type ProvenanceEventInput = {
   eventType: string;
   entityType: string;

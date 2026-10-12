@@ -242,6 +242,12 @@ export const completeDonationSuccess = async (
       const canonicalPayload = serializeProvenanceEvent(provenanceInput);
       const payloadHash = hashProvenanceEvent(provenanceInput);
 
+      // Get the latest ProvenanceEvent to chain from
+      const latestProvenanceEvent = await tx.provenanceEvent.findFirst({
+        orderBy: { id: 'desc' },
+        select: { payloadHash: true },
+      });
+
       await tx.provenanceEvent.create({
         data: {
           eventType: ProvenanceEventType.DONATION_SUCCESS,
@@ -253,6 +259,7 @@ export const completeDonationSuccess = async (
           occurredAt,
           canonicalPayload,
           payloadHash,
+          previous_hash: latestProvenanceEvent?.payloadHash ?? null,
           transitionKey: paymentId,
         },
       });
