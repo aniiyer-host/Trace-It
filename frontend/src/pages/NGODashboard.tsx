@@ -254,7 +254,7 @@ export default function NGODashboard() {
                   fieldReportUrl: d.fieldReportUrl ?? undefined,
                   proofSubmittedAt: d.proofSubmittedAt ?? undefined,
                   rejectionReason: d.rejectionReason ?? undefined,
-                  txHash: d.solanaTxHash ?? undefined,
+
                 }))
               : camp.milestones || [];
 
@@ -983,11 +983,7 @@ export default function NGODashboard() {
             campaignTitle: `Campaign ${selectedAttestation.donationId?.substring(0, 8)}`,
             paymentMethod: "upi",
             orderId: `order_${selectedAttestation.donationId}`,
-            txHash: `tx_${selectedAttestation.donationId}`,
-            walletAddress: "demo_wallet",
-            status: "disbursed",
-            createdAt: selectedAttestation.createdAt,
-            explorerUrl: `https://explorer.solana.com/tx/tx_${selectedAttestation.donationId}?cluster=devnet`,
+
           }}
           ngoName="AidIndia Foundation"
           open={attestationDialogOpen}
@@ -1012,11 +1008,7 @@ export default function NGODashboard() {
             campaignTitle: `Campaign ${selectedAttestation.donationId?.substring(0, 8)}`,
             paymentMethod: "upi",
             orderId: `order_${selectedAttestation.donationId}`,
-            txHash: `tx_${selectedAttestation.donationId}`,
-            walletAddress: "demo_wallet",
-            status: "disbursed",
-            createdAt: selectedAttestation.createdAt,
-            explorerUrl: `https://explorer.solana.com/tx/tx_${selectedAttestation.donationId}?cluster=devnet`,
+
           }}
           ngoName="AidIndia Foundation"
           open={attestationDialogOpen}

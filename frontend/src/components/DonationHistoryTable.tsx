@@ -185,16 +185,7 @@ export default function DonationHistoryTable({
                       >
                         Verify Integrity
                       </button>
-                      {donation.explorerUrl && (
-                        <a
-                          href={donation.explorerUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors"
-                        >
-                          View on Explorer
-                        </a>
-                      )}
+
                     </div>
                   </TableCell>
                 </TableRow>

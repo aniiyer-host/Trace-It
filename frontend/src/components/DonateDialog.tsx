@@ -1,6 +1,6 @@
 // DonateDialog – Modal for making a UPI or SOL donation to a campaign
 import { useState, useEffect } from "react";
-import { Loader2, CreditCard, ExternalLink } from "lucide-react";
+import { Loader2, CreditCard } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +15,7 @@ import { useDonationStore } from "@/store/donationStore";
 import { apiService } from "@/utils/apiClient";
 import { openRazorpayCheckout } from "@/services/razorpayPayments";
 import { downloadDonationReceipt } from "@/lib/donationReceipt";
-import { formatUSD, shortenHash } from "@/lib/utils";
+import { formatUSD } from "@/lib/utils";
 import type { Campaign, PaymentMethod, Donation } from "@/types";
 import axios from "axios";
 
@@ -88,7 +88,7 @@ export function DonateDialog({
         status: "INITIATED",
         createdAt: new Date().toISOString(),
         walletAddress: "donor_wallet",
-        explorerUrl: `https://explorer.solana.com/?cluster=devnet`,
+
       };
       donationStore.addDonation(newDonation);
       donationStore.addDonation(newDonation);
@@ -346,7 +346,7 @@ export function DonateDialog({
       const updated: Donation = {
         ...createdDonation,
         status: "SUCCESS",
-        txHash: `sim_tx_${createdDonation.id.slice(0, 8)}`,
+
       };
       setCreatedDonation(updated);
       setDonations(
@@ -434,21 +434,8 @@ export function DonateDialog({
                   Payment Confirmed
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Tx:{" "}
-                  {createdDonation.txHash
-                    ? shortenHash(createdDonation.txHash)
-                    : "Recorded on Solana devnet"}
+                  Payment recorded successfully
                 </p>
-                {createdDonation.txHash && (
-                  <a
-                    href={`https://explorer.solana.com/tx/${createdDonation.txHash}?cluster=devnet`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-primary text-sm hover:underline"
-                  >
-                    <ExternalLink className="h-3 w-3" /> View on Solana Explorer
-                  </a>
-                )}
               </>
             ) : createdDonation.status === "FAILED" ? (
               <>

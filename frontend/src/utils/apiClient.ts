@@ -458,7 +458,7 @@ export const apiService = {
     create: (donationData: {
       campaignId: string;
       ngoId: string;
-      amount: number;
+      amount: number | string;
       paymentMethod: string;
     }) => post<DonationCreateResponse>("/donor/donate", donationData),
     verifyPayment: (
@@ -488,7 +488,7 @@ export const apiService = {
       get<{ receiptUrl: string; publicDonationId: string }>(
         `/donor/receipt/${donationId}`,
       ),
-    getAttestation: (donationId: string): Promise<Attestation> =>
+    getAttestation: (donationId: string): Promise<Attestation[]> =>
       get(`/donor/donations/${donationId}/attestation`),
     requestAttestation: (donationId: string, type: "receipt" | "delivery") =>
       post(`/donor/donations/${donationId}/attestation`, { type }),

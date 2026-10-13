@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../db/prisma.js';
 import { AuditActorType } from '../../generated/prisma/enums.js';
 import { writeAuditLog } from '../services/auditLogService.js';
+import { MonetaryInputError, parseInrAmount } from '../utils/money.js';
 
 /**
  * Middleware to enforce KYC tier for donations.
@@ -23,13 +24,11 @@ export const kycCheckMiddleware = async (
 
     // Match Joi's numeric-string coercion in createDonation so strings cannot skip KYC.
     const rawAmount = req.body?.amount;
-    const amount =
-      typeof rawAmount === 'number'
-        ? rawAmount
-        : typeof rawAmount === 'string' && rawAmount.trim() !== ''
-          ? Number(rawAmount)
-          : Number.NaN;
-    if (!Number.isFinite(amount)) {
+    let amount;
+    try {
+      amount = parseInrAmount(rawAmount).decimal;
+    } catch (error) {
+      if (!(error instanceof MonetaryInputError)) throw error;
       // If amount is not a valid number, let the route handler's validation deal with it.
       // We'll just skip KYC check and let next() handle validation errors.
       return next();
@@ -46,7 +45,7 @@ export const kycCheckMiddleware = async (
     }
 
     // KYC threshold: 10000 INR
-    if (amount > 10000 && donorProfile.kycStatus !== 'APPROVED') {
+    if (amount.greaterThan(10000) && donorProfile.kycStatus !== 'APPROVED') {
       // Audit log for KYC required event (optional, but could be useful)
       void writeAuditLog({
         actorType: AuditActorType.USER,

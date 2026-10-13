@@ -139,6 +139,59 @@ export class BlockchainService {
   }
 
   /**
+   * Helper to fetch the original creation transaction for a PDA.
+   * Best-effort: paginates backwards but may return null if RPC history is truncated.
+   */
+  private async getCreationSignature(pda: PublicKey): Promise<string | null> {
+    try {
+      let before: string | undefined = undefined;
+      let lastSignature: string | null = null;
+      while (true) {
+        const sigs = await this.connection.getSignaturesForAddress(pda, { limit: 1000, before });
+        if (sigs.length === 0) break;
+        lastSignature = sigs[sigs.length - 1].signature;
+        if (sigs.length < 1000) break; // Reached end of history
+        before = lastSignature;
+      }
+
+      if (!lastSignature) return null;
+
+      // Verify the candidate transaction
+      const tx = await this.connection.getParsedTransaction(lastSignature, { maxSupportedTransactionVersion: 0 });
+      if (!tx || !tx.meta || tx.meta.err !== null || !tx.transaction.message) {
+        return null;
+      }
+
+      for (const ix of tx.transaction.message.instructions) {
+        if ('programId' in ix && ix.programId.equals(this.programId)) {
+          if ('accounts' in ix && ix.accounts.some(acc => acc.equals(pda))) {
+            if ('data' in ix && typeof ix.data === 'string') {
+              try {
+                const decoded = (this.program!.coder.instruction as unknown as {
+                  decode: (instruction: Buffer | string) => { name: string } | null;
+                }).decode(
+                  anchor.utils.bytes.bs58.decode(ix.data)
+                );
+                if (decoded && decoded.name === 'recordDonation') {
+                  return lastSignature;
+                }
+              } catch (e) {
+                // Ignore decoding errors for other instructions
+              }
+            }
+          }
+        }
+      }
+
+      console.warn(`[BlockchainService] Oldest available signature for PDA ${pda.toBase58()} is not the verified creation transaction.`);
+      return null;
+    } catch (e) {
+      console.error('[BlockchainService] Failed to fetch creation signature for PDA:', e);
+      return null;
+    }
+  }
+
+  /**
    * Record a confirmed donation on-chain.
    * This is the primary integration point called after Razorpay webhook confirmation.
    *
@@ -175,10 +228,10 @@ export class BlockchainService {
       // 5. Check if already exists (idempotency)
       const existingAccount = await this.connection.getAccountInfo(donationPda);
       if (existingAccount) {
-        // Already recorded — return success
+        // Already recorded — return success and attempt signature recovery
         return {
           success: true,
-          txHash: `already_recorded:${donationPda.toBase58()}`,
+          txHash: await this.getCreationSignature(donationPda),
         };
       }
 
@@ -205,13 +258,14 @@ export class BlockchainService {
     } catch (error: any) {
       // Handle "already in use" as idempotent success
       if (error.message?.includes('already in use')) {
+        const cleanDonationId = params.donationId.replace(/-/g, '');
         const [donationPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from('donation'), Buffer.from(params.donationId)],
+          [Buffer.from('donation'), Buffer.from(cleanDonationId, 'utf8')],
           this.programId
         );
         return {
           success: true,
-          txHash: `already_recorded:${donationPda.toBase58()}`,
+          txHash: await this.getCreationSignature(donationPda),
         };
       }
 

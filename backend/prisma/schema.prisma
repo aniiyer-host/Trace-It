@@ -119,6 +119,32 @@ enum AttestationStatus {
   APPROVED
   REJECTED
 }
+
+enum ProvenanceEventType {
+  DONATION_SUCCESS
+  DONATION_FAILED
+  DONATION_ALLOCATED
+  DONATION_DISBURSED
+  DONATION_DELIVERED
+  DONATION_REFUNDED
+  DISBURSEMENT_APPROVED
+  NGO_APPROVED
+  COHORT_REGISTERED
+}
+
+enum AnchorStatus {
+  PENDING
+  BATCHED
+  ANCHORED
+  FAILED
+}
+
+enum BatchStatus {
+  PENDING
+  SUBMITTED
+  CONFIRMED
+  FAILED
+}
 // MODELS
 
 // Profiles table -> model Profile
@@ -473,4 +499,65 @@ model Attestation {
   @@index([disbursementId])
   @@index([status])
   @@map("attestations")
+}
+
+// Provenance Outbox
+// ProvenanceEvent captures immutable financial lifecycle events for tamper-evident
+// anchoring to Solana via traceit_anchor. Sequence (id) is gap-tolerant; the batch
+// builder verifies contiguity before submission. occurredAt is supplied by the
+// application (not @default(now())) so it can be included in the canonical payload
+// before the INSERT, allowing payloadHash to be computed atomically in the same
+// business transaction without any post-insert mutation.
+model ProvenanceEvent {
+  id               BigInt              @id @default(autoincrement())
+  eventType        ProvenanceEventType
+  entityType       String
+  entityId         String
+  amountInr        String
+  ngoId            String?
+  campaignId       String?
+  occurredAt       DateTime
+  canonicalPayload String
+  payloadHash      String
+  previous_hash    String?  // For legacy rows: stores payloadHash of previous event (incorrect). For new chain: stores chainHash of previous event or NULL.
+  chainHash        String?    // SHA-512 chain hash: commits to event data + previous chain link. NULL for legacy rows.
+  transitionKey    String
+
+  anchorStatus     AnchorStatus        @default(PENDING)
+  anchorBatchId    String?
+  attemptCount     Int                 @default(0)
+  lastError        String?
+  processedAt      DateTime?
+
+  anchorBatch      AnchorBatch?        @relation(fields: [anchorBatchId], references: [id])
+
+  @@unique([entityId, eventType, transitionKey])
+  @@index([anchorStatus])
+  @@index([anchorBatchId])
+  @@index([occurredAt])
+  @@map("provenance_events")
+}
+
+// AnchorBatch records a submitted batch of provenance events.
+// batchKey: first 32 bytes of SHA-512("TRACEIT_ANCHOR_V1" || u16BE(schemaVersion)
+//           || u64BE(startSequence) || u64BE(endSequence) || u32BE(eventCount) || auditRoot)
+// auditRoot: SHA-512("TRACEIT_AUDIT_ROOT_V1" || u16BE(schemaVersion)
+//            || u64BE(startSequence) || u64BE(endSequence) || u32BE(eventCount)
+//            || eventHash[0] || ... || eventHash[n-1])
+model AnchorBatch {
+  id                String      @id @default(uuid())
+  batchKey          String      @unique
+  auditRoot         String
+  startSequence     BigInt
+  endSequence       BigInt
+  eventCount        Int
+  solanaTxSignature String?
+  anchoredAt        DateTime?
+  status            BatchStatus @default(PENDING)
+  createdAt         DateTime    @default(now())
+
+  provenanceEvents  ProvenanceEvent[]
+
+  @@index([status])
+  @@map("anchor_batches")
 }
