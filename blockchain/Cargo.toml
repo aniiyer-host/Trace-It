@@ -6,10 +6,41 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.89.0"
+rust-version = "1.68.0"
 
 [workspace.dependencies]
-anchor-lang = { version = "0.30.1", features = ["init-if-needed"] }
+anchor-lang = { version = "0.29.0", features = ["init-if-needed"] }
+solana-program = "=1.17.25"
+syn = "=2.0.50"
+thiserror = "=1.0.50"
+thiserror-impl = "=1.0.50"
+quote = "=1.0.35"
+unicode-segmentation = "=1.12.0"
+unicode-ident = "=1.0.12"
+hashbrown = "=0.14.2"
+indexmap = "=2.2.6"
+ppv-lite86 = "=0.2.17"
+ryu = "=1.0.15"
+bumpalo = "=3.14.0"
+cc = "=1.1.31"
+jobserver = "=0.1.32"
+# Pin compatibility suite for solana-program 1.17 + Anchor 0.29's Rust 1.68 SBF toolchain.
+js-sys = "=0.3.67"
+wasm-bindgen = "=0.2.90"
+zeroize_derive = "=1.4.2"
+proc-macro2 = "=1.0.79"
+proc-macro-crate = "=3.1.0"
+log = "=0.4.20"
+toml_edit = "=0.21.0"
+serde = "=1.0.210"
+serde_derive = "=1.0.210"
+bitflags = "=2.6.0"
+borsh = "=1.5.1"
+borsh-derive = "=1.5.1"
+bytemuck_derive = "=1.8.0"
+blake3 = "=1.5.5"
+cpufeatures = "=0.2.17"
+
 
 [profile.release]
 overflow-checks = true

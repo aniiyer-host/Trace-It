@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# REVIEW ONLY: proposed safe shutdown for the tracked Trace-It validator.
+set -euo pipefail
+
+LOCK_DIR="/tmp/traceit-validator-lock"
+PID_FILE="$LOCK_DIR/pid"
+LEDGER_FILE="$LOCK_DIR/ledger"
+
+validator_matches() {
+  local pid="$1"
+  local ledger="$2"
+  local args
+
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  args="$(ps -p "$pid" -o command= 2>/dev/null)" || return 1
+
+  [[ "$args" == *solana-test-validator* &&
+     "$args" == *"--ledger $ledger"* ]]
+}
+
+remove_lock_if_safe() {
+  local pid="$1"
+  local ledger="$2"
+
+  if ps -p "$pid" >/dev/null 2>&1; then
+    echo "Process still exists; preserving lock for inspection." >&2
+    return 1
+  fi
+
+  if [[ ! -f "$PID_FILE" || ! -f "$LEDGER_FILE" ]] ||
+     [[ "$(cat "$PID_FILE")" != "$pid" ]] ||
+     [[ "$(cat "$LEDGER_FILE")" != "$ledger" ]]; then
+    echo "Lock contents changed; preserving lock." >&2
+    return 1
+  fi
+
+  rm "$PID_FILE" "$LEDGER_FILE"
+  rmdir "$LOCK_DIR" 2>/dev/null || {
+    echo "Unexpected files remain in $LOCK_DIR; inspect it manually." >&2
+    return 1
+  }
+}
+
+if [[ ! -d "$LOCK_DIR" ]]; then
+  echo "No Trace-It validator lock found."
+  exit 0
+fi
+
+if [[ ! -f "$PID_FILE" || ! -f "$LEDGER_FILE" ]]; then
+  echo "Lock is incomplete; no process was signaled." >&2
+  exit 1
+fi
+
+VALIDATOR_PID="$(cat "$PID_FILE")"
+LEDGER="$(cat "$LEDGER_FILE")"
+
+if [[ ! "$VALIDATOR_PID" =~ ^[0-9]+$ ]] ||
+   [[ "$LEDGER" != /tmp/traceit-test-ledger-* ]]; then
+  echo "Invalid lock contents; no process was signaled." >&2
+  exit 1
+fi
+
+if ! ps -p "$VALIDATOR_PID" >/dev/null 2>&1; then
+  echo "Tracked process is absent; removing verified stale lock."
+  remove_lock_if_safe "$VALIDATOR_PID" "$LEDGER"
+  exit 0
+fi
+
+if ! validator_matches "$VALIDATOR_PID" "$LEDGER"; then
+  echo "Cannot verify process identity; no signal sent." >&2
+  exit 1
+fi
+
+echo "Stopping tracked validator (PID: $VALIDATOR_PID)..."
+kill "$VALIDATOR_PID"
+
+for _ in {1..10}; do
+  if ! ps -p "$VALIDATOR_PID" >/dev/null 2>&1; then
+    remove_lock_if_safe "$VALIDATOR_PID" "$LEDGER"
+    echo "Validator stopped."
+    exit 0
+  fi
+
+  if ! validator_matches "$VALIDATOR_PID" "$LEDGER"; then
+    echo "Process identity changed; refusing further signals." >&2
+    exit 1
+  fi
+
+  sleep 0.5
+done
+
+if validator_matches "$VALIDATOR_PID" "$LEDGER"; then
+  echo "Graceful stop timed out; sending SIGKILL."
+  kill -9 "$VALIDATOR_PID"
+fi
+
+sleep 1
+
+if ps -p "$VALIDATOR_PID" >/dev/null 2>&1; then
+  echo "Process still exists; preserving lock for inspection." >&2
+  exit 1
+fi
+
+remove_lock_if_safe "$VALIDATOR_PID" "$LEDGER"
+echo "Validator stopped."

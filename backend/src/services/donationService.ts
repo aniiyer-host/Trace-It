@@ -1,13 +1,24 @@
 import crypto from 'crypto';
 import { prisma } from '../db/prisma.js';
 import { requireEnvironmentVariable } from '../utils/envValidator.js';
-import { AuditActorType, DonationStatus } from '../../generated/prisma/enums.js';
+import {
+  AuditActorType,
+  DonationStatus,
+  ProvenanceEventType,
+} from '../../generated/prisma/enums.js';
 import Razorpay from 'razorpay';
+import { Prisma } from '../../generated/prisma/client.js';
 import { writeAuditLog } from './auditLogService.js';
 import { generateAndStoreReceipt } from './receiptService.js';
 import { notifyAdmin } from './emailService.js';
-import { getBlockchainService } from './blockchainInstance.js';
-import { addToBlockchainRetryQueue } from './blockchainRetryQueue.js';
+import {
+  canonicalizeProvenanceEvent,
+  hashProvenanceEvent,
+  serializeProvenanceEvent,
+} from '../utils/provenance.js';
+import { MonetaryInputError, parseInrAmount } from '../utils/money.js';
+
+
 
 export interface CompleteDonationOptions {
   ipAddress?: string;
@@ -136,13 +147,14 @@ export const completeDonationSuccess = async (
     evidence.source === 'simulation'
       ? `pay_sim_${donation.id.replace(/-/g, '')}`
       : evidence.razorpayPaymentId;
+  const expectedAmount = parseInrAmount(donation.amount.toFixed(2));
   const amountPaise =
     evidence.source === 'simulation'
-      ? Math.round(Number(donation.amount) * 100)
+      ? expectedAmount.amountPaise
       : evidence.amountPaise;
   const currency =
     evidence.source === 'simulation' ? donation.currencyCode : evidence.currency;
-  const expectedAmountPaise = Math.round(Number(donation.amount) * 100);
+  const expectedAmountPaise = expectedAmount.amountPaise;
 
   if (
     !orderId ||
@@ -176,6 +188,7 @@ export const completeDonationSuccess = async (
   let transition;
   try {
     transition = await prisma.$transaction(async (tx) => {
+      const occurredAt = new Date();
       const claimed = await tx.donation.updateMany({
         where: {
           id: donation.id,
@@ -216,6 +229,51 @@ export const completeDonationSuccess = async (
         );
       }
 
+      const provenanceInput = {
+        eventType: ProvenanceEventType.DONATION_SUCCESS,
+        entityType: 'Donation',
+        entityId: currentDonation.id,
+        amountInr: currentDonation.amount.toFixed(2),
+        ngoId: currentDonation.ngoId,
+        campaignId: currentDonation.campaignId,
+        occurredAt,
+      };
+      const canonicalEvent = canonicalizeProvenanceEvent(provenanceInput);
+      const canonicalPayload = serializeProvenanceEvent(provenanceInput);
+      const payloadHash = hashProvenanceEvent(provenanceInput);
+
+      // Get the latest ProvenanceEvent to chain from
+      const latestProvenanceEvent = await tx.provenanceEvent.findFirst({
+        orderBy: { id: 'desc' },
+        select: { payloadHash: true },
+      });
+
+      await tx.provenanceEvent.create({
+        data: {
+          eventType: ProvenanceEventType.DONATION_SUCCESS,
+          entityType: canonicalEvent.entityType,
+          entityId: canonicalEvent.entityId,
+          amountInr: canonicalEvent.amountInr,
+          ngoId: canonicalEvent.ngoId,
+          campaignId: canonicalEvent.campaignId,
+          occurredAt,
+          canonicalPayload,
+          payloadHash,
+          previous_hash: latestProvenanceEvent?.payloadHash ?? null,
+          transitionKey: paymentId,
+        },
+      });
+
+      await tx.blockchainRetryQueue.create({
+        data: {
+          donationId: currentDonation.id,
+          operationType: 'RECORD_DONATION',
+          retryCount: 0,
+          lastAttempt: new Date(0), // Immediate eligibility
+          error: 'Enqueued from payment success'
+        },
+      });
+
       return { donation: currentDonation, transitioned: true };
     });
   } catch (error) {
@@ -240,7 +298,7 @@ export const completeDonationSuccess = async (
   const updatedDonation = transition.donation;
 
   // 2. AML flag check: if amount > 100,000 INR
-  if (Number(updatedDonation.amount) > 100000) {
+  if (updatedDonation.amount.greaterThan(new Prisma.Decimal('100000'))) {
     void writeAuditLog({
       actorType: AuditActorType.SYSTEM,
       entityType: 'donation',
@@ -306,91 +364,7 @@ export const completeDonationSuccess = async (
       });
     });
 
-  // 5. Record on Solana Blockchain (only in non-test / when enabled)
-  if (process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
-    try {
-      const blockchainService = await getBlockchainService();
-      if (blockchainService) {
-        const donationData = {
-          donationId: updatedDonation.id,
-          donorUserId: updatedDonation.donorId,
-          ngoId: updatedDonation.ngoId,
-          campaignId: updatedDonation.campaignId ?? '',
-          amountInr: Number(updatedDonation.amount),
-          currency: 'INR',
-          timestamp: new Date(),
-        };
 
-        const blockchainResult = await blockchainService.recordDonation(donationData);
-
-        if (blockchainResult.success) {
-          await prisma.donation.update({
-            where: { id: updatedDonation.id },
-            data: { solanaTxHash: blockchainResult.txHash },
-          });
-
-          await writeAuditLog({
-            actorType: AuditActorType.SYSTEM,
-            entityType: 'donation',
-            entityId: updatedDonation.id,
-            action: 'BLOCKCHAIN_RECORD_SUCCESS',
-            metadata: {
-              donationId: updatedDonation.id,
-              transactionHash: blockchainResult.txHash,
-            },
-            ipAddress: options?.ipAddress,
-          });
-
-          console.info(`Blockchain recording successful for donation ${updatedDonation.id}: ${blockchainResult.txHash}`);
-        } else {
-          console.error(`Blockchain recording failed for donation ${updatedDonation.id}: ${blockchainResult.error}`);
-
-          await addToBlockchainRetryQueue({
-            donationId: updatedDonation.id,
-            error: blockchainResult.error ?? 'Unknown error',
-            retryCount: 0,
-            operationType: 'RECORD_DONATION',
-          });
-
-          await writeAuditLog({
-            actorType: AuditActorType.SYSTEM,
-            entityType: 'donation',
-            entityId: updatedDonation.id,
-            action: 'BLOCKCHAIN_RECORD_FAILED',
-            metadata: {
-              donationId: updatedDonation.id,
-              error: blockchainResult.error,
-            },
-            ipAddress: options?.ipAddress,
-          });
-        }
-      } else {
-        console.warn('[Blockchain] Service not available — skipping on-chain recording');
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`Blockchain service error for donation ${updatedDonation.id}:`, error);
-
-      await addToBlockchainRetryQueue({
-        donationId: updatedDonation.id,
-        error: errorMessage,
-        retryCount: 0,
-        operationType: 'RECORD_DONATION',
-      });
-
-      await writeAuditLog({
-        actorType: AuditActorType.SYSTEM,
-        entityType: 'donation',
-        entityId: updatedDonation.id,
-        action: 'BLOCKCHAIN_SERVICE_ERROR',
-        metadata: {
-          donationId: updatedDonation.id,
-          error: errorMessage,
-        },
-        ipAddress: options?.ipAddress,
-      });
-    }
-  }
 
   return updatedDonation;
 };
@@ -401,18 +375,18 @@ export const completeDonationSuccess = async (
  * @returns Order object from Razorpay
  */
 export const createRazorpayOrder = async (
-  amountInr: number,
+  amountInr: unknown,
   donationId: string,
 ) => {
   // Razorpay expects amount in the smallest currency unit (paise for INR)
-  const amountInPaise = Math.round(amountInr * 100);
-
-  if (
-    !Number.isSafeInteger(amountInPaise) ||
-    amountInPaise <= 0 ||
-    amountInPaise / 100 !== amountInr
-  ) {
-    throw new DonationPaymentError('Donation amount must be a valid INR amount');
+  let amountInPaise: number;
+  try {
+    amountInPaise = parseInrAmount(amountInr).amountPaise;
+  } catch (error) {
+    if (error instanceof MonetaryInputError) {
+      throw new DonationPaymentError('Donation amount must be a valid INR amount');
+    }
+    throw error;
   }
 
   return getRazorpayClient().orders.create({

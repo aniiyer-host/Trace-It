@@ -7,7 +7,9 @@ import {
   NgoStatus,
   CampaignStatus,
   DisbursementStatus,
+  ProvenanceEventType,
 } from "../generated/prisma/enums";
+import { hashProvenanceEvent } from "../src/utils/provenance.js";
 
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "access_secret";
 
@@ -197,9 +199,71 @@ describe("Disbursement API Integration Tests", () => {
 
     // Verify DonationAllocation records
     const allocations = await prisma.donationAllocation.findMany({
-      where: { disbursementId }
+      where: { disbursementId },
+      include: { donation: true },
     });
     expect(allocations.length).toBe(2);
+
+    const provenanceEvents = await prisma.provenanceEvent.findMany({
+      where: {
+        entityType: "Donation",
+        eventType: ProvenanceEventType.DONATION_ALLOCATED,
+        transitionKey: disbursementId,
+      },
+    });
+    expect(provenanceEvents).toHaveLength(2);
+
+    for (const allocation of allocations) {
+      const event = provenanceEvents.find(
+        (candidate) => candidate.entityId === allocation.donationId,
+      );
+      expect(event).toBeDefined();
+      expect(event).toMatchObject({
+        eventType: ProvenanceEventType.DONATION_ALLOCATED,
+        entityType: "Donation",
+        entityId: allocation.donationId,
+        amountInr: allocation.amount.toFixed(2),
+        ngoId: allocation.donation.ngoId,
+        campaignId: allocation.donation.campaignId,
+        transitionKey: disbursementId,
+      });
+
+      const canonicalPayload = JSON.parse(event!.canonicalPayload) as Record<
+        string,
+        unknown
+      >;
+      expect(Object.keys(canonicalPayload)).toEqual([
+        "schemaVersion",
+        "eventType",
+        "entityType",
+        "entityId",
+        "amountInr",
+        "ngoId",
+        "campaignId",
+        "occurredAt",
+      ]);
+      expect(canonicalPayload).toEqual({
+        schemaVersion: 1,
+        eventType: "DONATION_ALLOCATED",
+        entityType: "Donation",
+        entityId: allocation.donationId,
+        amountInr: allocation.amount.toFixed(2),
+        ngoId: allocation.donation.ngoId,
+        campaignId: allocation.donation.campaignId,
+        occurredAt: event!.occurredAt.toISOString(),
+      });
+      expect(event!.payloadHash).toBe(
+        hashProvenanceEvent({
+          eventType: "DONATION_ALLOCATED",
+          entityType: "Donation",
+          entityId: allocation.donationId,
+          amountInr: allocation.amount.toFixed(2),
+          ngoId: allocation.donation.ngoId,
+          campaignId: allocation.donation.campaignId,
+          occurredAt: event!.occurredAt,
+        }),
+      );
+    }
 
     // Verify RECEIPT Attestations were created
     const attestations = await prisma.attestation.findMany({
@@ -210,6 +274,129 @@ describe("Disbursement API Integration Tests", () => {
     // Verify Campaign is NOT closed (6000 < 10000)
     const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
     expect(campaign?.status).not.toBe(CampaignStatus.COMPLETED);
+  });
+
+  test("rejects repeated approval without duplicating allocation side effects", async () => {
+    const res = await request(app)
+      .post(`/api/admin/disburse/${disbursementId}/approve`)
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "Disbursement is not PENDING" });
+    expect(
+      await prisma.donationAllocation.count({ where: { disbursementId } }),
+    ).toBe(2);
+    expect(
+      await prisma.attestation.count({
+        where: { disbursementId, type: "RECEIPT" },
+      }),
+    ).toBe(2);
+    expect(
+      await prisma.provenanceEvent.count({
+        where: {
+          eventType: ProvenanceEventType.DONATION_ALLOCATED,
+          transitionKey: disbursementId,
+        },
+      }),
+    ).toBe(2);
+  });
+
+  test("rolls back approval and allocation writes when a later write fails", async () => {
+    const donations = await prisma.donation.findMany({
+      where: { campaignId },
+      orderBy: { createdAt: "asc" },
+    });
+    const donation = donations[1];
+    expect(
+      donation.amount.minus(donation.allocatedAmount).greaterThanOrEqualTo(500),
+    ).toBe(true);
+    const rollbackDisbursement = await prisma.disbursement.create({
+      data: {
+        campaignId,
+        ngoId: ngoUserId,
+        amountInr: 500,
+        status: DisbursementStatus.PENDING,
+      },
+    });
+
+    await prisma.attestation.create({
+      data: {
+        donationId: donation.id,
+        disbursementId: rollbackDisbursement.id,
+        type: "RECEIPT",
+        requestedBy: donation.donorId,
+        status: "PENDING",
+      },
+    });
+
+    const res = await request(app)
+      .post(`/api/admin/disburse/${rollbackDisbursement.id}/approve`)
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(500);
+    expect(
+      (await prisma.disbursement.findUnique({
+        where: { id: rollbackDisbursement.id },
+      }))?.status,
+    ).toBe(DisbursementStatus.PENDING);
+    expect(
+      (
+        await prisma.donation.findUnique({ where: { id: donation.id } })
+      )?.allocatedAmount.toFixed(2),
+    ).toBe(donation.allocatedAmount.toFixed(2));
+    expect(
+      await prisma.donationAllocation.count({
+        where: { disbursementId: rollbackDisbursement.id },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.provenanceEvent.count({
+        where: { transitionKey: rollbackDisbursement.id },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.attestation.count({
+        where: {
+          donationId: donation.id,
+          disbursementId: rollbackDisbursement.id,
+          type: "RECEIPT",
+        },
+      }),
+    ).toBe(1);
+  });
+
+  test("allows only one concurrent approval to claim a disbursement", async () => {
+    const concurrentDisbursement = await prisma.disbursement.create({
+      data: {
+        campaignId,
+        ngoId: ngoUserId,
+        amountInr: 100,
+        status: DisbursementStatus.PENDING,
+      },
+    });
+
+    const responses = await Promise.all(
+      [1, 2].map(() =>
+        request(app)
+          .post(`/api/admin/disburse/${concurrentDisbursement.id}/approve`)
+          .set("Authorization", `Bearer ${adminToken}`),
+      ),
+    );
+
+    expect(responses.map((response) => response.status).sort()).toEqual([
+      200,
+      400,
+    ]);
+    expect(
+      await prisma.donationAllocation.count({
+        where: { disbursementId: concurrentDisbursement.id },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.provenanceEvent.count({
+        where: { transitionKey: concurrentDisbursement.id },
+      }),
+    ).toBe(1);
   });
 
   test("POST /api/admin/disburse/:id/approve - approve final disbursement auto-closes campaign", async () => {

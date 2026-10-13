@@ -5,10 +5,12 @@ import { AuditActorType } from '../../generated/prisma/enums';
 import type { BlockchainService } from './blockchainService';
 import type { Prisma } from '../../generated/prisma/client';
 
+export const MAX_BLOCKCHAIN_RETRIES = 5;
+
 export class BlockchainRetryProcessor {
   private readonly batchSize = 10;
   private readonly baseDelayMs = 5000; // 5 seconds base delay
-  private readonly maxRetries = 5;
+  private readonly maxRetries = MAX_BLOCKCHAIN_RETRIES;
   private isRunning = false;
   private readonly operationTypes: ('RECORD_DONATION' | 'UPDATE_STATUS')[] = ['RECORD_DONATION', 'UPDATE_STATUS'];
 
@@ -138,7 +140,7 @@ export class BlockchainRetryProcessor {
       // Attempt to record on-chain
       const result = await blockchainService.recordDonation(donationData);
 
-      if (result.success) {
+      if (result.success && result.txHash) {
         // Success! Update donation and remove from queue
         await prisma.donation.update({
           where: { id: donation.id },
@@ -163,6 +165,46 @@ export class BlockchainRetryProcessor {
         });
 
         console.log(`Successfully recorded donation ${donation.id} on-chain via retry (attempt ${item.retryCount + 1}): ${result.txHash}`);
+      } else if (result.success && !result.txHash) {
+        // Record is on-chain, but we couldn't recover the signature.
+        if (item.retryCount + 1 >= this.maxRetries) {
+          // Terminal state
+          await prisma.blockchainRetryQueue.update({
+            where: { id: item.id },
+            data: {
+              error: 'Signature recovery permanently failed after max retries.',
+              retryCount: item.retryCount + 1,
+              lastAttempt: new Date(),
+              updatedAt: new Date()
+            }
+          });
+
+          await writeAuditLog({
+            actorType: AuditActorType.SYSTEM,
+            entityType: 'donation',
+            entityId: donation.id,
+            action: 'SIGNATURE_RECOVERY_ABANDONED',
+            metadata: {
+              donationId: donation.id,
+              error: 'Signature recovery permanently failed after max retries.'
+            },
+            ipAddress: 'retry-processor',
+          });
+          console.log(`Signature recovery abandoned for donation ${donation.id} (attempt ${item.retryCount + 1})`);
+        } else {
+          // Safely reschedule to try signature recovery again.
+          await prisma.blockchainRetryQueue.update({
+            where: { id: item.id },
+            data: {
+              error: 'Signature recovery pending (record already exists)',
+              retryCount: item.retryCount + 1,
+              lastAttempt: new Date(),
+              updatedAt: new Date()
+            }
+          });
+          console.log(`Retry pending for donation ${donation.id} (attempt ${item.retryCount + 1}): Signature recovery pending`);
+        }
+
       } else {
         // Failed again, update retry count and error
         await prisma.blockchainRetryQueue.update({

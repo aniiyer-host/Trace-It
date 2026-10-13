@@ -82,4 +82,46 @@ pub mod traceit {
             transaction_hash,
         )
     }
+
+    pub fn store_ngo_attestation(
+        ctx: Context<StoreNgoAttestation>,
+        donation_id: String,
+        ngo_id: String,
+        attestation_message: String,
+        attestation_message_hash: String,
+        ngo_public_key: String,
+        signed_at: i64,
+    ) -> Result<()> {
+        instructions::store_ngo_attestation::handler(
+            ctx,
+            donation_id,
+            ngo_id,
+            attestation_message,
+            attestation_message_hash,
+            ngo_public_key,
+            signed_at,
+        )
+    }
+
+    pub fn store_delivery_attestation(
+        ctx: Context<StoreDeliveryAttestation>,
+        donation_id: String,
+        ngo_id: String,
+        beneficiary_id_hash: String,
+        attestation_message: String,
+        attestation_message_hash: String,
+        ngo_public_key: String,
+        signed_at: i64,
+    ) -> Result<()> {
+        instructions::store_delivery_attestation::handler(
+            ctx,
+            donation_id,
+            ngo_id,
+            beneficiary_id_hash,
+            attestation_message,
+            attestation_message_hash,
+            ngo_public_key,
+            signed_at,
+        )
+    }
 }

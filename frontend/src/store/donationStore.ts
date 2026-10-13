@@ -177,16 +177,23 @@ export const useDonationStore = create<DonationStore>((set, get) => ({
     // Try to fetch from API
     try {
       //Removed as any at end for LINT error
-      const attestation = await apiService.donations.getAttestation(donationId);
-      if (!attestation) {
+      const attestations = await apiService.donations.getAttestation(donationId);
+      if (attestations.length === 0) {
         return null;
       }
 
-      // Map API status to our status
-      const status =
-        attestation.type === "receipt"
-          ? "receipt_confirmed"
-          : "delivery_confirmed";
+      const hasReceipt = attestations.some(
+        (attestation) => attestation.type.toUpperCase() === "RECEIPT",
+      );
+      const hasDelivery = attestations.some(
+        (attestation) => attestation.type.toUpperCase() === "DELIVERY",
+      );
+      const status = hasReceipt
+        ? "receipt_confirmed"
+        : hasDelivery
+          ? "delivery_confirmed"
+          : null;
+      if (!status) return null;
 
       // Update cache
       set((state) => ({

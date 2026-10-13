@@ -16,7 +16,10 @@ import type { Donation } from "@/types";
 import { cn } from "@/lib/utils";
 
 interface AttestationSignDialogProps {
-  donation: Donation;
+  donation: Pick<
+    Donation,
+    "id" | "campaignId" | "amount" | "campaignTitle" | "paymentMethod" | "orderId"
+  >;
   ngoName: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -56,7 +59,7 @@ export default function AttestationSignDialog({
   const handleSignAttestation = async () => {
     setLoading(true);
     try {
-      // Create attestation (simulating NGO signing with their private key)
+      // Record the NGO confirmation in the Trace-It database.
       const result = (await apiService.ngos.signAttestation(
         donation.id,
         attestationType,
@@ -64,11 +67,9 @@ export default function AttestationSignDialog({
       )) as { id?: string } | undefined;
 
       toast({
-        title: `${attestationType === "receipt" ? "Receipt" : "Delivery"} attestation signed!`,
+        title: `${attestationType === "receipt" ? "Receipt" : "Delivery"} attestation recorded`,
         //For this to work above added {id?: string } | undefined to the result type
-        // description: `Attestation stored on-chain with ID: ${result?.id || 'pending-tx'}`,
-        // description: `Attestation stored on-chain with ID: ${(result as any)?.id || "pending-tx"}`,
-        description: `Attestation stored on-chain with ID: ${result?.id || "pending-tx"}`,
+        description: `Database attestation recorded with ID: ${result?.id || "pending"}`,
       });
 
       onAttestationSigned();
@@ -143,11 +144,12 @@ export default function AttestationSignDialog({
         <div className="p-8 pb-6 border-b border-foreground/5 bg-foreground/[0.02]">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold tracking-tighter">
-              Cryptographic Attestation
+              Attestation Confirmation
             </DialogTitle>
             <DialogDescription className="text-foreground/60">
-              You are about to sign a permanent, publicly verifiable record on
-              the Solana blockchain.
+              You are about to record an NGO confirmation in the Trace-It
+              database. This does not create a cryptographic signature or a
+              blockchain transaction.
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -234,7 +236,7 @@ export default function AttestationSignDialog({
               <div className="flex">
                 <span className="text-foreground/40 w-24">signer:</span>
                 <span className="text-foreground">
-                  {ngoName} (Keypair active)
+                  {ngoName} (NGO confirmation)
                 </span>
               </div>
             </div>
@@ -243,10 +245,10 @@ export default function AttestationSignDialog({
           <div className="flex items-start gap-3 bg-foreground/5 p-4 rounded-xl text-sm text-foreground/80">
             <Shield className="w-5 h-5 text-foreground/60 shrink-0 mt-0.5" />
             <p>
-              By signing this payload, your organization creates an undeniable
-              cryptographic proof of{" "}
-              {attestationType === "receipt" ? "receipt" : "delivery"}. This
-              cannot be altered or erased.
+              By confirming this record, your organization records a{" "}
+              {attestationType === "receipt" ? "receipt" : "delivery"} status
+              in the Trace-It database. This is not a cryptographic signature
+              or blockchain proof.
             </p>
           </div>
 
@@ -309,11 +311,11 @@ export default function AttestationSignDialog({
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />{" "}
-                  Broadcasting...
+                  Recording...
                 </>
               ) : (
                 <>
-                  <Shield className="mr-2 h-4 w-4" /> Sign & Broadcast
+                  <Shield className="mr-2 h-4 w-4" /> Record
                   Attestation
                 </>
               )}

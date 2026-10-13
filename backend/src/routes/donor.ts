@@ -30,6 +30,11 @@ import {
   markDelivered,
 } from "../services/statusService.js";
 import { requireEnvironmentVariable } from "../utils/envValidator.js";
+import {
+  MonetaryInputError,
+  monetaryInputSchema,
+  parseInrAmount,
+} from "../utils/money.js";
 
 // ---------------------------------------------------------------------------
 // GET /api/donor/dashboard
@@ -104,7 +109,7 @@ export const getDonorDashboard = async (
 const donateSchema = Joi.object({
   ngoId: Joi.string().required(),
   campaignId: Joi.string().required(),
-  amount: Joi.number().positive().required(), // amount in INR
+  amount: monetaryInputSchema, // amount in INR
   paymentMethod: Joi.string()
     .valid("UPI", "CARD", "NETBANKING", "WALLET", "SOLANA_STUB")
     .required(),
@@ -133,9 +138,18 @@ export const createDonation = async (
     const { ngoId, campaignId, amount, paymentMethod } = value as {
       ngoId: string;
       campaignId: string;
-      amount: number;
+      amount: number | string;
       paymentMethod: string;
     };
+
+    try {
+      parseInrAmount(req.body?.amount);
+    } catch (error) {
+      if (error instanceof MonetaryInputError) {
+        return res.status(400).json({ error: "Amount must be valid to the nearest paise" });
+      }
+      throw error;
+    }
 
     const donorId = req.user?.id;
     if (!donorId) {
@@ -162,12 +176,14 @@ export const createDonation = async (
       return res.status(400).json({ error: "Invalid or inactive campaign" });
     }
 
-    const amountInPaise = Math.round(amount * 100);
-    if (
-      !Number.isSafeInteger(amountInPaise) ||
-      amountInPaise / 100 !== amount
-    ) {
-      return res.status(400).json({ error: "Amount must be valid to the nearest paise" });
+    let normalizedAmount;
+    try {
+      normalizedAmount = parseInrAmount(amount);
+    } catch (error) {
+      if (error instanceof MonetaryInputError) {
+        return res.status(400).json({ error: "Amount must be valid to the nearest paise" });
+      }
+      throw error;
     }
 
     const donationId = randomUUID();
@@ -180,7 +196,7 @@ export const createDonation = async (
         donorId,
         ngoId,
         campaignId,
-        amount,
+        amount: normalizedAmount.decimal,
         currencyCode: "INR",
         paymentMethod: paymentMethod as PaymentMethod,
         status: "INITIATED",
@@ -277,7 +293,15 @@ export const verifyCheckoutPayment = async (
       razorpay.payments.fetch(razorpay_payment_id),
       razorpay.orders.fetch(razorpay_order_id),
     ]);
-    const expectedAmountPaise = Math.round(Number(donation.amount) * 100);
+    let expectedAmountPaise: number;
+    try {
+      expectedAmountPaise = parseInrAmount(donation.amount.toFixed(2)).amountPaise;
+    } catch (error) {
+      if (error instanceof MonetaryInputError) {
+        return res.status(400).json({ error: "Razorpay payment does not match donation" });
+      }
+      throw error;
+    }
     if (
       payment.id !== razorpay_payment_id ||
       payment.order_id !== donation.razorpayOrderId ||

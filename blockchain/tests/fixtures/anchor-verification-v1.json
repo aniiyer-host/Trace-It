@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "description": "Public integration fixture for a locally verified audit batch; integer fields are decimal strings and hashes are lowercase hex.",
+  "input": {
+    "localVerification": "VERIFIED",
+    "anchorState": "CONFIRMED",
+    "batch": {
+      "batchKeyHex": "a6915b71ed47fb244f3267b9a3aa0f1d1ab880caa536fa1e1112326b0903a6b4",
+      "auditRootHex": "0b193cd34ee7360229fe7c4b8799cd2bf36c7eaa7273858eac27aac304caf0bd9ad3ec2e70443f0f84429f53533940a85601550dce79a309f3ec7e6477e0d46c",
+      "startSequence": "42",
+      "endSequence": "44",
+      "eventCount": 3,
+      "schemaVersion": 1
+    }
+  },
+  "expectedStates": {
+    "matchingAccount": "VERIFIED",
+    "pendingMissingAccount": "LOCAL_VALID_PENDING_ANCHOR",
+    "confirmedMissingAccount": "ANCHOR_NOT_FOUND",
+    "fieldMismatch": "ANCHOR_MISMATCH",
+    "malformedAccount": "ANCHOR_ACCOUNT_INVALID",
+    "rpcFailure": "RPC_UNAVAILABLE",
+    "unknownSchema": "UNSUPPORTED_SCHEMA_VERSION"
+  }
+}

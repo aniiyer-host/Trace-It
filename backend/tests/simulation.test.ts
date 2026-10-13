@@ -9,8 +9,10 @@ import {
   AttestationType,
   AttestationStatus,
   KycStatus,
+  ProvenanceEventType,
 } from "../generated/prisma/enums.js";
 import crypto from "crypto";
+import { hashProvenanceEvent } from "../src/utils/provenance.js";
 
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "access_secret";
 
@@ -111,6 +113,57 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
       include: { attestations: true },
     });
     expect(updated?.status).toBe("SUCCESS");
+
+    const transitionKey = `pay_sim_${donationId.replace(/-/g, "")}`;
+    const provenanceEvents = await prisma.provenanceEvent.findMany({
+      where: {
+        entityId: donationId,
+        eventType: ProvenanceEventType.DONATION_SUCCESS,
+      },
+    });
+    expect(provenanceEvents).toHaveLength(1);
+    const [provenanceEvent] = provenanceEvents;
+    expect(provenanceEvent).toMatchObject({
+      eventType: ProvenanceEventType.DONATION_SUCCESS,
+      entityType: "Donation",
+      entityId: donationId,
+      amountInr: "500.00",
+      ngoId: ngoUserId,
+      campaignId,
+      transitionKey,
+    });
+    const canonicalPayload = JSON.parse(provenanceEvent.canonicalPayload) as Record<string, unknown>;
+    expect(Object.keys(canonicalPayload)).toEqual([
+      "schemaVersion",
+      "eventType",
+      "entityType",
+      "entityId",
+      "amountInr",
+      "ngoId",
+      "campaignId",
+      "occurredAt",
+    ]);
+    expect(canonicalPayload).toEqual({
+      schemaVersion: 1,
+      eventType: "DONATION_SUCCESS",
+      entityType: "Donation",
+      entityId: donationId,
+      amountInr: "500.00",
+      ngoId: ngoUserId,
+      campaignId,
+      occurredAt: provenanceEvent.occurredAt.toISOString(),
+    });
+    expect(provenanceEvent.payloadHash).toBe(
+      hashProvenanceEvent({
+        eventType: "DONATION_SUCCESS",
+        entityType: "Donation",
+        entityId: donationId,
+        amountInr: "500.00",
+        ngoId: ngoUserId,
+        campaignId,
+        occurredAt: provenanceEvent.occurredAt,
+      }),
+    );
     
     // Attestations are now generated at disbursement approval, not here
     expect(updated?.attestations.length).toBe(0);
@@ -128,6 +181,14 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
       .post("/api/webhooks/simulate-success")
       .send({ donationId });
     expect(duplicateRes.status).toBe(200);
+    expect(
+      await prisma.provenanceEvent.count({
+        where: {
+          entityId: donationId,
+          eventType: ProvenanceEventType.DONATION_SUCCESS,
+        },
+      }),
+    ).toBe(1);
 
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
