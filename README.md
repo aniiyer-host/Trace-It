@@ -40,6 +40,13 @@ cd blockchain && npm test
 
 Backend integration tests may require an isolated test database. Do not point tests at a shared or production database.
 
+Before running backend tests, inspect the effective database target used by
+`backend/.env.test`; the full Jest suite performs database writes. The Anchor
+test script starts a local validator with `--reset` against
+`/tmp/traceit-test-ledger` and uses ports 8899 and 9900. Run it only when that
+ledger is disposable and those ports are available; test cleanup stops the
+validator but leaves the ledger directory behind.
+
 ## Solana Devnet
 
 Devnet deployment is a separate, fee-bearing operation. First review `blockchain/docs/phase5-operations-runbook.md` and run `npm run phase5:preflight` from `blockchain/` with the intended program, fee-payer, and upgrade-authority public keys configured. Preflight is read-only; it does not deploy the program or initialize its on-chain configuration. Do not run `scripts/deploy-devnet.sh` or the Devnet smoke script until the deployment details and each transaction have been explicitly approved. Config initialization uses `TRACEIT_SMOKE_ACTION=initialize-config`; anchor creation is a later, separately approved invocation with `TRACEIT_SMOKE_ACTION=write-anchor`. Never put private keys in this repository or an environment file committed to source control.

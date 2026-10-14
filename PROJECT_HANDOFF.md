@@ -1,6 +1,6 @@
 # Trace-It project handoff
 
-**Verified:** 2026-10-14 (WSL, branch `Aarush-system`). This note records the
+**Verified:** 2026-10-15 (WSL, branch `Aarush-system`). This note records the
 repository state checked during the completion pass. It does not certify a
 production release.
 
@@ -73,7 +73,7 @@ claims or execute payments.
 | Built locally | Yes. `traceit_anchor.so` is 232,136 bytes; SHA-256 `a4722659f20a5990da82b5f83d40a81e59b2f740d50e10cb7d02e666f7c9a17a`. |
 | IDL consistency | Yes. Generated IDL matches `blockchain/idl/traceit_anchor.json`; SHA-256 `4283336d28fa716d37ca5be36991b1d7f031cad990af8fabbf85329eef198bd1`. |
 | Local validator suite | Passed: 41 tests in the most recent recorded run. |
-| Devnet preflight | Passed read-only on 2026-10-14; refresh before any transaction. |
+| Devnet preflight | Passed read-only on 2026-10-15. Refresh before any transaction. |
 | Devnet deployment | Not deployed; program account absent at last preflight. |
 | Config initialization | Not performed. |
 | Smoke anchor | Not performed. |
@@ -87,7 +87,7 @@ Current identities:
   `EWT5ZZqNpfwD6yGzhf7SUJCPceq5VxfqMyjWQ6wumnJh`.
 - Legacy program (preserved): `5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3`.
 
-The 2026-10-14 Devnet preflight observed fee-payer balance **4.8706912 SOL**,
+The 2026-10-15 Devnet preflight observed fee-payer balance **4.8706912 SOL**,
 program account absent, estimated deployment peak **3.5928428 SOL**, and
 estimated headroom **1.2778484 SOL**. Rent components were program account
 0.00083312 SOL, ProgramData 2.3593806 SOL, temporary buffer 1.18008908 SOL,
@@ -117,34 +117,82 @@ is approved and applied.
 
 ## Verification gaps and known risks
 
-- No database migration, reset, seed, or persistent-database test was run in
-  this completion pass. Five migration directories are untracked work and need
-  review against the intended database before application.
-- Eight focused backend suites passed (50 tests). PostgreSQL integration and
-  broader API tests were not run because a disposable test database was not
-  confirmed for this run.
-- Frontend lint passes with zero errors or warnings; production build passes
-  with a 838.81 kB JS chunk warning. No frontend test script is configured.
-- Current npm audit reports: backend 18 findings (1 critical, 10 high, 7
-  moderate); frontend 9 (8 high, 1 moderate); blockchain 13 (10 high, 3
-  moderate). Findings are largely transitive, with several direct packages
-  affected. `npm audit fix --dry-run` showed possible compatible updates but no
-  dependency fixes were applied. Anchor's vulnerable `toml` dependency has no
-  audit fix in the current Anchor range; resolving it needs compatibility
-  assessment. Frontend Tailwind's suggested fix is a major-version migration.
-- `.github/workflows/ci.yml` is configured to log into Docker Hub and push
-  `latest` images on pushes to `Aarush-system`; the nearby comment incorrectly
-  says “only on main branch.” Review this publishing policy and CI secrets
-  before enabling or relying on that workflow.
-- Compose services and full payment, storage, email, donor, charity, and admin
-  flows remain to be exercised end to end with isolated local services and
-  provider test credentials.
+- All 18 migration directories are tracked, including the five directories
+  previously reported as untracked. Static review found no row deletion or
+  truncation in the migration SQL. The October 14 anchor migrations convert
+  `anchor_batches.status` from `BatchStatus` to `TEXT`, preserve old `SUBMITTED`
+  and `FAILED` semantics as review/dead-letter states, and deliberately drop
+  then restore the claim index across the ordered migrations. The email and
+  bank-transfer migrations add tables, indexes, constraints, and enum values.
+  Prisma schema validation passed. No local PostgreSQL listener or Docker
+  Compose plugin is available; no migration was applied and no migration replay
+  or DB integration test was run. The backend test configuration attempted a
+  non-loopback database host and was blocked by the sandbox; do not retry it.
+  Configure a confirmed-empty, loopback `traceit_anchor_test_*` database and
+  use the guarded integration test before claiming DB validation.
+- Backend typecheck, build, and Prisma validation passed. The full Jest run
+  completed 32 suites: 16 passed, 15 failed, and 1 skipped (132 passed, 117
+  failed, 4 skipped tests). Failures include unavailable non-loopback DB access
+  and `envValidator.test.ts` expectations missing the now-required
+  `RESEND_API_KEY`, `EMAIL_FROM`, and `AES_DOCUMENT_KEY`. Seven independent
+  focused suites passed (51 tests); the new webhook-signature suite passed (3
+  tests). The anchor persistence integration suite remains unrun without the
+  disposable database.
+- Frontend lint passed. The production build passed after route-level lazy
+  loading; its largest JS chunk is 348.37 kB (previously 838.93 kB), and the
+  build no longer reports a chunk over Vite's 500 kB advisory threshold. No
+  frontend test script is configured.
+- Backend `npm audit` refreshed on 2026-10-15 reports 18 findings: 1 critical,
+  10 high, and 7 moderate. Installed versions include `proxy-addr` 2.0.7
+  (transitive via Express 5.2.1), Joi 18.2.5, Multer 2.2.0, and `toml` 3.0.0
+  (transitive via backend Anchor 0.32.1). `proxy-addr` 2.0.8 fixes the critical
+  IPv4-mapped IPv6 trust-subnet spoofing issue; this app currently leaves
+  Express `trust proxy` disabled, so forwarded IPs are not trusted. Joi 18.2.5
+  is affected by the `isoDate()` ReDoS fixed in 18.2.6. Multer 2.2.0 is
+  affected by unauthenticated multipart field-name DoS fixed in 2.3.0. No
+  package changes were made because the npm-registry access request was
+  rejected and the needed Multer/Joi versions are not in
+  the local cache. The `toml` fix is 4.2.0, outside the current Anchor
+  dependency's compatible range; do not force a major override without testing
+  Anchor compatibility. Frontend and blockchain audits were not refreshed
+  after the npm-registry approval request was rejected; the old counts of 9
+  frontend and 13 blockchain findings are prior observations only.
+- Reviewed official advisories: [proxy-addr CVE-2026-90711](https://github.com/jshttp/proxy-addr/security/advisories/GHSA-jqcg-44mw-7w3h), [Joi CVE-2026-92599](https://joi.dev/resources/changelog), [Multer CVE-2026-77078](https://github.com/advisories/GHSA-wc9g-mqfw-jrwm), and [toml GHSA-82x6-q7mm-w9cf](https://github.com/advisories/ghsa-82x6-q7mm-w9cf).
+- `.github/workflows/ci.yml` still runs CI on pushes and pull requests for
+  `Aarush-system`; Docker Hub publishing now runs only on `push` to `main`.
+  CI now generates an ephemeral test wallet instead of writing a persistent
+  GitHub wallet secret to disk. YAML parsing and shell syntax checks passed.
+  Actual GitHub Actions behavior and repository secret settings were not
+  exercised. The Docker publish remains dependent on configured Docker Hub
+  secrets and was not triggered.
+- Security review found role-based account lookups in `requireAuth`, 10 MiB
+  Multer limits with a MIME allowlist, and raw-body HMAC webhook verification.
+  Webhook audit metadata no longer records full request headers or signature
+  values, and payment/refund signatures now share length-checked timing-safe
+  comparison. A focused regression test covers valid, mismatched, and malformed
+  signatures. File MIME values remain client-provided metadata; add content
+  sniffing before treating uploaded evidence as a verified file type.
+- Local Anchor build and artifact hashes remain unchanged. The local validator
+  suite passed all 41 tests after rerunning with local-port permission. Anchor
+  CLI remains 0.29.0 and Solana CLI 1.17.25. Current read-only
+  Devnet preflight passed on 2026-10-15 with the expected genesis hash,
+  candidate program ID and authorities; program account remains absent. The
+  computed peak is **3.5928428 SOL**, with **1.2778484 SOL** headroom from the
+  observed **4.8706912 SOL** fee-payer balance. The candidate program keypair
+  and bootstrap/runtime keypair files exist and derive the reviewed public
+  identities. The configured Solana CLI fee-payer keypair file is absent, and
+  neither `ANCHOR_WALLET` nor `TRACEIT_DEPLOY_PROGRAM_KEYPAIR` is set in the
+  operator shell. Do not request deployment approval until the intended
+  fee-payer keypair path is configured and independently checked. No
+  deployment, initialization, or smoke transaction occurred.
+- Compose services and full payment, object-storage, email-provider, donor,
+  charity, admin, and backend-to-chain flows remain unverified with isolated
+  services and provider test credentials.
 
 ## Repository state
 
-Work remains on `Aarush-system`; no commit or push was made. The worktree
-contains substantial earlier user changes across backend, frontend, migrations,
-Anchor program and docs. Preserve all existing changes when continuing. The
-completion pass added a root README, this handoff, safe environment-example
-tracking, localized frontend type fixes, safer deployment checks, and current
-identity/status corrections in Anchor operation docs.
+Work remains on `Aarush-system`; no commit or push was made. The checkpoint was
+clean before this pass. Current changes are limited to CI release gating and
+ephemeral test-wallet handling, webhook signature hardening and tests, frontend
+route code splitting, and this evidence update. Preserve these changes when
+continuing.

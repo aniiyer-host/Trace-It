@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [Aarush-system]
+    branches: [Aarush-system, main]
   push:
-    branches: [Aarush-system]
+    branches: [Aarush-system, main]
 
 jobs:
   test-and-build:
@@ -76,10 +76,10 @@ jobs:
         working-directory: ./backend
         run: npx prisma migrate deploy
 
-      - name: Create test wallet from persistent funded key
+      - name: Create ephemeral test wallet
+        working-directory: ./backend
         run: |
-          echo '${{ secrets.SOLANA_TEST_WALLET_SECRET }}' > /tmp/test-wallet.json
-          node -e "JSON.parse(require('fs').readFileSync('/tmp/test-wallet.json', 'utf-8'))" && echo "Wallet file is valid JSON"
+          node --input-type=module -e "import { Keypair } from '@solana/web3.js'; import { writeFileSync } from 'node:fs'; writeFileSync('/tmp/test-wallet.json', JSON.stringify(Array.from(Keypair.generate().secretKey)), { mode: 0o600 });"
 
       - name: Seed test database
         working-directory: ./backend
@@ -181,11 +181,12 @@ jobs:
         working-directory: ./backend
         run: npm run lint --if-present
 
-  # Docker build job (only on main branch)
+  # Publish images only for pushes to main. Development branch pushes and PRs
+  # still run the build and security jobs without publishing.
   docker:
     runs-on: ubuntu-latest
     needs: test-and-build
-    if: github.ref == 'refs/heads/Aarush-system'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 15
 
     steps:

@@ -9,6 +9,7 @@ import {
   DonationPaymentError,
   failDonation,
 } from '../../services/donationService.js';
+import { verifyHexSignature } from '../../utils/webhookSignature.js';
 
 interface RawRequest extends Request {
   rawBody: Buffer;
@@ -42,7 +43,6 @@ export const razorpayWebhookHandler = async (
         action: 'WEBHOOK_TAMPER_ATTEMPT',
         metadata: {
           reason: 'Missing signature or raw body',
-          headers: req.headers,
         },
         ipAddress: req.ip,
       });
@@ -50,12 +50,10 @@ export const razorpayWebhookHandler = async (
       return res.status(401).json({ error: 'Invalid webhook signature' });
     }
 
-    //debug line starts
     const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
     if (!RAZORPAY_WEBHOOK_SECRET) {
       throw new Error("RAZORPAY_WEBHOOK_SECRET is not configured");
     }
-    //debug line ends
 
     // Verify Razorpay webhook signature
     const hmac = crypto.createHmac('sha256', RAZORPAY_WEBHOOK_SECRET);
@@ -63,11 +61,7 @@ export const razorpayWebhookHandler = async (
     const generatedSignature = hmac.digest('hex');
 
     if (
-      !/^[a-f\d]{64}$/i.test(razorpaySignature) ||
-      !crypto.timingSafeEqual(
-        Buffer.from(generatedSignature, 'hex'),
-        Buffer.from(razorpaySignature, 'hex'),
-      )
+      !verifyHexSignature(generatedSignature, razorpaySignature)
     ) {
       // Log webhook tamper attempt
       void writeAuditLog({
@@ -76,8 +70,6 @@ export const razorpayWebhookHandler = async (
         action: 'WEBHOOK_TAMPER_ATTEMPT',
         metadata: {
           reason: 'Signature mismatch',
-          providedSignature: razorpaySignature,
-          generatedSignature,
         },
         ipAddress: req.ip,
       });
@@ -201,7 +193,6 @@ export const razorpayRefundWebhookHandler = async (
         action: 'WEBHOOK_TAMPER_ATTEMPT',
         metadata: {
           reason: 'Missing signature or raw body',
-          headers: req.headers,
         },
         ipAddress: req.ip,
       });
@@ -209,18 +200,16 @@ export const razorpayRefundWebhookHandler = async (
       return res.status(401).json({ error: 'Invalid webhook signature' });
     }
 
-    //debug line starts
     const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET;
     if (!RAZORPAY_WEBHOOK_SECRET) {
       throw new Error("RAZORPAY_WEBHOOK_SECRET is not configured");
     }
-    //debug line ends
     // Verify Razorpay webhook signature
     const hmac = crypto.createHmac('sha256', RAZORPAY_WEBHOOK_SECRET);
     hmac.update(rawBody);
     const generatedSignature = hmac.digest('hex');
 
-    if (generatedSignature !== razorpaySignature) {
+    if (!verifyHexSignature(generatedSignature, razorpaySignature)) {
       // Log webhook tamper attempt
       void writeAuditLog({
         actorType: AuditActorType.WEBHOOK,
@@ -228,8 +217,6 @@ export const razorpayRefundWebhookHandler = async (
         action: 'WEBHOOK_TAMPER_ATTEMPT',
         metadata: {
           reason: 'Signature mismatch',
-          providedSignature: razorpaySignature,
-          generatedSignature,
         },
         ipAddress: req.ip,
       });

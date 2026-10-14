@@ -1,20 +1,21 @@
 // App.tsx – root layout, routing, and global Toaster
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { MotionConfig } from 'framer-motion'
 import { Toaster } from '@/components/ui/toaster'
 import { ThemeProvider } from '@/components/theme-provider'
 import { NavBar } from '@/components/NavBar'
-import Home from '@/pages/Home'
-import Campaigns from '@/pages/Campaigns'
-import DonorDashboard from '@/pages/DonorDashboard'
-import NGODashboard from '@/pages/NGODashboard'
-import AdminPanel from '@/pages/AdminPanel'
-import Login from '@/pages/Login'
-import Signup from '@/pages/Signup'
-import Profile from '@/pages/Profile'
-import { NgoDirectory } from '@/pages/NgoDirectory'
+const Home = lazy(() => import('@/pages/Home'))
+const Campaigns = lazy(() => import('@/pages/Campaigns'))
+const DonorDashboard = lazy(() => import('@/pages/DonorDashboard'))
+const NGODashboard = lazy(() => import('@/pages/NGODashboard'))
+const AdminPanel = lazy(() => import('@/pages/AdminPanel'))
+const Login = lazy(() => import('@/pages/Login'))
+const Signup = lazy(() => import('@/pages/Signup'))
+const Profile = lazy(() => import('@/pages/Profile'))
+const NgoDirectory = lazy(() => import('@/pages/NgoDirectory').then((module) => ({ default: module.NgoDirectory })))
 // Placeholder for attestation verification page (to be implemented)
-import AttestationVerify from '@/pages/AttestationVerify'
+const AttestationVerify = lazy(() => import('@/pages/AttestationVerify'))
 import PageTransition from '@/components/PageTransition'
 
 export default function App() {
@@ -26,18 +27,20 @@ export default function App() {
             <NavBar />
             <PageTransition>
               <main className="flex-1 container max-w-6xl mx-auto px-4 py-8">
-                <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/campaigns" element={<Campaigns />} />
-                  <Route path="/donor" element={<DonorDashboard />} />
-                  <Route path="/ngo" element={<NGODashboard />} />
-                  <Route path="/ngos" element={<NgoDirectory />} />
-                  <Route path="/admin" element={<AdminPanel />} />
-                  <Route path="/attestation/verify/:attestationId" element={<AttestationVerify />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/signup" element={<Signup />} />
-                  <Route path="/profile" element={<Profile />} />
-                </Routes>
+                <Suspense fallback={<div role="status" className="py-12 text-center text-muted-foreground">Loading page…</div>}>
+                  <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/campaigns" element={<Campaigns />} />
+                    <Route path="/donor" element={<DonorDashboard />} />
+                    <Route path="/ngo" element={<NGODashboard />} />
+                    <Route path="/ngos" element={<NgoDirectory />} />
+                    <Route path="/admin" element={<AdminPanel />} />
+                    <Route path="/attestation/verify/:attestationId" element={<AttestationVerify />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/signup" element={<Signup />} />
+                    <Route path="/profile" element={<Profile />} />
+                  </Routes>
+                </Suspense>
               </main>
             </PageTransition>
             <Toaster />

@@ -37,7 +37,7 @@ Production must place upgrade authority under offline or multisig custody and ke
 8. Configuration initialization and anchor creation are separate approvals and separate invocations of the guarded `npm run phase5:smoke`. Set `TRACEIT_SMOKE_ACTION=initialize-config` for only the config instruction; after verifying its result and obtaining a new approval, set `TRACEIT_SMOKE_ACTION=write-anchor` to write only the public `multiple_events` fixture. Each action checks Devnet genesis and authority, simulates its instruction before sending, and verifies the resulting account. Anchor mode refuses to initialize a missing config.
 9. Rerun preflight with `TRACEIT_EXPECT_DEPLOYED=true` and archive command output with the release evidence.
 
-The preflight queries current rent rather than assuming static fees. For the 232,136-byte artifact measured on 2026-09-30, peak temporary funding was 3,592,842,800 lamports, including program, doubled ProgramData capacity, deploy buffer, config, first anchor, and a 0.05 SOL fee reserve. The buffer is temporary but must be fundable during deployment.
+The preflight queries current rent rather than assuming static fees. The read-only preflight on 2026-10-15 verified the 232,136-byte artifact and estimated peak temporary funding at 3,592,842,800 lamports, including program, doubled ProgramData capacity, deploy buffer, config, first anchor, and a 0.05 SOL fee reserve. The observed fee-payer balance was 4,870,691,200 lamports. The buffer is temporary but must be fundable during deployment. Refresh all values immediately before any transaction.
 
 The current deployment identity and artifact hash are recorded in
 [`../deployments/devnet-anchor.json`](../deployments/devnet-anchor.json). The
