@@ -2,9 +2,9 @@ name: DevSecOps Security
 
 on:
   push:
-    branches: [Aniket-Cyber]
+    branches: [Aarush-system, main]
   pull_request:
-    branches: [Aniket-Cyber]
+    branches: [Aarush-system, main]
   workflow_dispatch:
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
@@ -30,7 +30,7 @@ jobs:
         run: npm ci
 
       - name: Dependency audit
-        run: npm audit --audit-level=high || true
+        run: npm audit --audit-level=high
 
       - name: Generate SBOM
         run: |

@@ -130,11 +130,23 @@ is approved and applied.
   non-loopback database host and was blocked by the sandbox; do not retry it.
   Configure a confirmed-empty, loopback `traceit_anchor_test_*` database and
   use the guarded integration test before claiming DB validation.
+  The subsequently proposed target identifies database `TraceIt` at host
+  `172.17.160.1`; it fails both the loopback and disposable-name checks. A
+  statement that its contents are seed data does not establish an empty,
+  isolated test database. No connection or write was made to that target.
+  CI now uses its ephemeral PostgreSQL service under the permitted
+  `traceit_anchor_test_ci` name and supplies the explicit disposable-test
+  acknowledgment, so the guarded anchor integration suite can run there. The
+  service database is migrated and seeded first; the seed leaves provenance
+  and anchor batches empty, as required by the test guard. This workflow change
+  has not yet been exercised by GitHub Actions.
 - Backend typecheck, build, and Prisma validation passed. The full Jest run
   completed 32 suites: 16 passed, 15 failed, and 1 skipped (132 passed, 117
   failed, 4 skipped tests). Failures include unavailable non-loopback DB access
   and `envValidator.test.ts` expectations missing the now-required
-  `RESEND_API_KEY`, `EMAIL_FROM`, and `AES_DOCUMENT_KEY`. Seven independent
+  `RESEND_API_KEY`, `EMAIL_FROM`, and `AES_DOCUMENT_KEY`. Those stale test
+  expectations and the valid-production fixture have since been updated; the
+  focused `envValidator.test.ts` run now passes all 5 tests. Seven independent
   focused suites passed (51 tests); the new webhook-signature suite passed (3
   tests). The anchor persistence integration suite remains unrun without the
   disposable database.
@@ -142,21 +154,23 @@ is approved and applied.
   loading; its largest JS chunk is 348.37 kB (previously 838.93 kB), and the
   build no longer reports a chunk over Vite's 500 kB advisory threshold. No
   frontend test script is configured.
-- Backend `npm audit` refreshed on 2026-10-15 reports 18 findings: 1 critical,
-  10 high, and 7 moderate. Installed versions include `proxy-addr` 2.0.7
-  (transitive via Express 5.2.1), Joi 18.2.5, Multer 2.2.0, and `toml` 3.0.0
-  (transitive via backend Anchor 0.32.1). `proxy-addr` 2.0.8 fixes the critical
-  IPv4-mapped IPv6 trust-subnet spoofing issue; this app currently leaves
-  Express `trust proxy` disabled, so forwarded IPs are not trusted. Joi 18.2.5
-  is affected by the `isoDate()` ReDoS fixed in 18.2.6. Multer 2.2.0 is
-  affected by unauthenticated multipart field-name DoS fixed in 2.3.0. No
-  package changes were made because the npm-registry access request was
-  rejected and the needed Multer/Joi versions are not in
-  the local cache. The `toml` fix is 4.2.0, outside the current Anchor
-  dependency's compatible range; do not force a major override without testing
-  Anchor compatibility. Frontend and blockchain audits were not refreshed
-  after the npm-registry approval request was rejected; the old counts of 9
-  frontend and 13 blockchain findings are prior observations only.
+- Backend `npm audit` was refreshed against the registry on 2026-10-15. Two
+  semver-safe `npm audit fix` passes updated the lockfile, including
+  `proxy-addr` to 2.0.8, Joi to 18.2.9, Multer to 2.4.0, Axios to 1.20.0,
+  and other affected transitive packages. The critical proxy-address finding
+  and the prior Joi/Multer findings are resolved. The resulting full tree has
+  25 findings (22 moderate, 3 high); the production-pruned tree has 6 (3
+  moderate, 3 high). Remaining findings include Anchor's `toml` 3.0.0 high
+  advisories (no compatible automatic fix), Prisma CLI's mysql2 advisory, and
+  `jayson`/`stream-json` moderate advisories. Prisma CLI is still declared as a
+  production dependency; moving it to dev dependencies was rejected during the
+  requested package operation. Do not force major upgrades to Prisma or TOML
+  without compatibility testing. Registry audit on 2026-10-15 is the current
+  evidence; frontend and blockchain audits have not been refreshed. An offline
+  audit returned no advisory data and must not be treated as a clean audit.
+  CI now fails on high or critical production audit findings; the dedicated
+  security workflow also runs for `Aarush-system` and `main` and no longer
+  ignores audit failures.
 - Reviewed official advisories: [proxy-addr CVE-2026-90711](https://github.com/jshttp/proxy-addr/security/advisories/GHSA-jqcg-44mw-7w3h), [Joi CVE-2026-92599](https://joi.dev/resources/changelog), [Multer CVE-2026-77078](https://github.com/advisories/GHSA-wc9g-mqfw-jrwm), and [toml GHSA-82x6-q7mm-w9cf](https://github.com/advisories/ghsa-82x6-q7mm-w9cf).
 - `.github/workflows/ci.yml` still runs CI on pushes and pull requests for
   `Aarush-system`; Docker Hub publishing now runs only on `push` to `main`.
@@ -164,7 +178,12 @@ is approved and applied.
   GitHub wallet secret to disk. YAML parsing and shell syntax checks passed.
   Actual GitHub Actions behavior and repository secret settings were not
   exercised. The Docker publish remains dependent on configured Docker Hub
-  secrets and was not triggered.
+  secrets and was not triggered. Added Docker context exclusions for env files,
+  dependencies, build outputs, and Git metadata; final context size was 1.6 MB.
+  The final backend image build passed with the refreshed dependency lockfile,
+  pruned development dependencies, and ran as the unprivileged `node` user.
+  The production-pruned image still includes Prisma CLI because it remains a
+  production dependency.
 - Security review found role-based account lookups in `requireAuth`, 10 MiB
   Multer limits with a MIME allowlist, and raw-body HMAC webhook verification.
   Webhook audit metadata no longer records full request headers or signature
@@ -191,8 +210,10 @@ is approved and applied.
 
 ## Repository state
 
-Work remains on `Aarush-system`; no commit or push was made. The checkpoint was
-clean before this pass. Current changes are limited to CI release gating and
-ephemeral test-wallet handling, webhook signature hardening and tests, frontend
-route code splitting, and this evidence update. Preserve these changes when
-continuing.
+Work remains on `Aarush-system` at commit `19ef2b9` (`CI Changes and further
+validation. Hardened payment webhooks signatures`). The previous pass's changes
+are included in that commit. This continuation updates the environment
+  validator test fixture, semver-safe backend dependency lock updates, npm
+  install-script allowlist versions, CI test database and audit configuration,
+  Docker context/runtime, security workflow triggers, and this handoff; no
+  commit or push was made.

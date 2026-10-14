@@ -17,7 +17,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: traceit_test
+          POSTGRES_DB: traceit_anchor_test_ci
         ports: [5432:5432]
         options: >-
           --health-cmd pg_isready
@@ -36,8 +36,10 @@ jobs:
 
     env:
       NODE_ENV: test
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/traceit_test
-      DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/traceit_test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/traceit_anchor_test_ci
+      DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/traceit_anchor_test_ci
+      ANCHOR_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/traceit_anchor_test_ci
+      ANCHOR_TEST_DATABASE_DISPOSABLE: YES_I_CONFIRM
       JWT_ACCESS_SECRET: test-access-secret
       JWT_REFRESH_SECRET: test-refresh-secret
       SENDGRID_API_KEY: test-sendgrid-key
@@ -165,13 +167,11 @@ jobs:
 
       - name: Run frontend security audit
         working-directory: ./frontend
-        run: |
-          npm audit --production || echo "Non-fatal npm audit warnings"
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Run backend security audit
         working-directory: ./backend
-        run: |
-          npm audit --production || echo "Non-fatal npm audit warnings"
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Run frontend ESLint security plugin
         working-directory: ./frontend
