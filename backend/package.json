@@ -79,11 +79,11 @@
     }
   },
   "allowScripts": {
-    "@prisma/engines@7.9.1": true,
-    "@swc/core@1.16.0": true,
+    "@prisma/engines@7.10.0": true,
+    "@swc/core@1.16.1": true,
     "bufferutil@4.1.0": true,
     "esbuild@0.28.2": true,
-    "prisma@7.9.1": true,
+    "prisma@7.10.0": true,
     "utf-8-validate@6.0.6": true,
     "unrs-resolver@1.12.2": true
   }
