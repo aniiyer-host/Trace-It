@@ -106,6 +106,8 @@ export class SolanaAnchorAdapter implements AnchorChainAdapter {
         throw new AnchorAdapterError(
           "PROGRAM",
           `anchor transaction was rejected: ${JSON.stringify(confirmation.value.err)}`,
+          undefined,
+          signature,
         );
       }
       return signature;

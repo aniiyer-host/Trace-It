@@ -85,6 +85,23 @@ To start the production server:
 npm start
 ```
 
+### Milestone email delivery
+
+The API process starts the PostgreSQL-backed email outbox dispatcher automatically. Configure `RESEND_API_KEY` and `EMAIL_FROM` in the backend environment; `FRONTEND_URL` is optional and controls donation links. In development, the dispatcher stays stopped if Resend is not configured, and queued messages remain in PostgreSQL. Production startup rejects a missing or malformed Resend key/sender.
+
+Before deploying this code, apply the `add_email_outbox` migration using the normal release migration step (`npx prisma migrate deploy`), then start or restart the backend with `npm start`. No separate worker process is required. Failed sends retry with exponential backoff up to eight attempts, after which the row is retained with status `FAILED` and its last error for operator review. Inspect `email_outbox` for `PENDING`, `PROCESSING`, and `FAILED` rows when monitoring delivery.
+
+Delivery is at-least-once, not exactly-once: if Resend accepts a message but the worker loses its connection before persisting the provider response, a retry may send a duplicate.
+
+### NGO-reported beneficiary transfers
+
+After the associated allocation has been approved, an authenticated NGO can submit a transfer and evidence with `POST /api/charity/bank-transfers` (multipart field `file`; form fields `allocationId`, `amountInr`, `currencyCode`, `transferDate`, optional `bankReference`, and optional `resubmissionOfId` when replacing a rejected submission; and a stable `Idempotency-Key` header). A resubmission is a new record linked to its rejected predecessor, preserving the previous review in history. Amounts are limited to the remaining allocation and must use INR. Evidence is encrypted using the existing `AES_DOCUMENT_KEY` document convention and stored in the private `proof-docs` bucket; only the owning NGO and an authenticated admin can download it through the protected `/api/charity/bank-transfers/:id/evidence/:documentId` and `/api/admin/bank-transfers/:id/evidence/:documentId` endpoints. The API decrypts the file server-side and checks its SHA-512 digest before returning it.
+
+Admins review submissions through `GET /api/admin/bank-transfers/pending`, then `POST /api/admin/bank-transfers/:id/approve` or `/reject` (a rejection requires a reason). Approval, audit/provenance records, and the stable-key `BENEFICIARY_TRANSFER_REVIEWED` email outbox event are committed atomically. The email says the NGO reported a transfer and an administrator approved review of its evidence; it does not claim independent bank settlement or beneficiary receipt. The third milestone is not tied to the existing `DELIVERY` attestation.
+
+Before deploying this workflow, apply the `add_bank_transfer_review` migration with the regular release migration step after verifying the target database. This change does not apply the migration automatically.
+Configure `AES_DOCUMENT_KEY` as a separate 32-byte random hex key (for example, generate one with `openssl rand -hex 32`) and configure the existing S3-compatible storage settings for a private `proof-docs` bucket. Keep the key in the deployment secret manager and back it up securely; losing or rotating it without re-encrypting evidence makes stored files unreadable.
+
 ## Notes
 
 - The backend uses TypeScript (ESM) with Prisma ORM 7 and a Supabase-hosted PostgreSQL database.

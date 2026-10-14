@@ -32,12 +32,17 @@ Production must place upgrade authority under offline or multisig custody and ke
    ```
 
 5. Review cluster, program ID, fee payer, upgrade authority, hashes, balance, and peak rent estimate. Obtain explicit transaction approval.
-6. Set the guarded consent variable and invoke `bash scripts/deploy-devnet.sh`. The script refuses ID drift and non-approved invocation.
+6. After approval, set the guarded consent variable and invoke `bash scripts/deploy-devnet.sh`. The script rebuilds, checks the binary hash against the reviewed manifest, confirms the supplied fee payer/upgrade authority public keys, refreshes the Devnet preflight, and refuses to proceed if preflight is not ready or the program account already exists. It uses the same `ANCHOR_WALLET` as fee payer and upgrade authority. It does not upgrade an existing program.
 7. Record program ID, ProgramData address, deployment slot, authorities, artifact hashes, and explorer evidence in the manifest.
-8. Run the guarded `npm run phase5:smoke`. It verifies the devnet genesis hash and authority, simulates initialization/anchor instructions before sending, writes only the public `multiple_events` fixture, then reads back every immutable field.
+8. Configuration initialization and anchor creation are separate approvals and separate invocations of the guarded `npm run phase5:smoke`. Set `TRACEIT_SMOKE_ACTION=initialize-config` for only the config instruction; after verifying its result and obtaining a new approval, set `TRACEIT_SMOKE_ACTION=write-anchor` to write only the public `multiple_events` fixture. Each action checks Devnet genesis and authority, simulates its instruction before sending, and verifies the resulting account. Anchor mode refuses to initialize a missing config.
 9. Rerun preflight with `TRACEIT_EXPECT_DEPLOYED=true` and archive command output with the release evidence.
 
 The preflight queries current rent rather than assuming static fees. For the 232,136-byte artifact measured on 2026-09-30, peak temporary funding was 3,592,842,800 lamports, including program, doubled ProgramData capacity, deploy buffer, config, first anchor, and a 0.05 SOL fee reserve. The buffer is temporary but must be fundable during deployment.
+
+The current deployment identity and artifact hash are recorded in
+[`../deployments/devnet-anchor.json`](../deployments/devnet-anchor.json). The
+last preflight there is historical; deployment requires a fresh successful
+preflight immediately before submission.
 
 ## Submission and RPC policy
 

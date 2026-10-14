@@ -29,9 +29,11 @@ export default function DisbursementRequestDialog({
   onDisbursementRequested,
 }: DisbursementRequestDialogProps) {
   const [amount, setAmount] = useState("");
-  const [type, setType] = useState("PROOF_OF_NEED");
+  const [type, setType] = useState<"PROOF_OF_NEED" | "PROOF_OF_WORK">(
+    "PROOF_OF_NEED",
+  );
   const [selectedCohort, setSelectedCohort] = useState(
-    cohortId || (campaign as any).cohortId || (campaign as any).cohorts?.[0]?.id || ""
+    cohortId || campaign.cohortId || campaign.cohorts?.[0]?.id || ""
   );
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -45,7 +47,7 @@ export default function DisbursementRequestDialog({
       ),
   );
 
-  const cohorts = (campaign as any).cohorts || [];
+  const cohorts = campaign.cohorts ?? [];
 
   const handleRequestDisbursement = async () => {
     const parsedAmount = Number(amount);
@@ -75,7 +77,7 @@ export default function DisbursementRequestDialog({
         cohortId: selectedCohort || undefined,
         disbursementType: type,
         amountInr: parsedAmount,
-      } as any);
+      });
 
       toast({
         title: "Disbursement requested",
@@ -131,7 +133,9 @@ export default function DisbursementRequestDialog({
             <select
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               value={type}
-              onChange={(e) => setType(e.target.value)}
+              onChange={(e) =>
+                setType(e.target.value as "PROOF_OF_NEED" | "PROOF_OF_WORK")
+              }
               disabled={loading}
             >
               <option value="PROOF_OF_NEED">Proof of Need</option>
@@ -149,7 +153,7 @@ export default function DisbursementRequestDialog({
                 disabled={loading}
               >
                 <option value="">None (General Campaign Funds)</option>
-                {cohorts.map((c: any) => (
+                {cohorts.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>

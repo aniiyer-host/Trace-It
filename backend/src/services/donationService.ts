@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import { prisma } from '../db/prisma.js';
 import { requireEnvironmentVariable } from '../utils/envValidator.js';
 import {
+  AttestationStatus,
+  AttestationType,
   AuditActorType,
   DonationStatus,
   ProvenanceEventType,
@@ -11,12 +13,9 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { writeAuditLog } from './auditLogService.js';
 import { generateAndStoreReceipt } from './receiptService.js';
 import { notifyAdmin } from './emailService.js';
-import {
-  canonicalizeProvenanceEvent,
-  hashProvenanceEvent,
-  serializeProvenanceEvent,
-} from '../utils/provenance.js';
+import { appendProvenanceEvent } from './provenanceChainService.js';
 import { MonetaryInputError, parseInrAmount } from '../utils/money.js';
+import { enqueueDonationSuccessEmail } from './email/notificationService.js';
 
 
 
@@ -238,31 +237,27 @@ export const completeDonationSuccess = async (
         campaignId: currentDonation.campaignId,
         occurredAt,
       };
-      const canonicalEvent = canonicalizeProvenanceEvent(provenanceInput);
-      const canonicalPayload = serializeProvenanceEvent(provenanceInput);
-      const payloadHash = hashProvenanceEvent(provenanceInput);
+      await appendProvenanceEvent(tx, provenanceInput, paymentId);
 
-      // Get the latest ProvenanceEvent to chain from
-      const latestProvenanceEvent = await tx.provenanceEvent.findFirst({
-        orderBy: { id: 'desc' },
-        select: { payloadHash: true },
-      });
-
-      await tx.provenanceEvent.create({
-        data: {
-          eventType: ProvenanceEventType.DONATION_SUCCESS,
-          entityType: canonicalEvent.entityType,
-          entityId: canonicalEvent.entityId,
-          amountInr: canonicalEvent.amountInr,
-          ngoId: canonicalEvent.ngoId,
-          campaignId: canonicalEvent.campaignId,
-          occurredAt,
-          canonicalPayload,
-          payloadHash,
-          previous_hash: latestProvenanceEvent?.payloadHash ?? null,
-          transitionKey: paymentId,
+      const existingReceiptAttestation = await tx.attestation.findFirst({
+        where: {
+          donationId: currentDonation.id,
+          disbursementId: null,
+          type: AttestationType.RECEIPT,
         },
+        select: { id: true },
       });
+      if (!existingReceiptAttestation) {
+        await tx.attestation.create({
+          data: {
+            donationId: currentDonation.id,
+            type: AttestationType.RECEIPT,
+            allocatedAmount: currentDonation.amount,
+            requestedBy: currentDonation.donorId,
+            status: AttestationStatus.PENDING,
+          },
+        });
+      }
 
       await tx.blockchainRetryQueue.create({
         data: {
@@ -273,6 +268,8 @@ export const completeDonationSuccess = async (
           error: 'Enqueued from payment success'
         },
       });
+
+      await enqueueDonationSuccessEmail(tx, currentDonation, occurredAt);
 
       return { donation: currentDonation, transitioned: true };
     });
@@ -363,8 +360,6 @@ export const completeDonationSuccess = async (
         ipAddress: options?.ipAddress,
       });
     });
-
-
 
   return updatedDonation;
 };

@@ -12,7 +12,10 @@ import {
   ProvenanceEventType,
 } from "../generated/prisma/enums.js";
 import crypto from "crypto";
-import { hashProvenanceEvent } from "../src/utils/provenance.js";
+import {
+  computeChainHash,
+  hashProvenanceEvent,
+} from "../src/utils/provenance.js";
 
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "access_secret";
 
@@ -85,7 +88,7 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
     expect(donation?.status).toBe("INITIATED");
   });
 
-  it("POST /api/webhooks/simulate-success transitions INITIATED donation to SUCCESS but DOES NOT auto-create RECEIPT attestation", async () => {
+  it("creates an NGO receipt attestation when payment succeeds", async () => {
     // 1. Create a donation
     const donateRes = await request(app)
       .post("/api/donor/donate")
@@ -164,9 +167,54 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
         occurredAt: provenanceEvent.occurredAt,
       }),
     );
+    const precedingChainEvent = await prisma.provenanceEvent.findFirst({
+      where: {
+        chainHash: { not: null },
+        id: { lt: provenanceEvent.id },
+      },
+      orderBy: { id: "desc" },
+      select: { chainHash: true },
+    });
+    expect(provenanceEvent.previous_hash).toBe(
+      precedingChainEvent?.chainHash ?? null,
+    );
+    expect(provenanceEvent.chainHash).toBe(
+      computeChainHash(
+        {
+          eventType: provenanceEvent.eventType,
+          entityType: provenanceEvent.entityType,
+          entityId: provenanceEvent.entityId,
+          amountInr: provenanceEvent.amountInr,
+          ngoId: provenanceEvent.ngoId,
+          campaignId: provenanceEvent.campaignId,
+          occurredAt: provenanceEvent.occurredAt,
+        },
+        provenanceEvent.previous_hash,
+      ),
+    );
     
-    // Attestations are now generated at disbursement approval, not here
-    expect(updated?.attestations.length).toBe(0);
+    expect(updated?.attestations).toHaveLength(1);
+    expect(updated?.attestations[0]).toMatchObject({
+      type: "RECEIPT",
+      status: "PENDING",
+      disbursementId: null,
+      requestedBy: donorUserId,
+    });
+    expect(updated?.attestations[0].allocatedAmount?.toFixed(2)).toBe(
+      "500.00",
+    );
+
+    const ngoPendingAttestations = await request(app)
+      .get("/api/charity/attestations/pending")
+      .set("Authorization", `Bearer ${ngoToken}`);
+    expect(ngoPendingAttestations.status).toBe(200);
+    expect(
+      ngoPendingAttestations.body.some(
+        (attestation: { donationId: string; type: string }) =>
+          attestation.donationId === donationId &&
+          attestation.type === "RECEIPT",
+      ),
+    ).toBe(true);
 
     const receiptResponse = await request(app)
       .get(`/api/donor/receipt/${donationId}`)
@@ -186,6 +234,15 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
         where: {
           entityId: donationId,
           eventType: ProvenanceEventType.DONATION_SUCCESS,
+        },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.attestation.count({
+        where: {
+          donationId,
+          disbursementId: null,
+          type: "RECEIPT",
         },
       }),
     ).toBe(1);

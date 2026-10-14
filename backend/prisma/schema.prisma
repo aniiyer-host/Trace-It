@@ -59,6 +59,7 @@ enum DocumentType {
   PAN_CARD
   AADHAR
   FIELD_REPORT
+  BANK_TRANSFER_EVIDENCE
   COHORT_PROOF
   TAX_RECEIPT
   GOV_EXPORT
@@ -130,6 +131,9 @@ enum ProvenanceEventType {
   DISBURSEMENT_APPROVED
   NGO_APPROVED
   COHORT_REGISTERED
+  BANK_TRANSFER_REPORTED
+  BANK_TRANSFER_EVIDENCE_APPROVED
+  BANK_TRANSFER_EVIDENCE_REJECTED
 }
 
 enum AnchorStatus {
@@ -139,10 +143,16 @@ enum AnchorStatus {
   FAILED
 }
 
-enum BatchStatus {
+enum EmailMilestone {
+  DONATION_SUCCESS
+  FUNDS_ALLOCATED
+  BENEFICIARY_TRANSFER_REVIEWED
+}
+
+enum EmailOutboxStatus {
   PENDING
-  SUBMITTED
-  CONFIRMED
+  PROCESSING
+  SENT
   FAILED
 }
 // MODELS
@@ -175,6 +185,8 @@ model Profile {
   cohorts              BeneficiaryCohort[]
   documents            Document[]
   disbursementsAsNgo   Disbursement[]    @relation("disbursementsAsNgo")
+  bankTransfersAsNgo   BankTransfer[]    @relation("bankTransfersAsNgo")
+  bankTransfersReviewed BankTransfer[]   @relation("bankTransfersReviewed")
   impactTokensAsDonor  ImpactToken[]     @relation("impactTokensAsDonor")
   auditLogsAsActor     AuditLog[]        @relation("auditLogsAsActor")
   govRequestsAsCreatedBy GovernmentRequest[] @relation("govRequestsAsCreatedBy")
@@ -290,6 +302,7 @@ model DonationAllocation {
 
   donation     Donation     @relation(fields: [donationId], references: [id])
   disbursement Disbursement @relation(fields: [disbursementId], references: [id])
+  bankTransfers BankTransfer[]
 
   @@index([donationId])
   @@index([disbursementId])
@@ -359,6 +372,7 @@ model Document {
   ownerId       String
   campaignId    String?
   disbursementId String?
+  bankTransferId String?
   documentType  DocumentType
   status        DocumentStatus @default(ACTIVE)
   storageBucket String
@@ -377,13 +391,54 @@ model Document {
   owner         Profile @relation(fields: [ownerId], references: [id])
   campaign      Campaign? @relation("campaignDocuments", fields: [campaignId], references: [id])
   disbursement  Disbursement? @relation("disbursementDocuments", fields: [disbursementId], references: [id])
+  bankTransfer  BankTransfer? @relation(fields: [bankTransferId], references: [id], onDelete: Restrict)
 
   @@index([ownerId])
   @@index([campaignId])
   @@index([disbursementId])
+  @@index([bankTransferId])
   @@index([status])
   @@index([legalHold])
   @@map("documents")
+}
+
+enum BankTransferStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+model BankTransfer {
+  id                String            @id @default(uuid())
+  ngoId             String
+  allocationId      String
+  amountInr         Decimal           @db.Decimal(14, 2)
+  currencyCode      String
+  transferDate      DateTime
+  bankReference     String?
+  submissionKey     String
+  resubmissionOfId  String?
+  status            BankTransferStatus @default(SUBMITTED)
+  submittedAt       DateTime          @default(now())
+  reviewedAt        DateTime?
+  reviewedBy        String?
+  rejectionReason   String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  ngo               Profile           @relation("bankTransfersAsNgo", fields: [ngoId], references: [id])
+  reviewer          Profile?          @relation("bankTransfersReviewed", fields: [reviewedBy], references: [id])
+  allocation        DonationAllocation @relation(fields: [allocationId], references: [id])
+  previousSubmission BankTransfer?    @relation("BankTransferResubmissions", fields: [resubmissionOfId], references: [id], onDelete: Restrict)
+  resubmissions      BankTransfer[]   @relation("BankTransferResubmissions")
+  evidence          Document[]
+
+  @@unique([ngoId, submissionKey])
+  @@index([status, submittedAt])
+  @@index([allocationId, status])
+  @@index([ngoId, bankReference])
+  @@index([resubmissionOfId])
+  @@map("bank_transfers")
 }
 
 // Impact Tokens
@@ -501,6 +556,29 @@ model Attestation {
   @@map("attestations")
 }
 
+model EmailOutbox {
+  id                String            @id @default(uuid())
+  eventKey          String            @unique
+  milestone         EmailMilestone
+  donationId        String
+  disbursementId    String?
+  payload           Json
+  status            EmailOutboxStatus @default(PENDING)
+  attemptCount      Int               @default(0)
+  availableAt       DateTime          @default(now())
+  lockedAt          DateTime?
+  lockedBy          String?
+  lastError         String?
+  providerMessageId String?
+  sentAt            DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([status, availableAt])
+  @@index([donationId])
+  @@map("email_outbox")
+}
+
 // Provenance Outbox
 // ProvenanceEvent captures immutable financial lifecycle events for tamper-evident
 // anchoring to Solana via traceit_anchor. Sequence (id) is gap-tolerant; the batch
@@ -545,19 +623,27 @@ model ProvenanceEvent {
 //            || u64BE(startSequence) || u64BE(endSequence) || u32BE(eventCount)
 //            || eventHash[0] || ... || eventHash[n-1])
 model AnchorBatch {
-  id                String      @id @default(uuid())
-  batchKey          String      @unique
-  auditRoot         String
-  startSequence     BigInt
-  endSequence       BigInt
-  eventCount        Int
-  solanaTxSignature String?
-  anchoredAt        DateTime?
-  status            BatchStatus @default(PENDING)
-  createdAt         DateTime    @default(now())
+  id                 String   @id @default(uuid())
+  batchKey           String   @unique
+  auditRoot          String
+  startSequence      BigInt
+  endSequence        BigInt
+  eventCount         Int
+  solanaTxSignature  String?
+  anchorPda          String?
+  anchoredAt         DateTime?
+  status             String   @default("PENDING")
+  attemptCount       Int      @default(0)
+  reconciliationCount Int     @default(0)
+  nextAttemptAt      DateTime @default(now())
+  claimToken         String?
+  claimExpiresAt     DateTime?
+  lastError          String?
+  createdAt          DateTime @default(now())
 
   provenanceEvents  ProvenanceEvent[]
 
   @@index([status])
+  @@index([status, nextAttemptAt, createdAt], map: "anchor_batches_claim_idx")
   @@map("anchor_batches")
 }

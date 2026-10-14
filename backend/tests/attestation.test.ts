@@ -174,6 +174,7 @@ describe("Attestation & Milestone API Integration Tests", () => {
       .get("/api/charity/attestations/pending")
       .set("Authorization", `Bearer ${ngoToken}`);
     expect(ownRes.status).toBe(200);
+    expect(ownRes.headers["cache-control"]).toBe("no-store");
     expect(ownRes.body.some((a: any) => a.id === attestationId)).toBe(true);
 
     const otherRes = await request(app)
@@ -193,24 +194,45 @@ describe("Attestation & Milestone API Integration Tests", () => {
   });
 
   test("POST /api/charity/attestations - the owning NGO signs the attestation", async () => {
+    const otherReceipt = await prisma.attestation.create({
+      data: {
+        donationId,
+        type: "RECEIPT",
+        requestedBy: donorUserId,
+      },
+    });
     const res = await request(app)
       .post("/api/charity/attestations")
       .set("Authorization", `Bearer ${ngoToken}`)
-      .send({ donationId, type: "receipt" });
+      .send({ donationId, type: "receipt", attestationId });
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe(AttestationStatus.APPROVED);
+    expect(res.body.id).toBe(attestationId);
+    expect(
+      (
+        await prisma.attestation.findUnique({ where: { id: otherReceipt.id } })
+      )?.status,
+    ).toBe(AttestationStatus.PENDING);
+    await prisma.attestation.delete({ where: { id: otherReceipt.id } });
 
-    // Verify that a DELIVERY attestation was automatically generated with the correct allocatedAmount
+    // Donation-level receipt confirmation must not create a delivery attestation.
     const generatedDelivery = await prisma.attestation.findFirst({
       where: {
         donationId,
         type: "DELIVERY",
       },
     });
-    expect(generatedDelivery).toBeDefined();
-    expect(generatedDelivery?.allocatedAmount).toBeDefined();
-    expect(Number(generatedDelivery?.allocatedAmount)).toBe(1500);
+    expect(generatedDelivery).toBeNull();
+
+    await prisma.attestation.create({
+      data: {
+        donationId,
+        type: "DELIVERY",
+        requestedBy: donorUserId,
+        allocatedAmount: 1500,
+      },
+    });
   });
 
   test("POST /api/charity/attestations - signing again is rejected (already signed)", async () => {

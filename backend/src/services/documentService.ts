@@ -22,6 +22,7 @@ export class DocumentService {
     if (!keyString) {
       throw new Error('AES_DOCUMENT_KEY is not defined in environment variables');
     }
+
     // Key must be 32 bytes (256 bits)
     const key = Buffer.from(keyString, 'hex');
     if (key.length !== 32) {
@@ -34,6 +35,84 @@ export class DocumentService {
     const encrypted = Buffer.concat([cipher.update(buffer), cipher.final()]);
     // Prepend the IV to the encrypted data for use during decryption
     return Buffer.concat([iv, encrypted]);
+  }
+
+  private static decryptBuffer(buffer: Buffer): Buffer {
+    const keyString = process.env.AES_DOCUMENT_KEY;
+    if (!keyString) {
+      throw new Error('AES_DOCUMENT_KEY is not defined in environment variables');
+    }
+    const key = Buffer.from(keyString, 'hex');
+    if (key.length !== 32 || buffer.length <= 16) {
+      throw new Error('Stored evidence has an invalid encryption key or payload');
+    }
+
+    const decipher = crypto.createDecipheriv(
+      'aes-256-cbc',
+      key,
+      buffer.subarray(0, 16),
+    );
+    return Buffer.concat([
+      decipher.update(buffer.subarray(16)),
+      decipher.final(),
+    ]);
+  }
+
+  static async readBankTransferEvidence(input: {
+    storageBucket: string;
+    storagePath: string;
+    sha512Hash: string;
+  }): Promise<Buffer> {
+    const encrypted = await new StorageService(input.storageBucket).downloadFile(
+      input.storagePath,
+    );
+    const decrypted = this.decryptBuffer(encrypted);
+    if (HashService.sha512(decrypted) !== input.sha512Hash) {
+      throw new Error('Bank transfer evidence failed its integrity check');
+    }
+    return decrypted;
+  }
+
+  static async prepareBankTransferEvidence(
+    file: Express.Multer.File,
+    ownerId: string,
+    transferId: string,
+  ): Promise<{
+    storageBucket: string;
+    storagePath: string;
+    sha512Hash: string;
+    originalFilename: string;
+  }> {
+    const extensionByMimeType: Record<string, string> = {
+      'application/pdf': 'pdf',
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+    };
+    const extension = extensionByMimeType[file.mimetype];
+    if (!extension) {
+      throw new Error('Bank transfer evidence must be a PDF, JPEG, or PNG');
+    }
+
+    const storagePath = `${ownerId}/BANK_TRANSFER_EVIDENCE/${transferId}.${extension}`;
+    await storageService.uploadFile(
+      this.encryptBuffer(file.buffer),
+      storagePath,
+      'application/octet-stream',
+    );
+
+    return {
+      storageBucket: 'proof-docs',
+      storagePath,
+      sha512Hash: HashService.sha512(file.buffer),
+      originalFilename: file.originalname.slice(0, 255),
+    };
+  }
+
+  static async deletePreparedDocument(
+    storageBucket: string,
+    storagePath: string,
+  ): Promise<void> {
+    await new StorageService(storageBucket).deleteFile(storagePath);
   }
 
   /**

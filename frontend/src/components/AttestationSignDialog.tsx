@@ -16,6 +16,7 @@ import type { Donation } from "@/types";
 import { cn } from "@/lib/utils";
 
 interface AttestationSignDialogProps {
+  attestationId: string;
   donation: Pick<
     Donation,
     "id" | "campaignId" | "amount" | "campaignTitle" | "paymentMethod" | "orderId"
@@ -34,6 +35,7 @@ export default function AttestationSignDialog({
   // onOpenChange,
   // onAttestationSigned,
   donation,
+  attestationId,
   ngoName,
   open,
   onOpenChange,
@@ -64,6 +66,7 @@ export default function AttestationSignDialog({
         donation.id,
         attestationType,
         attestationType === "delivery" ? beneficiaryId : undefined,
+        attestationId,
       )) as { id?: string } | undefined;
 
       toast({
@@ -135,7 +138,7 @@ export default function AttestationSignDialog({
         if (nextOpen) {
           setBeneficiaryId("");
           setBeneficiaryError("");
-          setAttestationType("receipt");
+          setAttestationType(initialAttestationType);
         }
         onOpenChange(nextOpen);
       }}
@@ -158,6 +161,7 @@ export default function AttestationSignDialog({
           {/* Type Selection Tabs */}
           <div className="grid grid-cols-2 gap-4">
             <button
+              disabled={initialAttestationType !== "receipt"}
               onClick={() => {
                 setAttestationType("receipt");
                 setBeneficiaryId("");
@@ -168,15 +172,18 @@ export default function AttestationSignDialog({
                 attestationType === "receipt"
                   ? "border-trust-attestation-receipt bg-trust-attestation-receipt-tint text-foreground"
                   : "border-foreground/10 text-foreground/50 hover:border-foreground/30 hover:bg-foreground/[0.02]",
+                initialAttestationType !== "receipt" &&
+                  "cursor-not-allowed opacity-50",
               )}
             >
               <span className="font-semibold mb-1">Proof of Receipt</span>
               <span className="text-xs opacity-80 leading-tight">
-                Confirm platform funds reached your NGO bank account.
+                Confirm this donation payment was received by your NGO.
               </span>
             </button>
 
             <button
+              disabled={initialAttestationType !== "delivery"}
               onClick={() => {
                 setAttestationType("delivery");
                 setBeneficiaryId("");
@@ -187,6 +194,8 @@ export default function AttestationSignDialog({
                 attestationType === "delivery"
                   ? "border-trust-attestation-delivery bg-trust-attestation-delivery-tint text-foreground"
                   : "border-foreground/10 text-foreground/50 hover:border-foreground/30 hover:bg-foreground/[0.02]",
+                initialAttestationType !== "delivery" &&
+                  "cursor-not-allowed opacity-50",
               )}
             >
               <span className="font-semibold mb-1">Proof of Delivery</span>

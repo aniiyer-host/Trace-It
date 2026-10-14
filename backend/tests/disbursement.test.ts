@@ -9,7 +9,10 @@ import {
   DisbursementStatus,
   ProvenanceEventType,
 } from "../generated/prisma/enums";
-import { hashProvenanceEvent } from "../src/utils/provenance.js";
+import {
+  computeChainHash,
+  hashProvenanceEvent,
+} from "../src/utils/provenance.js";
 
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "access_secret";
 
@@ -210,8 +213,23 @@ describe("Disbursement API Integration Tests", () => {
         eventType: ProvenanceEventType.DONATION_ALLOCATED,
         transitionKey: disbursementId,
       },
+      orderBy: { id: "asc" },
     });
     expect(provenanceEvents).toHaveLength(2);
+    const precedingChainEvent = await prisma.provenanceEvent.findFirst({
+      where: {
+        chainHash: { not: null },
+        id: { lt: provenanceEvents[0].id },
+      },
+      orderBy: { id: "desc" },
+      select: { chainHash: true },
+    });
+    expect(provenanceEvents[0].previous_hash).toBe(
+      precedingChainEvent?.chainHash ?? null,
+    );
+    expect(provenanceEvents[1].previous_hash).toBe(
+      provenanceEvents[0].chainHash,
+    );
 
     for (const allocation of allocations) {
       const event = provenanceEvents.find(
@@ -263,6 +281,20 @@ describe("Disbursement API Integration Tests", () => {
           occurredAt: event!.occurredAt,
         }),
       );
+      expect(event!.chainHash).toBe(
+        computeChainHash(
+          {
+            eventType: event!.eventType,
+            entityType: event!.entityType,
+            entityId: event!.entityId,
+            amountInr: event!.amountInr,
+            ngoId: event!.ngoId,
+            campaignId: event!.campaignId,
+            occurredAt: event!.occurredAt,
+          },
+          event!.previous_hash,
+        ),
+      );
     }
 
     // Verify RECEIPT Attestations were created
@@ -302,6 +334,11 @@ describe("Disbursement API Integration Tests", () => {
   });
 
   test("rolls back approval and allocation writes when a later write fails", async () => {
+    const originalChainHead = await prisma.provenanceEvent.findFirst({
+      where: { chainHash: { not: null } },
+      orderBy: { id: "desc" },
+      select: { id: true, chainHash: true },
+    });
     const donations = await prisma.donation.findMany({
       where: { campaignId },
       orderBy: { createdAt: "asc" },
@@ -354,6 +391,13 @@ describe("Disbursement API Integration Tests", () => {
         where: { transitionKey: rollbackDisbursement.id },
       }),
     ).toBe(0);
+    expect(
+      await prisma.provenanceEvent.findFirst({
+        where: { chainHash: { not: null } },
+        orderBy: { id: "desc" },
+        select: { id: true, chainHash: true },
+      }),
+    ).toEqual(originalChainHead);
     expect(
       await prisma.attestation.count({
         where: {

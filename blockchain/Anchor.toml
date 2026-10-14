@@ -7,14 +7,15 @@ skip-lint = false
 [programs.devnet]
 # Legacy program retained for historical reads during the anchor migration.
 traceit = "5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3"
+traceit_anchor = "3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa"
 
 [programs.localnet]
 traceit = "5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3"
-traceit_anchor = "4qLwniS2NeDrqftgb83GbYVHWVbBBbUcjDR1Ncm5GCHX"
+traceit_anchor = "3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa"
 
 [provider]
 cluster = "localnet"
-wallet = "~/.config/solana/devnet-traceit.json"
+wallet = "~/.config/solana/traceit-v1-authority.json"
 
 [surfpool]
 rpc_port = 8900

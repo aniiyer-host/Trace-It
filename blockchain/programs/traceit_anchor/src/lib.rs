@@ -1,12 +1,12 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::pubkey;
 
-declare_id!("4qLwniS2NeDrqftgb83GbYVHWVbBBbUcjDR1Ncm5GCHX");
+declare_id!("3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa");
 
 pub const CONFIG_SEED: &[u8] = b"anchor_config";
 pub const ANCHOR_SEED: &[u8] = b"anchor";
 pub const SUPPORTED_SCHEMA_VERSION: u16 = 1;
-pub const BOOTSTRAP_AUTHORITY: Pubkey = pubkey!("Emi2GHuHM4UnY6TqcXio3Cbfe5H1E2uukL3QgBziQSrG");
+pub const BOOTSTRAP_AUTHORITY: Pubkey = pubkey!("5jV2gq2stVAbNnrHW8w55LyDWEhcAQPdZpWFwxpW9q7W");
 
 #[program]
 pub mod traceit_anchor {

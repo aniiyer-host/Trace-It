@@ -8,8 +8,9 @@ interface PendingAttestation {
   id: string;
   donationId: string;
   type: "RECEIPT" | "DELIVERY";
+  disbursementId: string | null;
+  allocatedAmount?: number | string | null;
   createdAt: string;
-  allocatedAmount?: number | string;
   donation?: {
     amount: number;
     donorId: string;

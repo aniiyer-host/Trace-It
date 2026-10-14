@@ -608,6 +608,7 @@ export const apiService = {
       cohortId?: string;
       amountInr: number;
       fieldReportUrl?: string;
+      disbursementType?: "PROOF_OF_NEED" | "PROOF_OF_WORK";
     }) => post<DisbursementResponse>("/charity/disburse", data),
   },
 
@@ -620,10 +621,12 @@ export const apiService = {
       donationId: string,
       type: "receipt" | "delivery",
       beneficiaryId?: string,
+      attestationId?: string,
     ) =>
       post(`/charity/attestations`, {
         donationId,
         type: type.toUpperCase(),
+        ...(attestationId && { attestationId }),
         ...(beneficiaryId && { beneficiaryId }),
       }),
   },
@@ -635,6 +638,7 @@ export const apiService = {
     cohortId?: string;
     amountInr: number;
     fieldReportUrl?: string;
+    disbursementType?: "PROOF_OF_NEED" | "PROOF_OF_WORK";
   }) => post<DisbursementResponse>("/charity/disburse", data),
 
   // Admin

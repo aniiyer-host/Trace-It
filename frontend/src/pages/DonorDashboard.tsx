@@ -491,8 +491,8 @@ export default function DonorDashboard() {
 
                     const disbursementIds = [...new Set(
                       (selectedDonation.attestations || [])
-                        .filter((a: any) => a.disbursementId)
-                        .map((a: any) => a.disbursementId as string)
+                        .filter((a) => a.disbursementId)
+                        .map((a) => a.disbursementId as string)
                     )];
 
                     if (disbursementIds.length === 0) {
@@ -612,19 +612,19 @@ function buildJourney(campaign: Campaign, donation: Donation, disbursementId: st
   );
 
   const atts = Array.isArray(donation.attestations)
-    ? donation.attestations.filter((a: any) => a.disbursementId === disbursementId)
+    ? donation.attestations.filter((a) => a.disbursementId === disbursementId)
     : [];
 
   // 3. Funds Allocated (FIFO picked up this donation)
   const isAllocated = atts.some(
-    (a: any) => a.type === "RECEIPT" && Number(a.allocatedAmount || 0) > 0
+    (a) => a.type === "RECEIPT" && Number(a.allocatedAmount || 0) > 0
   );
   
   // 4. NGO Receipt Signed (Attestation)
-  const isReceipted = atts.some((a: any) => a.type === "RECEIPT" && a.status === "APPROVED");
+  const isReceipted = atts.some((a) => a.type === "RECEIPT" && a.status === "APPROVED");
 
   // 5. Delivery Attestation Signed (Impact Verified)
-  const isDelivered = atts.some((a: any) => a.type === "DELIVERY" && a.status === "APPROVED");
+  const isDelivered = atts.some((a) => a.type === "DELIVERY" && a.status === "APPROVED");
 
   return [
     {

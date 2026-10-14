@@ -146,6 +146,20 @@ function BeneficiaryIdReveal({ campaignId }: { campaignId: string }) {
   );
 }
 
+type SelectedNgoAttestation = {
+  id: string;
+  donationId: string;
+  type: "RECEIPT" | "DELIVERY";
+  createdAt: string;
+  disbursementId: string | null;
+  allocatedAmount?: number | string | null;
+  donation?: {
+    amount: number;
+    donorId: string;
+    campaignId?: string;
+  };
+};
+
 export default function NGODashboard() {
   //Cause of LINT error
   // const { campaigns: _storeCampaigns, updateMilestoneStatus } =
@@ -168,17 +182,8 @@ export default function NGODashboard() {
   const [disbursementOpen, setDisbursementOpen] = useState(false);
   const [attestationDialogOpen, setAttestationDialogOpen] = useState(false);
 
-  const [selectedAttestation, setSelectedAttestation] = useState<{
-    id: string;
-    donationId: string;
-    type: "RECEIPT" | "DELIVERY";
-    createdAt: string;
-    donation?: {
-      amount: number;
-      donorId: string;
-      campaignId?: string;
-    };
-  } | null>(null);
+  const [selectedAttestation, setSelectedAttestation] =
+    useState<SelectedNgoAttestation | null>(null);
   const { toast } = useToast();
   const { user } = useAuthStore();
   const navigate = useNavigate();
@@ -334,17 +339,7 @@ export default function NGODashboard() {
     toast({ title: "Proof submitted — awaiting admin approval" });
   };
 
-  const handleAttestationSelect = (attestation: {
-    id: string;
-    donationId: string;
-    type: "RECEIPT" | "DELIVERY";
-    createdAt: string;
-    donation?: {
-      amount: number;
-      donorId: string;
-      campaignId?: string;
-    };
-  }) => {
+  const handleAttestationSelect = (attestation: SelectedNgoAttestation) => {
     setSelectedAttestation(attestation);
     setAttestationDialogOpen(true);
   };
@@ -382,8 +377,8 @@ export default function NGODashboard() {
       campaignId: attestation.donation?.campaignId,
       label:
         attestation.type === "DELIVERY"
-          ? `Delivery · ₹${Number((attestation as any).allocatedAmount || attestation.donation?.amount || 0).toLocaleString()}`
-          : `Receipt · ₹${Number((attestation as any).allocatedAmount || attestation.donation?.amount || 0).toLocaleString()}`,
+          ? `Delivery · ₹${Number(attestation.allocatedAmount ?? attestation.donation?.amount ?? 0).toLocaleString()}`
+          : `Receipt · ₹${Number(attestation.allocatedAmount ?? attestation.donation?.amount ?? 0).toLocaleString()}`,
     })),
 
     ...pendingMilestoneActions
@@ -615,6 +610,8 @@ export default function NGODashboard() {
                       `Campaign ${attestation.donationId?.substring(0, 8)}`;
 
                     const isDelivery = attestation.type === "DELIVERY";
+                    const isDonationReceipt =
+                      !isDelivery && attestation.disbursementId === null;
 
                     return (
                       <div
@@ -638,15 +635,25 @@ export default function NGODashboard() {
                           >
                             {isDelivery
                               ? "Delivery Attestation"
-                              : "Receipt Attestation"}
+                              : isDonationReceipt
+                                ? "Donation Received"
+                                : "Receipt Attestation"}
                           </div>
                           <div className="text-xs font-medium text-foreground/50 uppercase tracking-wide">
                             {isDelivery
                               ? "Confirm delivery to beneficiary"
-                              : "Confirm you received the funds"}
+                              : isDonationReceipt
+                                ? "Payment confirmed — confirm this donation was received."
+                                : "Confirm you received the disbursed funds"}
                           </div>
                           <div className="text-2xl font-bold tracking-tighter tabular-nums pt-1">
-                            {formatUSD(Number(attestation.allocatedAmount || attestation.donation?.amount))}
+                            {formatUSD(
+                              Number(
+                                attestation.allocatedAmount ??
+                                  attestation.donation?.amount ??
+                                  0,
+                              ),
+                            )}
                           </div>
                           <div className="text-foreground/70">
                             {attestation.donation?.donorId
@@ -668,7 +675,11 @@ export default function NGODashboard() {
                           variant="primary"
                           className="w-full sm:w-auto"
                         >
-                          Sign & Release
+                          {isDonationReceipt
+                            ? "Confirm Donation"
+                            : isDelivery
+                              ? "Confirm Delivery"
+                              : "Confirm Receipt"}
                         </Button>
                       </div>
                     );
@@ -791,6 +802,8 @@ export default function NGODashboard() {
                                   donationId: `don-${milestone.id}`,
                                   type: "DELIVERY",
                                   createdAt: new Date().toISOString(),
+                                  disbursementId: milestone.id,
+                                  allocatedAmount: milestone.targetAmount,
                                   donation: {
                                     amount: milestone.targetAmount,
                                     donorId: "anonymous",
@@ -953,10 +966,7 @@ export default function NGODashboard() {
       {selectedCampaignObj && (
         <DisbursementRequestDialog
           campaign={selectedCampaignObj}
-          cohortId={
-            (selectedCampaignObj as any).cohortId ||
-            (selectedCampaignObj as any).cohorts?.[0]?.id
-          }
+          cohortId={selectedCampaignObj.cohortId || selectedCampaignObj.cohorts?.[0]?.id}
           open={disbursementOpen}
           onOpenChange={setDisbursementOpen}
           onDisbursementRequested={() => void handleDisbursementRequested()}
@@ -998,14 +1008,23 @@ export default function NGODashboard() {
       {selectedAttestation && (
         <AttestationSignDialog
           key={selectedAttestation.id}
+          attestationId={selectedAttestation.id}
           initialAttestationType={
             selectedAttestation.type === "RECEIPT" ? "receipt" : "delivery"
           }
           donation={{
             id: selectedAttestation.donationId,
             campaignId: selectedAttestation.donation?.campaignId || "",
-            amount: Number((selectedAttestation as any).allocatedAmount || selectedAttestation.donation?.amount),
-            campaignTitle: `Campaign ${selectedAttestation.donationId?.substring(0, 8)}`,
+            amount: Number(
+              selectedAttestation.allocatedAmount ??
+                selectedAttestation.donation?.amount ??
+                0,
+            ),
+            campaignTitle:
+              ngoCampaigns.find(
+                (campaign) =>
+                  campaign.id === selectedAttestation.donation?.campaignId,
+              )?.title || `Campaign ${selectedAttestation.donationId.substring(0, 8)}`,
             paymentMethod: "upi",
             orderId: `order_${selectedAttestation.donationId}`,
 

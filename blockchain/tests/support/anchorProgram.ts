@@ -6,11 +6,11 @@ import {
 } from "../../client/traceit_anchor";
 
 export const ANCHOR_PROGRAM_ID = new anchor.web3.PublicKey(
-  "4qLwniS2NeDrqftgb83GbYVHWVbBBbUcjDR1Ncm5GCHX",
+  "3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa",
 );
 
 export const BOOTSTRAP_AUTHORITY = new anchor.web3.PublicKey(
-  "Emi2GHuHM4UnY6TqcXio3Cbfe5H1E2uukL3QgBziQSrG",
+  "5jV2gq2stVAbNnrHW8w55LyDWEhcAQPdZpWFwxpW9q7W",
 );
 
 export function getAnchorProgram(

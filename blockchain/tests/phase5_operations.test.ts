@@ -7,8 +7,9 @@ import {
   validatePhase5Identity,
 } from "../operations/phase5";
 
-const PROGRAM_ID = "4qLwniS2NeDrqftgb83GbYVHWVbBBbUcjDR1Ncm5GCHX";
-const AUTHORITY = "Emi2GHuHM4UnY6TqcXio3Cbfe5H1E2uukL3QgBziQSrG";
+const PROGRAM_ID = "3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa";
+const AUTHORITY = "5jV2gq2stVAbNnrHW8w55LyDWEhcAQPdZpWFwxpW9q7W";
+const DEPLOYER = "EWT5ZZqNpfwD6yGzhf7SUJCPceq5VxfqMyjWQ6wumnJh";
 
 describe("phase 5 operational controls", () => {
   it("accepts a consistent public deployment identity", () => {
@@ -18,8 +19,8 @@ describe("phase 5 operational controls", () => {
         configuredProgramId: PROGRAM_ID,
         deploymentProgramId: PROGRAM_ID,
         bootstrapAuthority: AUTHORITY,
-        feePayer: AUTHORITY,
-        upgradeAuthority: AUTHORITY,
+        feePayer: DEPLOYER,
+        upgradeAuthority: DEPLOYER,
       }),
     ).to.deep.equal([]);
   });

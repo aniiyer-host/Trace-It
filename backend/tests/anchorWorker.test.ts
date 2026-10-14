@@ -206,6 +206,7 @@ describe("AnchorWorker", () => {
         anchorPda: "anchor-pda",
       }),
     );
+    expect(repo.markConfirmed).not.toHaveBeenCalled();
   });
 
   it("reconciles a crash after submission before sending again", async () => {
@@ -243,7 +244,10 @@ describe("AnchorWorker", () => {
 
     expect(repo.markRetryable).toHaveBeenCalledWith(
       "batch-1",
-      expect.objectContaining({ reconciliationCount: 3 }),
+      expect.objectContaining({
+        reconciliationCount: 3,
+        clearTransactionSignature: true,
+      }),
     );
     expect(chain.submitAnchorBatch).not.toHaveBeenCalled();
   });

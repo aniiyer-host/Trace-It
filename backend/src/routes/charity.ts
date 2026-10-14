@@ -14,10 +14,14 @@ import {
   AuditActorType,
 } from "../../generated/prisma/enums.js";
 import { writeAuditLog } from "../services/auditLogService.js";
-
-
 import { allocateDonation } from "../services/statusService.js";
 import { HashService } from "../services/hashService.js";
+import { enqueueFundsAllocatedForCompletedAttestation } from "../services/email/notificationService.js";
+import {
+  createBankTransfer,
+  downloadNgoBankTransferEvidence,
+  listNgoBankTransfers,
+} from "./bankTransfers.js";
 import { MonetaryInputError, parseInrAmount } from "../utils/money.js";
 import {
   AttestationType,
@@ -833,6 +837,7 @@ export const getPendingAttestationsForNgo = async (
       orderBy: { createdAt: "asc" },
     });
 
+    res.setHeader("Cache-Control", "no-store");
     res.json(attestations);
   } catch (err) {
     next(err);
@@ -850,7 +855,7 @@ export const signAttestation = async (
     if (!ngoId)
       return res.status(401).json({ error: "User not authenticated" });
 
-    const { donationId } = req.body;
+    const { donationId, attestationId } = req.body;
     const { beneficiaryId } = req.body;
     const rawType = (req.body?.type ?? "").toString().toUpperCase();
     if (!donationId || !["RECEIPT", "DELIVERY"].includes(rawType)) {
@@ -869,7 +874,11 @@ export const signAttestation = async (
         .json({ error: "Donation not found or access denied" });
 
     const attestation = await prisma.attestation.findFirst({
-      where: { donationId, type: rawType as AttestationType },
+      where: {
+        ...(typeof attestationId === "string" ? { id: attestationId } : {}),
+        donationId,
+        type: rawType as AttestationType,
+      },
     });
     if (!attestation)
       return res
@@ -929,41 +938,64 @@ export const signAttestation = async (
     }
     // --- End beneficiary verification ---
 
-    const updated = await prisma.attestation.update({
-      where: { id: attestation.id },
-      data: {
-        status:
-          rawType === "RECEIPT"
-            ? AttestationStatus.APPROVED
-            : AttestationStatus.NGO_SIGNED,
-        ngoSignedBy: ngoId,
-        ngoSignedAt: new Date(),
-        ...(rawType === "RECEIPT" && { approvedAt: new Date() }),
-      },
-    });
-
-    if (attestation.type === "RECEIPT") {
-      const existingDelivery = await prisma.attestation.findFirst({
-        where: {
-          donationId: attestation.donationId,
-          disbursementId: attestation.disbursementId,
-          type: "DELIVERY",
+    const updated = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.attestation.updateMany({
+        where: { id: attestation.id, status: AttestationStatus.PENDING },
+        data: {
+          status:
+            rawType === "RECEIPT"
+              ? AttestationStatus.APPROVED
+              : AttestationStatus.NGO_SIGNED,
+          ngoSignedBy: ngoId,
+          ngoSignedAt: new Date(),
+          ...(rawType === "RECEIPT" && { approvedAt: new Date() }),
         },
       });
 
-      if (!existingDelivery) {
-        await prisma.attestation.create({
-          data: {
+      if (claimed.count !== 1) return null;
+
+      const updatedAttestation = await tx.attestation.findUnique({
+        where: { id: attestation.id },
+      });
+      if (!updatedAttestation) {
+        throw new Error("Attestation disappeared after its status transition");
+      }
+
+      if (attestation.type === "RECEIPT") {
+        await enqueueFundsAllocatedForCompletedAttestation(tx, attestation.id, ngoId);
+      }
+
+      if (attestation.type === "RECEIPT" && attestation.disbursementId) {
+        const existingDelivery = await tx.attestation.findFirst({
+          where: {
             donationId: attestation.donationId,
             disbursementId: attestation.disbursementId,
             type: "DELIVERY",
-            status: "PENDING",
-            requestedBy: attestation.requestedBy,
-            allocatedAmount: attestation.allocatedAmount,
           },
+          select: { id: true },
         });
+
+        if (!existingDelivery) {
+          await tx.attestation.create({
+            data: {
+              donationId: attestation.donationId,
+              disbursementId: attestation.disbursementId,
+              type: "DELIVERY",
+              status: "PENDING",
+              requestedBy: attestation.requestedBy,
+              allocatedAmount: attestation.allocatedAmount,
+            },
+          });
+        }
       }
+
+      return updatedAttestation;
+    });
+
+    if (!updated) {
+      return res.status(409).json({ error: "Attestation was completed by another request" });
     }
+
     await writeAuditLog({
       actorType: AuditActorType.USER,
       actorId: ngoId,
@@ -1207,6 +1239,25 @@ charityRouter.post(
   requireAuth,
   requireRole(UserRole.CHARITY),
   uploadDisbursementProof,
+);
+charityRouter.post(
+  "/bank-transfers",
+  requireAuth,
+  requireRole(UserRole.CHARITY),
+  uploadSingle,
+  createBankTransfer,
+);
+charityRouter.get(
+  "/bank-transfers",
+  requireAuth,
+  requireRole(UserRole.CHARITY),
+  listNgoBankTransfers,
+);
+charityRouter.get(
+  "/bank-transfers/:id/evidence/:documentId",
+  requireAuth,
+  requireRole(UserRole.CHARITY),
+  downloadNgoBankTransferEvidence,
 );
 
 export default charityRouter;

@@ -263,6 +263,14 @@
 - **Not yet implemented:** BUG-P2-05, BUG-P2-06, BUG-P3-03, BUG-P3-04, BUG-P3-06, BUG-P3-05.
 - **Blockers discovered:** `src/routes/webhooks/razorpay.ts` has two pre-existing optional-secret type errors; integration tests require a missing local Solana keypair.
 
+### Durable provenance anchor integration (2026-10-14)
+
+- **Implemented:** Added deterministic protocol-v1 batch hashing, contiguous provenance-event selection, PostgreSQL transaction-scoped batch serialization, atomic event membership, a durable Prisma repository with row claims/leases/recovery and compare-and-set transitions, and process startup/shutdown wiring for the scheduler and worker.
+- **Persistence:** Migration `backend/prisma/migrations/20261014180000_add_durable_anchor_worker/migration.sql` extends the existing `anchor_batches` model. It was created and schema-validated but **not applied**. Runtime startup checks for the required columns and disables anchoring if they are missing.
+- **Configuration:** V1 anchoring uses `TRACEIT_ANCHOR_RPC_URL`, `TRACEIT_ANCHOR_WALLET_KEYPAIR_PATH`, `TRACEIT_ANCHOR_PROGRAM_ID`, and `TRACEIT_ANCHOR_CLUSTER`; the legacy `SOLANA_PROGRAM_ID` is deliberately not reused.
+- **Validation:** Prisma client generation, `npx prisma validate`, `npx tsc --noEmit`, and seven focused anchoring/provenance Jest suites passed (58 tests). `git diff --check` passed. Tests used mocks; no database mutation or RPC/network submission occurred.
+- **Remaining blockers:** Apply the migration only after confirming the target is the intended database, then configure a dedicated anchor program deployment and perform approved validator/devnet integration verification. No real submission or on-chain confirmation was tested.
+
 ### Validation Recovery — Locked Dependency Restore (2026-08-21)
 
 - **Action:** Ran `npm ci` from `backend/` to restore the existing `package-lock.json` dependency tree. No manifest, lockfile, source, test, or migration files were modified.

@@ -112,6 +112,27 @@ export class StorageService {
     }
   }
 
+  async downloadFile(path: string): Promise<Buffer> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucketName,
+      Key: path,
+    });
+
+    try {
+      const response = await this.s3Client.send(command);
+      if (!response.Body) {
+        throw new Error(`Stored file ${this.bucketName}/${path} has no body`);
+      }
+      return Buffer.from(await response.Body.transformToByteArray());
+    } catch (error) {
+      console.error(
+        `Error downloading file ${this.bucketName}/${path}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
   /**
    * Delete a file from the bucket.
    * @param path - The path (key) of the file to delete.

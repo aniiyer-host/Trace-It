@@ -6,9 +6,9 @@ set -e
 LEDGER=/tmp/traceit-test-ledger
 PROGRAM_ID="5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3"
 SO_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/target/deploy/traceit.so"
-ANCHOR_PROGRAM_ID="4qLwniS2NeDrqftgb83GbYVHWVbBBbUcjDR1Ncm5GCHX"
+ANCHOR_PROGRAM_ID="3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa"
 ANCHOR_SO_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/target/deploy/traceit_anchor.so"
-WALLET_PATH="$HOME/.config/solana/devnet-traceit.json"
+WALLET_PATH="$HOME/.config/solana/traceit-v1-authority.json"
 WALLET_PUBKEY=$(solana-keygen pubkey "$WALLET_PATH")
 LOG=/tmp/traceit-validator.log
 LOCK_DIR="/tmp/traceit-validator-lock"

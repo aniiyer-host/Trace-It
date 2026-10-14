@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import {
   hashProvenanceEvent,
   normalizeAmountInr,
@@ -87,6 +88,22 @@ describe("chain hash computation", () => {
   );
   expect(chainHash).toMatch(/^[0-9a-f]{128}$/);
   expect(computeChainHash(baseInput, null)).toBe(chainHash);
+  });
+
+  it("hashes raw SHA-512 bytes with the v1 prefix, big-endian version, and zero genesis", () => {
+    const expected = crypto
+      .createHash("sha512")
+      .update(
+        Buffer.concat([
+          Buffer.from("TRACEIT_CHAIN_V1", "utf8"),
+          Buffer.from([0x00, 0x01]),
+          Buffer.from(hashProvenanceEvent(baseInput), "hex"),
+          Buffer.alloc(64),
+        ]),
+      )
+      .digest("hex");
+
+    expect(computeChainHash(baseInput, null)).toBe(expected);
   });
 
   it("computes sequential chain links correctly", () => {

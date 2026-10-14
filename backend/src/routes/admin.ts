@@ -16,13 +16,15 @@ import {
 } from "../../generated/prisma/enums.js";
 import { writeAuditLog } from "../services/auditLogService.js";
 import { allocateDonation } from "../services/statusService.js";
-import {
-  canonicalizeProvenanceEvent,
-  hashProvenanceEvent,
-  serializeProvenanceEvent,
-} from "../utils/provenance.js";
+import { appendProvenanceEvent } from "../services/provenanceChainService.js";
 
 import { StorageService } from "../services/storageService.js";
+import {
+  approveBankTransfer,
+  downloadAdminBankTransferEvidence,
+  listPendingBankTransfers,
+  rejectBankTransfer,
+} from "./bankTransfers.js";
 
 const adminRouter = Router();
 
@@ -191,29 +193,11 @@ export const approveDisbursement = async (
           campaignId: donation.campaignId,
           occurredAt,
         };
-        const canonicalEvent = canonicalizeProvenanceEvent(provenanceInput);
-
-        // Get the latest ProvenanceEvent to chain from
-        const latestProvenanceEvent = await tx.provenanceEvent.findFirst({
-          orderBy: { id: 'desc' },
-          select: { payloadHash: true },
-        });
-
-        await tx.provenanceEvent.create({
-          data: {
-            eventType: ProvenanceEventType.DONATION_ALLOCATED,
-            entityType: canonicalEvent.entityType,
-            entityId: canonicalEvent.entityId,
-            amountInr: canonicalEvent.amountInr,
-            ngoId: canonicalEvent.ngoId,
-            campaignId: canonicalEvent.campaignId,
-            occurredAt,
-            canonicalPayload: serializeProvenanceEvent(provenanceInput),
-            payloadHash: hashProvenanceEvent(provenanceInput),
-            previous_hash: latestProvenanceEvent?.payloadHash ?? null,
-            transitionKey: approvedDisbursement.id,
-          },
-        });
+        await appendProvenanceEvent(
+          tx,
+          provenanceInput,
+          approvedDisbursement.id,
+        );
 
         remainingToAllocate = remainingToAllocate.minus(amountToAllocate);
       }
@@ -1411,6 +1395,31 @@ adminRouter.get(
   requireAuth,
   requireRole(UserRole.ADMIN),
   getDisbursementProofUrl,
+);
+
+adminRouter.get(
+  "/bank-transfers/pending",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  listPendingBankTransfers,
+);
+adminRouter.get(
+  "/bank-transfers/:id/evidence/:documentId",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  downloadAdminBankTransferEvidence,
+);
+adminRouter.post(
+  "/bank-transfers/:id/approve",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  approveBankTransfer,
+);
+adminRouter.post(
+  "/bank-transfers/:id/reject",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  rejectBankTransfer,
 );
 
 export default adminRouter;

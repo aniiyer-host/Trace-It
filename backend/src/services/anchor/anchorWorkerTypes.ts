@@ -32,6 +32,7 @@ export interface AnchorTransition {
   attemptCount: number;
   reconciliationCount?: number;
   transactionSignature?: string;
+  clearTransactionSignature?: boolean;
   anchorPda?: string;
   error?: string;
   nextAttemptAt?: Date;

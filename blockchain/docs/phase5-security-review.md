@@ -3,6 +3,11 @@
 **Reviewed:** 2026-09-30
 **Scope:** `traceit_anchor`, Phase 2 client, Phase 3 worker, Phase 4 verifier, and Phase 5 release tooling.
 
+> **Historical snapshot:** This review predates the current Devnet candidate.
+> Its balance row below records the 2026-09-30 observation. The 2026-10-14
+> preflight is recorded in `deployments/devnet-anchor.json`; refresh all
+> balances and rent estimates before any transaction.
+
 ## Findings
 
 | Area | Result | Evidence / residual action |

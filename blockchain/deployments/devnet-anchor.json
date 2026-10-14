@@ -2,34 +2,39 @@
   "schemaVersion": 1,
   "cluster": "devnet",
   "status": "BLOCKED_PREDEPLOYMENT",
-  "observedAt": "2026-09-30",
+  "observedAt": "2026-10-14",
   "program": {
-    "declaredDevelopmentId": "4qLwniS2NeDrqftgb83GbYVHWVbBBbUcjDR1Ncm5GCHX",
-    "candidateDeploymentKeypairId": "5s9AEJfEKfUrcCszpfdkZmka1XcX2XA7mbyDTmKmQywW",
+    "declaredDevelopmentId": "3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa",
+    "candidateDeploymentKeypairId": "3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa",
     "deployedProgramId": null,
     "programDataAddress": null,
     "deploymentSlot": null,
-    "binarySha256": "520e75b6c15d577303a35f5766254c57356734c42aef5ab4f0364fdf68425557",
+    "binarySha256": "a4722659f20a5990da82b5f83d40a81e59b2f740d50e10cb7d02e666f7c9a17a",
     "idlSha256": "4283336d28fa716d37ca5be36991b1d7f031cad990af8fabbf85329eef198bd1",
     "idlVersion": "0.1.0"
   },
   "authorities": {
-    "bootstrap": "Emi2GHuHM4UnY6TqcXio3Cbfe5H1E2uukL3QgBziQSrG",
-    "runtime": null,
-    "upgrade": null,
-    "feePayer": "Emi2GHuHM4UnY6TqcXio3Cbfe5H1E2uukL3QgBziQSrG",
-    "policy": "Devnet may use the approved team development authority. Production must separate fee-payer, runtime, and upgrade custody and require multisig/offline approval."
+    "bootstrap": "5jV2gq2stVAbNnrHW8w55LyDWEhcAQPdZpWFwxpW9q7W",
+    "runtime": "5jV2gq2stVAbNnrHW8w55LyDWEhcAQPdZpWFwxpW9q7W",
+    "upgrade": "EWT5ZZqNpfwD6yGzhf7SUJCPceq5VxfqMyjWQ6wumnJh",
+    "feePayer": "EWT5ZZqNpfwD6yGzhf7SUJCPceq5VxfqMyjWQ6wumnJh",
+    "policy": "Devnet deployment fee payer and upgrade authority are the existing funded wallet; bootstrap and runtime authority are the new authority keypair. The runtime authority also pays initialization and anchor account rent. Production must use reviewed custody and multisig/offline upgrade approval."
   },
   "preflight": {
     "genesisHash": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
-    "walletBalanceLamports": 1026224262,
+    "walletBalanceLamports": 4870691200,
     "requiredPeakLamports": 3592842800,
     "minimumOperatingLamports": 1000000000,
     "programAccountExists": false
   },
+  "balanceChecks": {
+    "observedAt": "2026-10-14",
+    "programIdentityLamports": 0,
+    "bootstrapRuntimeAuthorityLamports": 0,
+    "deploymentFeePayerLamports": 4870691200
+  },
   "blockers": [
-    "Approve a custody-backed devnet program identity and synchronize every declared/configured ID.",
-    "Fund the devnet fee payer above the measured peak deployment requirement plus operating reserve.",
+    "Verify the local deployment keypair matches the declared and configured program ID.",
     "Obtain explicit transaction approval before deployment, initialization, or smoke-test writes."
   ],
   "smokeTest": {

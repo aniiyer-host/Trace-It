@@ -11,6 +11,12 @@ if (process.env.TRACEIT_ALLOW_DEVNET_TRANSACTIONS !== CONSENT) {
 }
 
 const root = path.resolve(__dirname, "..");
+const action = required("TRACEIT_SMOKE_ACTION");
+if (action !== "initialize-config" && action !== "write-anchor") {
+  throw new Error(
+    "TRACEIT_SMOKE_ACTION must be initialize-config or write-anchor",
+  );
+}
 const programId = new anchor.web3.PublicKey(
   required("TRACEIT_ANCHOR_PROGRAM_ID"),
 );
@@ -43,7 +49,7 @@ async function main(): Promise<void> {
     configPda,
     "confirmed",
   );
-  if (!configInfo) {
+  if (!configInfo && action === "initialize-config") {
     const initialize = program.methods.initializeConfig().accounts({
       config: configPda,
       authority: provider.wallet.publicKey,
@@ -54,6 +60,11 @@ async function main(): Promise<void> {
       commitment: "confirmed",
     });
   }
+  if (!configInfo && action === "write-anchor") {
+    throw new Error(
+      "AnchorConfig is not initialized; approve and run initialize-config first",
+    );
+  }
   const config = await program.account.anchorConfig.fetch(configPda);
   if (
     !config.authority.equals(bootstrapAuthority) ||
@@ -61,6 +72,24 @@ async function main(): Promise<void> {
     config.paused !== false
   ) {
     throw new Error("devnet AnchorConfig does not match the v1 deployment policy");
+  }
+
+  if (action === "initialize-config") {
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          cluster: "devnet",
+          action,
+          programId: programId.toBase58(),
+          configPda: configPda.toBase58(),
+          configInitializationSignature,
+          verified: true,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return;
   }
 
   const fixtures = JSON.parse(
@@ -134,6 +163,7 @@ async function main(): Promise<void> {
         programId: programId.toBase58(),
         configPda: configPda.toBase58(),
         anchorPda: anchorPda.toBase58(),
+        action,
         fixture: fixture.name,
         configInitializationSignature,
         anchorSignature,

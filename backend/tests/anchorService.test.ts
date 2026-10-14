@@ -364,4 +364,41 @@ describe("SolanaAnchorAdapter", () => {
       }),
     ).rejects.toMatchObject({ kind: "CONFIRMATION" });
   });
+
+  it("retains a signature when the confirmed transaction reports an execution error", async () => {
+    const signer = Keypair.generate();
+    const connection = {
+      getLatestBlockhash: jest.fn(async () => ({
+        blockhash: PublicKey.default.toBase58(),
+        lastValidBlockHeight: 10,
+      })),
+      simulateTransaction: jest.fn(async () => ({
+        context: { slot: 1 },
+        value: { err: null, logs: [] },
+      })),
+      sendRawTransaction: jest.fn(async () => "rejected-signature"),
+      confirmTransaction: jest.fn(async () => ({
+        context: { slot: 2 },
+        value: { err: { InstructionError: [0, "InvalidAccountData"] } },
+      })),
+    } as unknown as Connection;
+    const adapter = new SolanaAnchorAdapter(connection, signer);
+    const value = batch();
+
+    await expect(
+      adapter.submitRecordAnchor({
+        batch: value,
+        programId: PROGRAM_ID,
+        configPda: PublicKey.findProgramAddressSync(
+          [Buffer.from("anchor_config")],
+          PROGRAM_ID,
+        )[0],
+        anchorPda: deriveAnchorPda(PROGRAM_ID, value.batchKey),
+        authority: signer.publicKey,
+      }),
+    ).rejects.toMatchObject({
+      kind: "PROGRAM",
+      signature: "rejected-signature",
+    });
+  });
 });

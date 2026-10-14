@@ -7,17 +7,19 @@ anchors only and deliberately excludes donation, status, disbursement, NGO,
 cohort, and attestation instructions. The legacy `traceit` program remains in
 the workspace for historical reads and migration testing.
 
-The local test program ID is
-`4qLwniS2NeDrqftgb83GbYVHWVbBBbUcjDR1Ncm5GCHX`. It is not a devnet
-deployment ID and has no repository-held deployment keypair. Security/DevOps
-must allocate the deployable program keypair under approved custody in Phase 5;
-the declared ID, Anchor configuration, committed IDL/client, and deployment
-manifest must then be updated together.
+The current Anchor v1 program ID configured for the reviewed Devnet candidate
+and local tests is
+`3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa`. The deployment record remains
+`BLOCKED_PREDEPLOYMENT`; configuring an ID does not mean the program has been
+deployed. The legacy program ID remains
+`5fj53usXqFvfah3x7rYo6BxQnrvBprBZsGU49XhQxzV3`.
 
 ## Instructions
 
 - `initialize_config`: creates the singleton config and requires the compiled
-  bootstrap authority `Emi2…QSrG`; arbitrary first-caller initialization fails.
+  bootstrap authority
+  `5jV2gq2stVAbNnrHW8w55LyDWEhcAQPdZpWFwxpW9q7W`; arbitrary first-caller
+  initialization fails.
 - `set_paused`: the current authority pauses or resumes new anchors.
 - `propose_authority`: records a nonzero, different pending authority.
 - `accept_authority`: requires the pending authority's signature and completes
@@ -34,8 +36,8 @@ preflight simulation before localnet submission.
 
 | Account | Bytes | Rent-exempt minimum* |
 |---|---:|---:|
-| `AnchorConfig` | 77 | 1,426,800 lamports |
-| `AnchorRecord` | 167 | 2,053,200 lamports |
+| `AnchorConfig` | 77 | 1,041,400 lamports |
+| `AnchorRecord` | 167 | 1,498,600 lamports |
 
 \*Calculated using the Solana 1.17 rent parameters; deployment tooling must
 query the target cluster again before funding.

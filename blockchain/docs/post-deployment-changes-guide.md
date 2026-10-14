@@ -4,7 +4,15 @@
 >
 > **Scope:** The new minimal `traceit_anchor` program on Solana devnet
 >
-> **Current status (2026-10-02):** Deployment has not happened yet. `5s9AEJfEKfUrcCszpfdkZmka1XcX2XA7mbyDTmKmQywW` is the approved candidate address, but repository IDs are not yet synchronized and no deployment/config/smoke transaction has been sent. Phase 6 legacy application writes now fail closed in code.
+> **Identity/status correction (2026-10-14):** The candidate in this older guide
+> was superseded. Current candidate: `3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa`;
+> bootstrap/runtime authority: `5jV2gq2stVAbNnrHW8w55LyDWEhcAQPdZpWFwxpW9q7W`;
+> intended fee payer/upgrade authority:
+> `EWT5ZZqNpfwD6yGzhf7SUJCPceq5VxfqMyjWQ6wumnJh`. The v1 identity is synchronized
+> in source/config/IDL/test support, but deployment is still blocked and no
+> Devnet deployment, configuration initialization, or smoke anchor has occurred.
+> Treat older candidate and wallet details below as historical; use the Phase 5
+> operations runbook and `deployments/devnet-anchor.json` for current operations.
 
 ## 1. The Short Explanation
 

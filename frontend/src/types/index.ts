@@ -70,6 +70,13 @@ export interface Campaign {
   updatedAt?: string;
   //Added to correct LINT Error
   successDonationCount?: number;
+  cohortId?: string | null;
+  cohorts?: CampaignCohort[];
+}
+
+export interface CampaignCohort {
+  id: string;
+  name: string;
 }
 
 export interface Milestone {
@@ -292,6 +299,8 @@ export interface PendingNgoAttestation {
   id: string;
   donationId: string;
   type: string;
+  disbursementId: string | null;
+  allocatedAmount: number | string | null;
   attestedBy: string | null;
   attestedAt: string | null;
   statement: string;
@@ -302,6 +311,7 @@ export interface PendingNgoAttestation {
     publicId: string;
     amount: number;
     donorId: string;
+    campaignId: string;
   };
 }
 export interface AdminPendingCampaign extends Omit<Campaign, "ngo"> {

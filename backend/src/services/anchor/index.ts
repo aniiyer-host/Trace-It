@@ -4,3 +4,7 @@ export * from "./solanaAnchorAdapter.js";
 export * from "./anchorService.js";
 export * from "./anchorWorkerTypes.js";
 export * from "./anchorWorker.js";
+export * from "./anchorProtocol.js";
+export * from "./anchorBatchService.js";
+export * from "./prismaAnchorBatchRepository.js";
+export * from "./anchorWorkerBootstrap.js";

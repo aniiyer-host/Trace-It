@@ -15,7 +15,8 @@ import webhookRoutes from "./routes/webhooks/razorpay.js";
 
 import { errorHandler } from "./middleware/errorHandler.js";
 import { notFound } from "./middleware/notFound.js";
-import BlockchainRetryProcessor from "./services/blockchainRetryProcessor.js";
+import { createAnchorRuntimeFromEnvironment } from "./services/anchor/anchorWorkerBootstrap.js";
+import { EmailOutboxProcessor } from "./services/email/emailOutboxProcessor.js";
 
 import { validateEnvironment } from "./utils/envValidator.js";
 
@@ -106,22 +107,26 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
     console.log(`Server is running on port ${PORT}`);
   });
 
-  let blockchainProcessor: InstanceType<typeof BlockchainRetryProcessor> | undefined;
+  let shuttingDown = false;
+  const emailOutboxProcessor = new EmailOutboxProcessor();
+  void emailOutboxProcessor.start().catch((error) => {
+    console.error("[EmailOutboxProcessor] Stopped unexpectedly:", error);
+  });
 
-  if (process.env.SOLANA_WALLET_KEYPAIR_PATH) {
-    blockchainProcessor = new BlockchainRetryProcessor();
-
-    void blockchainProcessor.start().catch((error) => {
-      console.error("[Blockchain] Retry processor stopped unexpectedly:", error);
+  const anchorRuntimePromise = createAnchorRuntimeFromEnvironment();
+  void anchorRuntimePromise
+    .then((runtime) => {
+      if (!runtime || shuttingDown) return;
+      runtime.start();
+    })
+    .catch((error) => {
+      console.error("[Blockchain] Anchor runtime initialization failed:", error);
     });
-  } else {
-    console.warn(
-      "[Blockchain] Retry processor not started: SOLANA_WALLET_KEYPAIR_PATH is not configured."
-    );
-  }
 
-  const shutdown = () => {
-    blockchainProcessor?.stop();
+  const shutdown = async () => {
+    shuttingDown = true;
+    await anchorRuntimePromise.then((runtime) => runtime?.stop());
+    emailOutboxProcessor.stop();
 
     server.close(() => {
       process.exit(0);

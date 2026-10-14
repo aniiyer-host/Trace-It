@@ -12,14 +12,14 @@ export interface DonorReceiptDetails {
 
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (character) => {
-    const entities: Record<string, string> = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-    };
-    return entities[character];
+    switch (character) {
+      case "&": return "&amp;";
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case '"': return "&quot;";
+      case "'": return "&#39;";
+      default: return character;
+    }
   });
 
 const amountInWords = (amount: number): string => {
@@ -32,12 +32,12 @@ const amountInWords = (amount: number): string => {
   const scales = ["", "thousand", "lakh", "crore", "arab", "kharab"];
   const twoDigitWords = (value: number) =>
     value < 20
-      ? ones[value]
-      : `${tens[Math.floor(value / 10)]}${value % 10 ? ` ${ones[value % 10]}` : ""}`;
+      ? (ones.at(value) ?? "")
+      : `${tens.at(Math.floor(value / 10)) ?? ""}${value % 10 ? ` ${ones.at(value % 10) ?? ""}` : ""}`;
   const threeDigitWords = (value: number) => {
     const hundreds = Math.floor(value / 100);
     const remainder = value % 100;
-    return `${hundreds ? `${ones[hundreds]} hundred${remainder ? " " : ""}` : ""}${remainder ? twoDigitWords(remainder) : ""}`;
+    return `${hundreds ? `${ones.at(hundreds) ?? ""} hundred${remainder ? " " : ""}` : ""}${remainder ? twoDigitWords(remainder) : ""}`;
   };
 
   const absoluteAmount = Math.abs(amount);
@@ -55,7 +55,8 @@ const amountInWords = (amount: number): string => {
     const groupSize = groupIndex === 0 ? 1000 : 100;
     const group = remaining % groupSize;
     if (group) {
-      groups.unshift(`${threeDigitWords(group)}${scales[groupIndex] ? ` ${scales[groupIndex]}` : ""}`);
+      const scale = scales.at(groupIndex);
+      groups.unshift(`${threeDigitWords(group)}${scale ? ` ${scale}` : ""}`);
     }
     remaining = Math.floor(remaining / groupSize);
     groupIndex += 1;

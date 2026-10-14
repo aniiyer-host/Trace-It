@@ -166,7 +166,15 @@ export class AnchorWorker {
         reconciliationCount,
       });
       if (reconciliationCount >= this.policy.reconciliationChecksBeforeResubmit) {
-        await this.scheduleRetry(batch, transition, "anchor absent after bounded reconciliation");
+        await this.scheduleRetry(
+          batch,
+          {
+            ...transition,
+            transactionSignature: undefined,
+            clearTransactionSignature: true,
+          },
+          "anchor absent after bounded reconciliation",
+        );
       } else {
         await this.repository.markReconciliationRequired(batch.id, {
           ...transition,

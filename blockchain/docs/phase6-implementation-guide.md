@@ -2,9 +2,18 @@
 
 > **Updated:** 2026-09-30
 >
+> **Identity/status correction (2026-10-14):** This guide contains historical
+> Phase 6 identity notes below. The current candidate is
+> `3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa`; bootstrap/runtime authority
+> is `5jV2gq2stVAbNnrHW8w55LyDWEhcAQPdZpWFwxpW9q7W`; intended fee payer and
+> upgrade authority is `EWT5ZZqNpfwD6yGzhf7SUJCPceq5VxfqMyjWQ6wumnJh`. Refer to
+> [`deployments/devnet-anchor.json`](../deployments/devnet-anchor.json) and
+> [`phase5-operations-runbook.md`](phase5-operations-runbook.md) for current
+> operations. No Devnet transaction has been submitted.
+>
 > **Architecture:** PostgreSQL-first application with asynchronous Solana audit anchoring
 >
-> **Current position:** Blockchain-owned implementation through Phase 6 is complete. Legacy application writes and retry execution fail closed while historical readers remain available. The new anchor program has **not** yet been deployed or smoke-tested on devnet, and the Backend/Data integration evidence below is still required before operational rollout.
+> **Current position:** Blockchain-owned implementation through Phase 6 is complete. Legacy application writes and retry execution fail closed while historical readers remain available. The durable backend batch builder/repository and guarded runtime integration are now present, but their additive database migration has not been applied here. The new anchor program has **not** yet been deployed or smoke-tested on devnet.
 
 ## 1. Purpose
 
@@ -29,7 +38,7 @@ Solana proves that a previously calculated audit root existed; it does not autho
 | **0 — Baseline and contract** | Restored reproducible Anchor 0.29/Solana 1.17 builds, committed the compatible lockfile, retained 17 legacy local-validator tests, chose a separate minimal program, froze serialization/PDA/authority rules, and added shared Rust/TypeScript vectors. | Complete. Legacy program remains at `5fj53u…XzV3`; it is preserved for historical compatibility. |
 | **1 — Minimal anchor program** | Added `traceit_anchor`, singleton `AnchorConfig`, immutable `AnchorRecord`, `record_anchor`, pause/unpause, and two-step authority rotation. Enforced signer, PDA, schema, root, range, count, and overflow constraints. | Complete locally. Account sizes are 77 bytes and 167 bytes. Development ID `4qLw…GCHX` is not the selected deployment ID. |
 | **2 — Client/service boundary** | Added typed submission, fetch, verification, reconciliation, PDA derivation, strict account decoding, simulation-before-send, error classification, and explorer URL support in `backend/src/services/anchor/`. | Complete but intentionally disconnected from business routes. An ambiguous send is reconciled by PDA and is never blindly retried. |
-| **3 — Worker/reconciliation** | Added `AnchorWorker`, repository contract, leases, claim tokens, heartbeats, crash recovery, bounded retries, reconciliation, dead-letter behavior, metrics, and graceful shutdown. | Blockchain-owned code complete. Backend/Data must still implement the durable `AnchorBatchRepository` and bootstrap the worker. |
+| **3 — Worker/reconciliation** | Added `AnchorWorker`, durable PostgreSQL repository, deterministic event batch builder, claim leases, heartbeats, crash recovery, bounded retries, reconciliation, dead-letter behavior, metrics, and graceful runtime shutdown. | Code integration complete. Apply `backend/prisma/migrations/20261014180000_add_durable_anchor_worker` and configure the dedicated `TRACEIT_ANCHOR_*` variables before runtime anchoring can operate. |
 | **4 — Verification** | Added read-only verification with explicit states, adversarial account checks, optional transaction inspection, JSON-safe output, fixtures, and legacy-reader compatibility. | Blockchain-owned code complete. Backend must first verify the local audit chain and wire a public route; frontend must consume that route. |
 | **5 — Devnet/operations** | Added read-only RPC failover, deployment preflight, guarded deployment and smoke scripts, release controls, artifact/IDL hashes, monitoring thresholds, incident procedures, and focused security review. Local recovery evidence recorded 39 blockchain tests and 189 backend tests passing. | Tooling complete; release incomplete. No new-program devnet deployment, initialization, or smoke write has occurred. |
 
