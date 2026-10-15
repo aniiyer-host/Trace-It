@@ -25,7 +25,11 @@ const bootstrapAuthority = new anchor.web3.PublicKey(
 );
 const envProvider = anchor.AnchorProvider.env();
 const provider = new anchor.AnchorProvider(
-  new anchor.web3.Connection(required("ANCHOR_PROVIDER_URL"), "confirmed"),
+  new anchor.web3.Connection(required("ANCHOR_PROVIDER_URL"), {
+    commitment: "confirmed",
+    disableRetryOnRateLimit: true,
+    fetch: rateLimitAwareFetch,
+  }),
   envProvider.wallet,
   { commitment: "confirmed", preflightCommitment: "confirmed" },
 );
@@ -241,16 +245,55 @@ async function submitGuarded(
       preflightCommitment: "confirmed",
     },
   );
-  const confirmation = await provider.connection.confirmTransaction(
-    { ...validity, signature },
-    "confirmed",
-  );
-  if (confirmation.value.err) {
+  const confirmationError = await waitForConfirmation(provider.connection, signature);
+  if (confirmationError) {
     throw new Error(
-      `${label} transaction ${signature} failed at slot ${confirmation.context.slot}: ${JSON.stringify(confirmation.value.err)}`,
+      `${label} transaction ${signature} failed: ${JSON.stringify(confirmationError)}`,
     );
   }
   return signature;
+}
+
+async function waitForConfirmation(
+  connection: anchor.web3.Connection,
+  signature: string,
+): Promise<unknown | null> {
+  const deadline = Date.now() + 60_000;
+  do {
+    const result = await connection.getSignatureStatuses([signature], {
+      searchTransactionHistory: true,
+    });
+    const status = result.value[0];
+    if (status?.err) return status.err;
+    if (status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized") {
+      return null;
+    }
+    if (Date.now() >= deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, Math.round(1_000 * (0.8 + Math.random() * 0.4))));
+  } while (Date.now() <= deadline);
+  throw new Error(`transaction ${signature} did not reach confirmed status before timeout`);
+}
+
+async function rateLimitAwareFetch(
+  input: Parameters<typeof fetch>[0],
+  init?: Parameters<typeof fetch>[1],
+): Promise<Response> {
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await globalThis.fetch(input, init);
+    if (response.status !== 429 || attempt >= 3) return response;
+    const retryAfter = response.headers.get("retry-after");
+    const retryAfterSeconds = retryAfter === null ? Number.NaN : Number(retryAfter);
+    const retryAfterDate = retryAfter === null ? Number.NaN : Date.parse(retryAfter);
+    const retryAfterMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0
+      ? Math.round(retryAfterSeconds * 1_000)
+      : Number.isFinite(retryAfterDate) ? Math.max(0, retryAfterDate - Date.now()) : null;
+    if (retryAfterMs !== null && retryAfterMs > 30_000) return response;
+    await response.body?.cancel().catch(() => undefined);
+    const backoff = Math.min(500 * 2 ** attempt, 8_000);
+    const jitteredBackoff = Math.round(backoff * (0.8 + Math.random() * 0.4));
+    const positiveJitter = retryAfterMs === null ? 0 : Math.round(Math.min(retryAfterMs * 0.2, 1_000) * Math.random());
+    await new Promise((resolve) => setTimeout(resolve, Math.max(retryAfterMs ?? 0, jitteredBackoff) + positiveJitter));
+  }
 }
 
 function required(name: string): string {

@@ -38,13 +38,12 @@ export default function DisbursementRequestDialog({
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const availableAmount = Math.max(
-    0,
-    Number(campaign.raisedAmount || 0) -
-      (campaign.milestones || []).reduce(
-        (sum, milestone) => sum + Number(milestone.targetAmount || 0),
-        0,
-      ),
+  const milestones = campaign.milestones || [];
+  const availableAmount = Math.max(0, Number(campaign.raisedAmount || 0) - milestones
+    .filter((milestone) => !["REJECTED", "FAILED"].includes(milestone.disbursementStatus || ""))
+    .reduce((sum, milestone) => sum + Number(milestone.targetAmount || 0), 0));
+  const hasOutstandingRequest = milestones.some((milestone) =>
+    ["PENDING", "APPROVED", "SENT"].includes(milestone.disbursementStatus || ""),
   );
 
   const cohorts = campaign.cohorts ?? [];
@@ -61,10 +60,10 @@ export default function DisbursementRequestDialog({
       return;
     }
 
-    if (parsedAmount > Number(campaign.raisedAmount || 0)) {
+    if (parsedAmount > availableAmount) {
       toast({
-        title: "Amount exceeds funds raised",
-        description: `This campaign has raised ₹${Number(campaign.raisedAmount || 0).toLocaleString()}.`,
+        title: "Amount exceeds eligible remaining funds",
+        description: `Available for a new request: ₹${availableAmount.toLocaleString()}.`,
         variant: "destructive",
       });
       return;
@@ -121,9 +120,14 @@ export default function DisbursementRequestDialog({
             <p className="text-sm text-muted-foreground">
               Raised: ₹{Number(campaign.raisedAmount || 0).toLocaleString()}
             </p>
+            {hasOutstandingRequest && (
+              <p className="text-sm text-amber-700">
+                A request is already awaiting review, approval, or transfer. You can request funds again after it reaches a terminal status.
+              </p>
+            )}
             {availableAmount > 0 && (
               <p className="text-sm text-muted-foreground">
-                Approx. unrequested funds: ₹{availableAmount.toLocaleString()}
+                Eligible remaining funds: ₹{availableAmount.toLocaleString()}
               </p>
             )}
           </div>
@@ -204,7 +208,7 @@ export default function DisbursementRequestDialog({
             </Button>
             <Button
               onClick={() => void handleRequestDisbursement()}
-              disabled={loading}
+              disabled={loading || hasOutstandingRequest || availableAmount <= 0}
               variant="primary"
               className="w-full md:w-auto"
             >

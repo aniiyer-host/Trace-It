@@ -236,10 +236,12 @@ model Campaign {
   solanaProgramId    String?
   solanaVaultAddress String?
   ipfsCid            String?
-  beneficiaryIdHash        String? @unique  // HMAC-SHA512 of the beneficiary ID; raw ID never stored
-  beneficiaryIdEncrypted   String?  // AES-256-CBC encrypted beneficiary ID for NGO retrieval
-  beneficiaryName         String?
-  beneficiaryDescription  String?
+  beneficiaryIdHash        String? @unique  // Campaign-bound HMAC-SHA256 verifier; raw ID never stored
+  beneficiaryIdEncrypted   String?  // Authenticated encrypted Beneficiary ID for NGO retrieval
+  beneficiaryName         String?  // Legacy plaintext; new writes use encrypted columns below
+  beneficiaryDescription  String?  // Legacy plaintext; new writes use encrypted columns below
+  beneficiaryNameEncrypted        String?
+  beneficiaryDescriptionEncrypted String?
   createdAt                DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -345,6 +347,7 @@ model Disbursement {
   amountSol          Decimal?  @db.Decimal(18, 8)
   fieldReportUrl     String?
   status             DisbursementStatus @default(PENDING)
+  settlementDueAt    DateTime?
   approvedBy         String?   // references profiles.id
   approvedAt         DateTime?
   solanaTxHash       String?
@@ -365,6 +368,7 @@ model Disbursement {
   @@index([campaignId])
   @@index([ngoId])
   @@index([status])
+  @@index([status, settlementDueAt])
   @@map("disbursements")
 }
 

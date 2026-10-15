@@ -17,6 +17,7 @@ import {
 import { writeAuditLog } from "../services/auditLogService.js";
 import { allocateDonation } from "../services/statusService.js";
 import { appendProvenanceEvent } from "../services/provenanceChainService.js";
+import { HashService } from "../services/hashService.js";
 
 import { StorageService } from "../services/storageService.js";
 import {
@@ -27,6 +28,29 @@ import {
 } from "./bankTransfers.js";
 
 const adminRouter = Router();
+
+const adminCampaignResponse = (campaign: any) => {
+  if (!campaign) return campaign;
+  const {
+    beneficiaryIdHash: _hash,
+    beneficiaryIdEncrypted: _id,
+    beneficiaryNameEncrypted: encryptedName,
+    beneficiaryDescriptionEncrypted: encryptedDescription,
+    beneficiaryName,
+    beneficiaryDescription,
+    ...safe
+  } = campaign;
+  return {
+    ...safe,
+    beneficiaryName: encryptedName ? HashService.decryptSensitiveValue(encryptedName) : beneficiaryName,
+    beneficiaryDescription: encryptedDescription ? HashService.decryptSensitiveValue(encryptedDescription) : beneficiaryDescription,
+  };
+};
+
+const adminDisbursementResponse = (disbursement: any) => ({
+  ...disbursement,
+  ...(disbursement.campaign ? { campaign: adminCampaignResponse(disbursement.campaign) } : {}),
+});
 
 // ---------------------------------------------------------------------------
 // POST /disburse/:id/approve
@@ -224,7 +248,7 @@ export const approveDisbursement = async (
       },
     });
 
-    res.json(updated);
+    res.json(adminDisbursementResponse(updated));
   } catch (err) {
     next(err);
   }
@@ -255,7 +279,7 @@ export const getAllDisbursements = async (
       orderBy: { createdAt: "desc" },
     });
 
-    res.json(disbursements);
+    res.json(disbursements.map(adminDisbursementResponse));
   } catch (err) {
     next(err);
   }
@@ -286,7 +310,7 @@ export const getDisbursementById = async (
       return res.status(404).json({ error: "Disbursement not found" });
     }
 
-    res.json(disbursement);
+    res.json(adminDisbursementResponse(disbursement));
   } catch (err) {
     next(err);
   }
@@ -424,16 +448,7 @@ export const getPendingCampaigns = async (
       },
       orderBy: { createdAt: "desc" },
     });
-    res.json(
-      campaigns.map((c) => {
-        const {
-          beneficiaryIdHash: _h,
-          beneficiaryIdEncrypted: _e,
-          ...safe
-        } = c as any;
-        return safe;
-      }),
-    );
+    res.json(campaigns.map(adminCampaignResponse));
   } catch (err) {
     next(err);
   }
@@ -473,12 +488,7 @@ export const approveCampaign = async (
       action: "CAMPAIGN_APPROVED",
       metadata: {},
     });
-    const {
-      beneficiaryIdHash: _h,
-      beneficiaryIdEncrypted: _e,
-      ...safe
-    } = updated as any;
-    res.json(safe);
+    res.json(adminCampaignResponse(updated));
   } catch (err) {
     next(err);
   }
@@ -516,12 +526,7 @@ export const closeCampaign = async (
       action: "CAMPAIGN_CLOSED",
       metadata: {},
     });
-    const {
-      beneficiaryIdHash: _h,
-      beneficiaryIdEncrypted: _e,
-      ...safe
-    } = updated as any;
-    res.json(safe);
+    res.json(adminCampaignResponse(updated));
   } catch (err) {
     next(err);
   }
@@ -1116,24 +1121,38 @@ export const markDisbursementSettled = async (
       return res.status(400).json({ error: "Disbursement is not APPROVED" });
     }
 
-    const updated = await prisma.disbursement.update({
-      where: { id: disbursementId },
-      data: {
-        status: DisbursementStatus.SETTLED,
-      },
-    });
-
-    await writeAuditLog({
-      actorType: AuditActorType.USER,
-      actorId: adminId,
-      entityType: "disbursement",
-      entityId: disbursement.id,
-      action: "DISBURSEMENT_SETTLED_MANUAL_OVERRIDE",
-      metadata: { note: "Manual override triggered to settle disbursement before Razorpay integration." },
+    const transferConfirmedAt = new Date();
+    const settlementDueAt = new Date(transferConfirmedAt.getTime() + 5_000);
+    const updated = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.disbursement.updateMany({
+        where: { id: disbursementId, status: DisbursementStatus.APPROVED },
+        data: {
+          status: DisbursementStatus.SENT,
+          settlementDueAt,
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new Error("Disbursement transfer confirmation changed concurrently");
+      }
+      await tx.auditLog.create({
+        data: {
+          actorType: AuditActorType.USER,
+          actorId: adminId,
+          entityType: "disbursement",
+          entityId: disbursement.id,
+          action: "DISBURSEMENT_TRANSFER_CONFIRMED_MANUAL",
+          metadata: {
+            note: "Admin recorded manual transfer confirmation before payout provider integration.",
+            transferConfirmedAt: transferConfirmedAt.toISOString(),
+            settlementDueAt: settlementDueAt.toISOString(),
+          },
+        },
+      });
+      return tx.disbursement.findUniqueOrThrow({ where: { id: disbursementId } });
     });
 
     return res.status(200).json({
-      message: "Disbursement marked as settled successfully",
+      message: "Manual transfer confirmation recorded; settlement will complete after the delay",
       disbursement: updated,
     });
   } catch (error) {
@@ -1216,12 +1235,11 @@ export const getDisbursementProofUrl = async (
       where: { disbursementId },
     });
 
-    const storageService = new StorageService("test-bucket");
     const urls: { name: string; url: string }[] = [];
 
     if (documents.length > 0) {
       for (const doc of documents) {
-        const signedUrl = await storageService.getSignedUrl(doc.storagePath, 900);
+        const signedUrl = await new StorageService(doc.storageBucket).getSignedUrl(doc.storagePath, 900);
         // Extract filename from storagePath (e.g. milestone_proofs/id/12345_filename.pdf -> filename.pdf)
         const parts = doc.storagePath.split('_');
         const name = parts.length > 1 ? parts.slice(1).join('_') : doc.storagePath;
@@ -1230,7 +1248,9 @@ export const getDisbursementProofUrl = async (
     } else if (disbursement.fieldReportUrl) {
       // Fallback for older data where document might not exist but fieldReportUrl is a storage path
       // Wait, if it's a hash, this will fail. Let's just try to sign it.
-      const signedUrl = await storageService.getSignedUrl(disbursement.fieldReportUrl, 900);
+      const signedUrl = await new StorageService(
+        process.env.TRACEIT_PROOF_BUCKET?.trim() || "test-bucket",
+      ).getSignedUrl(disbursement.fieldReportUrl, 900);
       urls.push({ name: "Proof Document", url: signedUrl });
     }
 

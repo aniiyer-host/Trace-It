@@ -55,7 +55,7 @@ export const getPublicCampaigns = async (
         endDate: true,
         sdgTags: true,
         disbursements: {
-          select: { id: true, fieldReportUrl: true },
+          select: { id: true, fieldReportUrl: true, status: true },
         },
         ngo: {
           select: {
@@ -90,7 +90,11 @@ export const getPublicCampaigns = async (
         startDate: c.startDate,
         endDate: c.endDate,
         sdgTags: c.sdgTags,
-        milestones: c.disbursements,
+        milestones: c.disbursements.map((disbursement) => ({
+          id: disbursement.id,
+          fieldReportUrl: disbursement.fieldReportUrl,
+          disbursementStatus: disbursement.status,
+        })),
         ngoId: (c as unknown as { ngo?: { id: string } }).ngo?.id ?? null,
         ngoName: (c as unknown as { ngo?: { organisationName: string | null } }).ngo?.organisationName ?? null,
         successDonationCount: (c as unknown as { _count?: { donations: number } })._count?.donations ?? 0,

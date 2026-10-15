@@ -115,7 +115,7 @@ describe("PrismaAnchorBatchRepository", () => {
 
     expect(statements[0]).toContain('"status" = ');
     expect(statements[0]).toContain('"solanaTxSignature"');
-    expect(statements[0]).toContain('"claimExpiresAt" > CURRENT_TIMESTAMP');
+    expect(statements[0]).toContain('"claimExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE \'UTC\')');
     expect(statements[1]).toContain('"anchorStatus" = ');
     expect(statements[1]).toContain('"processedAt" = ');
     expect(executeRaw.mock.calls[0]).toContain("CONFIRMED");

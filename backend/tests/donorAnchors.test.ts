@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from "express";
 
 import { prisma } from "../src/db/prisma.js";
 import { getDonationAnchors } from "../src/routes/donor.js";
+import { computeChainHashFromPayloadHash, hashProvenanceEvent, serializeProvenanceEvent } from "../src/utils/provenance.js";
 
 function response() {
   const res = {
@@ -20,27 +21,34 @@ describe("getDonationAnchors", () => {
   });
 
   it("returns provenance and anchor status for the authenticated donor's donation", async () => {
+    const occurredAt = new Date("2026-10-15T00:00:00.000Z");
+    const eventInput = {
+      eventType: "DONATION_SUCCESS",
+      entityType: "Donation",
+      entityId: "02468100-6f1a-44a1-b3b1-87ba538a00b8",
+      amountInr: "250.00",
+      ngoId: "12468100-6f1a-44a1-b3b1-87ba538a00b8",
+      campaignId: null,
+      occurredAt,
+    };
+    const payloadHash = hashProvenanceEvent(eventInput);
+    const event = {
+      id: 1n,
+      ...eventInput,
+      canonicalPayload: serializeProvenanceEvent(eventInput),
+      payloadHash,
+      previous_hash: null,
+      chainHash: computeChainHashFromPayloadHash(payloadHash, null),
+      anchorStatus: "ANCHORED",
+      anchorBatchId: null,
+      anchorBatch: null,
+    };
     const donationLookup = jest
       .spyOn(prisma.donation, "findFirst")
       .mockResolvedValue({ id: "donation-1" } as never);
     const provenanceLookup = jest
       .spyOn(prisma.provenanceEvent, "findMany")
-      .mockResolvedValue([
-      {
-        eventType: "DONATION_SUCCESS",
-        payloadHash: "a".repeat(128),
-        chainHash: "c".repeat(128),
-        anchorStatus: "ANCHORED",
-        anchorBatchId: "batch-1",
-        anchorBatch: {
-          status: "CONFIRMED",
-          auditRoot: "b".repeat(128),
-          solanaTxSignature: "devnet-signature",
-          anchorPda: "anchor-pda",
-          anchoredAt: new Date("2026-10-15T00:00:00.000Z"),
-        },
-      },
-      ] as never);
+      .mockResolvedValue([event] as never);
     const req = {
       params: { id: "donation-1" },
       user: { id: "donor-1" },
@@ -65,13 +73,19 @@ describe("getDonationAnchors", () => {
       anchors: [
         expect.objectContaining({
           eventType: "DONATION_SUCCESS",
-          payloadHash: "a".repeat(128),
-          chainHash: "c".repeat(128),
+          payloadHash,
+          chainHash: event.chainHash,
           status: "ANCHORED",
-          batchStatus: "CONFIRMED",
-          transactionSignature: "devnet-signature",
-          anchorPda: "anchor-pda",
-          anchoredAt: "2026-10-15T00:00:00.000Z",
+          batchStatus: null,
+          transactionSignature: null,
+          anchorPda: null,
+          anchoredAt: null,
+          verification: expect.objectContaining({
+            provenance: { status: "PASSED" },
+            batchRoot: { status: "NOT_APPLICABLE", reason: expect.any(String) },
+            anchorStatus: "ANCHORED",
+            attestationSignature: { status: "UNAVAILABLE", reason: expect.any(String) },
+          }),
         }),
       ],
     });

@@ -28,7 +28,29 @@ import {
   AttestationType,
   AttestationStatus,
 } from "../../generated/prisma/enums.js";
+import { randomUUID } from "node:crypto";
 const charityRouter = Router();
+
+const authorizedCampaignResponse = (campaign: any) => {
+  const {
+    beneficiaryIdHash: _hash,
+    beneficiaryIdEncrypted: _encryptedId,
+    beneficiaryNameEncrypted: encryptedName,
+    beneficiaryDescriptionEncrypted: encryptedDescription,
+    beneficiaryName,
+    beneficiaryDescription,
+    ...safe
+  } = campaign;
+  return {
+    ...safe,
+    beneficiaryName: encryptedName
+      ? HashService.decryptSensitiveValue(encryptedName)
+      : beneficiaryName,
+    beneficiaryDescription: encryptedDescription
+      ? HashService.decryptSensitiveValue(encryptedDescription)
+      : beneficiaryDescription,
+  };
+};
 
 
 // POST /onboard - update NGO profile details
@@ -199,7 +221,6 @@ export const createCampaign = async (
       category,
       coverImageUrl,
       sdgTags,
-      beneficiaryId,
       beneficiaryName,
       beneficiaryDescription,
       beneficiaryPan,
@@ -211,38 +232,33 @@ export const createCampaign = async (
         .json({ error: "Title, description, and targetAmount are required" });
     }
 
-    let idToStore: string | undefined;
-    const beneficiaryDetailsProvided =
-      beneficiaryName !== undefined || beneficiaryDescription !== undefined || beneficiaryPan !== undefined;
-    if (beneficiaryDetailsProvided) {
-      if (typeof beneficiaryName !== "string" || !beneficiaryName.trim() || beneficiaryName.trim().length > 160 ||
-          typeof beneficiaryDescription !== "string" || !beneficiaryDescription.trim() || beneficiaryDescription.trim().length > 2000 ||
-          typeof beneficiaryPan !== "string") {
-        return res.status(400).json({ error: "Beneficiary name, reason, and a valid PAN are required" });
-      }
-      try {
-        idToStore = HashService.beneficiaryIdFromPan(
-          beneficiaryPan,
-          requireEnvironmentVariable("BENEFICIARY_HMAC_SECRET"),
-        );
-      } catch {
-        return res.status(400).json({ error: "Beneficiary name, reason, and a valid PAN are required" });
-      }
-    } else if (beneficiaryId) {
-      // Keep the existing API compatible while clients migrate to PAN-derived IDs.
-      idToStore = beneficiaryId;
+    if (typeof beneficiaryName !== "string" || !beneficiaryName.trim() || beneficiaryName.trim().length > 160 ||
+        typeof beneficiaryDescription !== "string" || !beneficiaryDescription.trim() || beneficiaryDescription.trim().length > 2000 ||
+        typeof beneficiaryPan !== "string") {
+      return res.status(400).json({ error: "Beneficiary name, reason, and a valid PAN are required" });
     }
-    const beneficiaryIdHash = idToStore
-      ? HashService.hmacSha512(idToStore, requireEnvironmentVariable("BENEFICIARY_HMAC_SECRET"))
-      : undefined;
-    const beneficiaryIdEncrypted = idToStore
-      ? HashService.encryptBeneficiaryId(idToStore)
-      : undefined;
+    const campaignId = randomUUID();
+    let idToStore: string;
+    try {
+      idToStore = HashService.beneficiaryIdFromPan(
+        beneficiaryPan,
+        requireEnvironmentVariable("BENEFICIARY_HMAC_SECRET"),
+        campaignId,
+      );
+    } catch {
+      return res.status(400).json({ error: "Beneficiary name, reason, and a valid PAN are required" });
+    }
+    const hmacSecret = requireEnvironmentVariable("BENEFICIARY_HMAC_SECRET");
+    const beneficiaryIdHash = HashService.beneficiaryIdVerifier(idToStore, campaignId, hmacSecret);
+    const beneficiaryIdEncrypted = HashService.encryptBeneficiaryId(idToStore);
+    const beneficiaryNameEncrypted = HashService.encryptSensitiveValue(beneficiaryName.trim());
+    const beneficiaryDescriptionEncrypted = HashService.encryptSensitiveValue(beneficiaryDescription.trim());
 
     let campaign;
     try {
       campaign = await prisma.campaign.create({
         data: {
+          id: campaignId,
           ngoId: userId,
           title,
           description,
@@ -251,14 +267,15 @@ export const createCampaign = async (
           category,
           coverImageUrl,
           sdgTags: sdgTags || [],
-          ...(typeof beneficiaryName === "string" ? { beneficiaryName: beneficiaryName.trim() } : {}),
-          ...(typeof beneficiaryDescription === "string" ? { beneficiaryDescription: beneficiaryDescription.trim() } : {}),
-          ...(beneficiaryIdHash ? { beneficiaryIdHash, beneficiaryIdEncrypted } : {}),
+          beneficiaryNameEncrypted,
+          beneficiaryDescriptionEncrypted,
+          beneficiaryIdHash,
+          beneficiaryIdEncrypted,
           status: CampaignStatus.DRAFT,
         },
       });
     } catch (err: any) {
-      if (err.code === "P2002" && idToStore) {
+      if (err.code === "P2002") {
         return res.status(409).json({
           error: "BENEFICIARY_ALREADY_USED",
           message: "This beneficiary is already registered under another campaign.",
@@ -276,13 +293,7 @@ export const createCampaign = async (
       metadata: { title, targetAmount: Number(targetAmount) },
     });
 
-    // Never expose the beneficiary hash or encrypted ID to the client
-    const {
-      beneficiaryIdHash: _hash,
-      beneficiaryIdEncrypted: _enc,
-      ...safeResponse
-    } = campaign as any;
-    res.status(201).json(safeResponse);
+    res.status(201).json(authorizedCampaignResponse(campaign));
   } catch (err) {
     next(err);
   }
@@ -305,14 +316,7 @@ export const getCampaigns = async (
     });
 
     res.json(
-      campaigns.map((c) => {
-        const {
-          beneficiaryIdHash: _h,
-          beneficiaryIdEncrypted: _e,
-          ...safe
-        } = c as any;
-        return safe;
-      }),
+      campaigns.map(authorizedCampaignResponse),
     );
   } catch (err) {
     next(err);
@@ -356,12 +360,7 @@ export const submitCampaign = async (
       metadata: { title: campaign.title },
     });
 
-    const {
-      beneficiaryIdHash: _h,
-      beneficiaryIdEncrypted: _e,
-      ...safe
-    } = updated as any;
-    res.json(safe);
+    res.json(authorizedCampaignResponse(updated));
   } catch (err) {
     next(err);
   }
@@ -601,14 +600,6 @@ export const createDisbursement = async (
       throw error;
     }
 
-    if (requestedAmount.decimal.greaterThan(campaign.raisedAmount)) {
-      return res
-        .status(400)
-        .json({
-          error: "amountInr cannot exceed the campaign amount raised",
-        });
-    }
-
     if (cohortId) {
       const cohort = await prisma.beneficiaryCohort.findFirst({
         where: {
@@ -624,17 +615,64 @@ export const createDisbursement = async (
       }
     }
 
-    const disbursement = await prisma.disbursement.create({
-      data: {
-        campaignId: targetCampaignId,
-        ngoId: userId,
-        cohortId: cohortId || null,
-        amountInr: requestedAmount.decimal,
-        fieldReportUrl: fieldReportUrl || null,
-        status: DisbursementStatus.PENDING,
-        disbursementType: disbursementType || "PROOF_OF_NEED",
-      },
-    });
+    // Serialize requests per campaign so simultaneous submissions cannot both
+    // pass the outstanding-request or remaining-funds checks.
+    let disbursement;
+    try {
+      disbursement = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM campaigns WHERE id = ${targetCampaignId} FOR UPDATE`;
+        const lockedCampaign = await tx.campaign.findFirst({
+          where: { id: targetCampaignId, ngoId: userId, status: CampaignStatus.ACTIVE },
+          select: { id: true, raisedAmount: true },
+        });
+        if (!lockedCampaign) throw new Error("CAMPAIGN_NOT_ELIGIBLE");
+
+        const outstanding = await tx.disbursement.findFirst({
+          where: {
+            campaignId: targetCampaignId,
+            status: { in: [DisbursementStatus.PENDING, DisbursementStatus.APPROVED, DisbursementStatus.SENT] },
+          },
+          select: { id: true },
+        });
+        if (outstanding) throw new Error("DISBURSEMENT_ALREADY_OUTSTANDING");
+
+        const committed = await tx.disbursement.aggregate({
+          where: {
+            campaignId: targetCampaignId,
+            status: { in: [DisbursementStatus.PENDING, DisbursementStatus.APPROVED, DisbursementStatus.SENT, DisbursementStatus.SETTLED] },
+          },
+          _sum: { amountInr: true },
+        });
+        const remaining = new Prisma.Decimal(lockedCampaign.raisedAmount)
+          .minus(committed._sum.amountInr ?? 0);
+        if (requestedAmount.decimal.greaterThan(remaining)) {
+          throw new Error("INSUFFICIENT_ELIGIBLE_FUNDS");
+        }
+
+        return tx.disbursement.create({
+          data: {
+            campaignId: targetCampaignId,
+            ngoId: userId,
+            cohortId: cohortId || null,
+            amountInr: requestedAmount.decimal,
+            fieldReportUrl: fieldReportUrl || null,
+            status: DisbursementStatus.PENDING,
+            disbursementType: disbursementType || "PROOF_OF_NEED",
+          },
+        });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "DISBURSEMENT_ALREADY_OUTSTANDING") {
+        return res.status(409).json({ error: "A disbursement request is already awaiting review or transfer for this campaign" });
+      }
+      if (error instanceof Error && error.message === "INSUFFICIENT_ELIGIBLE_FUNDS") {
+        return res.status(400).json({ error: "amountInr exceeds the campaign's eligible remaining funds" });
+      }
+      if (error instanceof Error && error.message === "CAMPAIGN_NOT_ELIGIBLE") {
+        return res.status(409).json({ error: "Disbursements can only be requested for ACTIVE campaigns" });
+      }
+      throw error;
+    }
 
     await writeAuditLog({
       actorType: AuditActorType.USER,
@@ -915,12 +953,13 @@ export const signAttestation = async (
           return res.status(422).json({
             error: "BENEFICIARY_ID_REQUIRED",
             message:
-              "This campaign requires beneficiary verification. Please enter the beneficiary wallet ID.",
+              "This campaign requires beneficiary verification. Please enter the Beneficiary ID.",
           });
         }
 
-        const submittedHash = HashService.hmacSha512(
-          typeof beneficiaryId === "string" ? beneficiaryId.trim() : "",
+        const submittedHash = HashService.beneficiaryIdVerifier(
+          typeof beneficiaryId === "string" ? beneficiaryId : "",
+          donation.campaignId,
           requireEnvironmentVariable("BENEFICIARY_HMAC_SECRET"),
         );
 
@@ -941,7 +980,7 @@ export const signAttestation = async (
           return res.status(422).json({
             error: "BENEFICIARY_MISMATCH",
             message:
-              "The beneficiary ID you entered does not match the one registered for this campaign. Please verify and try again. This mismatch has been logged.",
+              "The Beneficiary ID does not match this campaign. Please verify it and try again.",
           });
         }
         // TODO: Phase 4 - Store this verification on-chain
@@ -1084,7 +1123,7 @@ export const uploadDisbursementProof = [
         return res.status(400).json({ error: "Combined size of all files exceeds the 10 MB limit" });
       }
 
-      const storageBucket = "test-bucket";
+      const storageBucket = process.env.TRACEIT_PROOF_BUCKET?.trim() || "test-bucket";
       const storageService = new StorageService(storageBucket);
       
       const allFilesToProcess = [...files];

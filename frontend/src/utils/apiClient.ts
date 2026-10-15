@@ -669,6 +669,14 @@ export const apiService = {
     //Change any to AdminPendingDisbursement to fix LINT error
     getPendingMilestones: () =>
       get<AdminPendingDisbursement[]>("/admin/disbursements/pending"),
+    getDisbursements: (status?: string) =>
+      get<DisbursementResponse[]>(
+        `/admin/disbursements${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+      ),
+    confirmManualTransfer: (disbursementId: string) =>
+      post<{ message: string; disbursement: DisbursementResponse }>(
+        `/admin/disbursements/${disbursementId}/mark-settled`,
+      ),
 
     approveAttestation: (attestationId: string) =>
       post(`/admin/attestations/${attestationId}/approve`),

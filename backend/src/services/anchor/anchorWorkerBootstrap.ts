@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { Connection, Keypair } from "@solana/web3.js";
+import { Keypair } from "@solana/web3.js";
 
 import { prisma } from "../../db/prisma.js";
 import { AnchorBatchScheduler, AnchorBatchService } from "./anchorBatchService.js";
@@ -10,10 +10,11 @@ import {
   assertAnchorSchemaReady,
 } from "./prismaAnchorBatchRepository.js";
 import { SolanaAnchorAdapter } from "./solanaAnchorAdapter.js";
+import { createSolanaConnection } from "../solanaRpc.js";
 
 export interface AnchorRuntime {
   start(): void;
-  processOneBatch(batchId: string): Promise<"IDLE" | "PROCESSED">;
+  processOneBatch(batchId: string): Promise<"IDLE" | "HANDLED" | "FAILED">;
   stop(): Promise<void>;
 }
 
@@ -83,7 +84,7 @@ export async function createAnchorRuntimeFromEnvironment(
     }
 
     const authority = Keypair.fromSecretKey(Uint8Array.from(secretKey));
-    const connection = new Connection(rpcUrl, "confirmed");
+    const connection = createSolanaConnection(rpcUrl, "confirmed");
     const adapter = new SolanaAnchorAdapter(connection, authority, "confirmed");
     const publisher = new AnchorService(adapter, {
       programId,

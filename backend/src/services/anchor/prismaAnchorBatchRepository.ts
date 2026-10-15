@@ -205,7 +205,7 @@ export class PrismaAnchorBatchRepository implements AnchorBatchRepository {
             "claimExpiresAt" = CASE WHEN ${releaseClaim} THEN NULL ELSE "claimExpiresAt" END
         WHERE "id" = ${id}
           AND "claimToken" = ${transition.claimToken}
-          AND "claimExpiresAt" > CURRENT_TIMESTAMP
+          AND "claimExpiresAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
       `;
       if (updated !== 1) throw new AnchorClaimLostError(id);
 

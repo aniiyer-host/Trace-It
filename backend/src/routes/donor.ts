@@ -35,6 +35,12 @@ import {
   monetaryInputSchema,
   parseInrAmount,
 } from "../utils/money.js";
+import { verifyProvenanceEvents } from "../services/provenanceChainService.js";
+import {
+  createReadOnlyAnchorVerifier,
+  verifyPersistedAnchor,
+  type DonationAnchorVerification,
+} from "../services/integrity/donationAnchorVerification.js";
 
 // ---------------------------------------------------------------------------
 // GET /api/donor/dashboard
@@ -739,29 +745,103 @@ export const getDonationAnchors = async (
     });
     if (!donation) return res.status(404).json({ error: "Donation not found" });
 
-    const events = await prisma.provenanceEvent.findMany({
+    const [events, allEvents] = await Promise.all([prisma.provenanceEvent.findMany({
       where: {
         entityType: "Donation",
         entityId: donationId,
       },
       orderBy: { id: "asc" },
       select: {
+        id: true,
         eventType: true,
+        entityType: true,
+        entityId: true,
+        amountInr: true,
+        ngoId: true,
+        campaignId: true,
+        occurredAt: true,
+        canonicalPayload: true,
         payloadHash: true,
+        previous_hash: true,
         chainHash: true,
         anchorStatus: true,
         anchorBatchId: true,
         anchorBatch: {
           select: {
+            id: true,
+            batchKey: true,
             status: true,
             auditRoot: true,
+            startSequence: true,
+            endSequence: true,
+            eventCount: true,
             solanaTxSignature: true,
             anchorPda: true,
             anchoredAt: true,
           },
         },
       },
-    });
+    }), prisma.provenanceEvent.findMany({
+      orderBy: { id: "asc" },
+      select: {
+        id: true,
+        eventType: true,
+        entityType: true,
+        entityId: true,
+        amountInr: true,
+        ngoId: true,
+        campaignId: true,
+        occurredAt: true,
+        canonicalPayload: true,
+        payloadHash: true,
+        previous_hash: true,
+        chainHash: true,
+        anchorBatchId: true,
+      },
+    })]);
+
+    const localVerification = verifyProvenanceEvents(allEvents);
+    const chain = createReadOnlyAnchorVerifier();
+    const batchVerification = new Map<string, Promise<Awaited<ReturnType<typeof verifyPersistedAnchor>>>>();
+    for (const event of events) {
+      const batch = event.anchorBatch;
+      if (batch && event.anchorBatchId && !batchVerification.has(event.anchorBatchId)) {
+        const batchEvents = allEvents.filter((candidate) => candidate.anchorBatchId === event.anchorBatchId);
+        batchVerification.set(event.anchorBatchId, verifyPersistedAnchor(batch as never, batchEvents as never, chain));
+      }
+    }
+
+    const verificationByEvent = new Map<string, DonationAnchorVerification>();
+    await Promise.all(events.map(async (event) => {
+      const provenance: DonationAnchorVerification["provenance"] = event.chainHash === null
+        ? { status: "UNAVAILABLE", reason: "This legacy event has no provenance chain hash." }
+        : localVerification.valid
+          ? { status: "PASSED" }
+          : { status: "FAILED", reason: "At least one stored event failed the local provenance-chain integrity check." };
+      const attestationSignature: DonationAnchorVerification["attestationSignature"] = {
+        status: "UNAVAILABLE",
+        reason: "Attestation records do not have a cryptographic signature field or verifier in this application.",
+      };
+      const batch = event.anchorBatch;
+      if (!batch || !event.anchorBatchId) {
+        verificationByEvent.set(event.id.toString(), {
+          provenance,
+          batchRoot: { status: "NOT_APPLICABLE", reason: "This event has not been assigned to an anchor batch." },
+          anchorStatus: event.anchorStatus,
+          onChainRecord: { status: "NOT_APPLICABLE" },
+          transaction: { status: "NOT_APPLICABLE" },
+          attestationSignature,
+        });
+        return;
+      }
+      const batchResult = await batchVerification.get(event.anchorBatchId)!;
+      verificationByEvent.set(event.id.toString(), {
+        provenance,
+        ...batchResult,
+        anchorStatus: batch.status,
+        attestationSignature,
+      });
+    }));
 
     return res.json({
       anchors: events.map((event) => ({
@@ -775,6 +855,7 @@ export const getDonationAnchors = async (
         transactionSignature: event.anchorBatch?.solanaTxSignature ?? null,
         anchorPda: event.anchorBatch?.anchorPda ?? null,
         anchoredAt: event.anchorBatch?.anchoredAt?.toISOString() ?? null,
+        verification: verificationByEvent.get(event.id.toString()),
       })),
     });
   } catch (err) {

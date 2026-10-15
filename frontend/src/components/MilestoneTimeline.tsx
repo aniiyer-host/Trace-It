@@ -89,13 +89,16 @@ export function MilestoneTimeline({ milestones, className }: Props) {
 
                                     {(ms.disbursementStatus === 'PENDING' ||
                                         ms.disbursementStatus === 'APPROVED' ||
+                                        ms.disbursementStatus === 'SENT' ||
                                         (!ms.disbursementStatus &&
                                             ms.status === 'disbursed' &&
                                             !ms.approvedAt)) && (
                                         <div className="flex items-center gap-2 mt-2">
                                             <Loader2 className="h-3 w-3 animate-spin text-primary" />
                                             <span className="text-sm text-primary">
-                                                Awaiting fund transfer...
+                                                {ms.disbursementStatus === 'SENT'
+                                                    ? 'Awaiting Fund Transfer'
+                                                    : 'Awaiting transfer confirmation...'}
                                             </span>
                                         </div>
                                     )}
@@ -107,7 +110,7 @@ export function MilestoneTimeline({ milestones, className }: Props) {
                                                 className="h-2 w-2 rounded-full bg-trust-green"
                                             />
                                             <span className="text-sm text-trust-green font-medium">
-                                                Funds transferred successfully
+                                                Funds Transferred Successfully
                                             </span>
                                         </div>
                                     )}

@@ -312,6 +312,26 @@ export default function NGODashboard() {
     void loadNgoData();
   }, [user, fetchNgoData, fetchPendingAttestations]);
 
+  const hasUnfinishedDisbursement = ngoCampaigns.some((campaign) =>
+    campaign.milestones.some((milestone) =>
+      milestone.disbursementStatus === "APPROVED" || milestone.disbursementStatus === "SENT",
+    ),
+  );
+  useEffect(() => {
+    if (!hasUnfinishedDisbursement) return;
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") void fetchNgoData();
+    };
+    const timer = window.setInterval(() => {
+      refreshIfVisible();
+    }, 5_000);
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+    };
+  }, [hasUnfinishedDisbursement, fetchNgoData]);
+
   /*
    * OLD CODE PRESERVED (Commented):
    * The old handleApprove called the admin-only endpoint from NGO dashboard, causing 403 Forbidden.
@@ -370,6 +390,14 @@ export default function NGODashboard() {
   });
 
   const selectedCampaignObj = ngoCampaigns.find((c) => c.id === selectedView);
+  const selectedHasOutstandingDisbursement = selectedCampaignObj?.milestones.some((milestone) =>
+    ["PENDING", "APPROVED", "SENT"].includes(milestone.disbursementStatus || ""),
+  ) ?? false;
+  const selectedEligibleFunds = selectedCampaignObj
+    ? Math.max(0, selectedCampaignObj.raisedAmount - selectedCampaignObj.milestones
+      .filter((milestone) => !["REJECTED", "FAILED"].includes(milestone.disbursementStatus || ""))
+      .reduce((sum, milestone) => sum + Number(milestone.targetAmount || 0), 0))
+    : 0;
 
   const actionNavItems = [
     ...Object.entries(pendingAttestations).map(([key, attestation]) => ({
@@ -783,21 +811,16 @@ export default function NGODashboard() {
                             </div>
                           )}
                         {milestone.status === "disbursed" && (
-                          // <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-foreground/5 border border-foreground/10 text-sm font-medium text-foreground/70">
-                          //   <Clock className="h-4 w-4 text-primary animate-pulse" />
-                          //   Awaiting fund transfer
-                          // </div>
-
                           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-foreground/5 border border-foreground/10 text-sm font-medium text-foreground/70">
-                            {["SENT", "SETTLED"].includes(milestone.disbursementStatus || "") ? (
+                            {milestone.disbursementStatus === "SETTLED" ? (
                               <>
                                 <span aria-hidden="true" className="h-2 w-2 rounded-full bg-trust-green" />
-                                <span className="text-trust-green">Funds transferred successfully</span>
+                                <span className="text-trust-green">Funds Transferred Successfully</span>
                               </>
                             ) : (
                               <>
                                 <Clock className="h-4 w-4 text-primary animate-pulse" />
-                                Awaiting fund transfer
+                                Awaiting Fund Transfer
                               </>
                             )}
                           </div>
@@ -907,16 +930,28 @@ export default function NGODashboard() {
                     Request campaign funds, then attach proof for admin review.
                   </p>
                 </div>
-                {!selectedCampaignObj.milestones.some(
-                  (milestone) => milestone.status === "allocated",
-                ) && (
+                <div className="flex flex-col items-start sm:items-end gap-1">
                   <Button
                     onClick={() => setDisbursementOpen(true)}
                     variant="primary"
+                    disabled={
+                      selectedCampaignObj.status !== "ACTIVE" ||
+                      selectedHasOutstandingDisbursement ||
+                      selectedEligibleFunds <= 0
+                    }
                   >
                     Request Disbursement
                   </Button>
-                )}
+                  {selectedCampaignObj.status !== "ACTIVE" ? (
+                    <span className="text-xs text-muted-foreground">Only active campaigns can request funds.</span>
+                  ) : selectedHasOutstandingDisbursement ? (
+                    <span className="text-xs text-muted-foreground">A request is awaiting review, approval, or transfer. You can request again after it reaches a terminal status.</span>
+                  ) : selectedEligibleFunds <= 0 ? (
+                    <span className="text-xs text-muted-foreground">No eligible campaign funds remain.</span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Eligible remaining funds: ₹{selectedEligibleFunds.toLocaleString()}</span>
+                  )}
+                </div>
               </div>
 
               {/* Top Stats Grid (No dividers, spatial tension) */}

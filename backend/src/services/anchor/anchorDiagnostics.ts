@@ -7,7 +7,7 @@ export function formatAnchorOperatorError(
 ): string {
   const detail = error instanceof Error
     ? `${error.name}: ${error.message}${error.stack ? `\n${error.stack.split("\n").slice(1).join("\n")}` : ""}`
-    : `Anchor processing failed: ${String(error)}`;
+    : `Anchor processing failed: ${typeof error === "string" ? error : JSON.stringify(error) ?? String(error)}`;
   const secrets = Object.entries(environment)
     .filter(([name, value]) => SENSITIVE_ENV_NAME.test(name) && Boolean(value))
     .map(([, value]) => value!.trim())

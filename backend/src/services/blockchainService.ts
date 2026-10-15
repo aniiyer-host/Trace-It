@@ -2,6 +2,7 @@ import {
   Connection,
   Keypair,
   PublicKey,
+  Transaction,
   clusterApiUrl,
   Commitment,
 } from '@solana/web3.js';
@@ -9,6 +10,7 @@ import * as anchor from '@coral-xyz/anchor';
 import { HashService } from './hashService';
 import path from 'path';
 import fs from 'fs';
+import { createSolanaConnection, waitForSignatureConfirmation } from './solanaRpc.js';
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -26,6 +28,20 @@ export interface BlockchainResult {
   success: boolean;
   txHash: string | null;
   error?: string;
+}
+
+class SubmittedTransactionConfirmationError extends Error {
+  constructor(readonly signature: string, cause: unknown) {
+    super(
+      `Transaction ${signature} was submitted but its confirmation result is ambiguous: ${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause },
+    );
+    this.name = 'SubmittedTransactionConfirmationError';
+  }
+}
+
+function submittedSignature(error: unknown): string | null {
+  return error instanceof SubmittedTransactionConfirmationError ? error.signature : null;
 }
 
 export interface DonationOnChainData {
@@ -95,9 +111,9 @@ export class BlockchainService {
     commitment?: Commitment;
   }) {
     // Connection
-    this.connection = new Connection(
+    this.connection = createSolanaConnection(
       config.rpcUrl || clusterApiUrl('devnet'),
-      config.commitment || 'confirmed'
+      config.commitment || 'confirmed',
     );
 
     // Wallet
@@ -236,7 +252,7 @@ export class BlockchainService {
       }
 
       // 6. Submit the transaction
-      const tx = await this.program.methods
+      const transaction = await this.program.methods
         .recordDonation(
           params.donationId,
           donorIdHash,
@@ -252,7 +268,8 @@ export class BlockchainService {
           authority: this.wallet.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
-        .rpc({ commitment: 'confirmed' });
+        .transaction();
+      const tx = await this.submitProgramTransaction(transaction);
 
       return { success: true, txHash: tx };
     } catch (error: any) {
@@ -272,7 +289,7 @@ export class BlockchainService {
       console.error('[BlockchainService] recordDonation failed:', error);
       return {
         success: false,
-        txHash: null,
+        txHash: submittedSignature(error),
         error: error.message || 'Unknown blockchain error',
       };
     }
@@ -298,20 +315,21 @@ export class BlockchainService {
         this.programId
       );
 
-      const tx = await this.program.methods
+      const transaction = await this.program.methods
         .updateDonationStatus(donationId, newStatus)
         .accounts({
           donationRecord: donationPda,
           authority: this.wallet.publicKey,
         })
-        .rpc({ commitment: 'confirmed' });
+        .transaction();
+      const tx = await this.submitProgramTransaction(transaction);
 
       return { success: true, txHash: tx };
     } catch (error: any) {
       console.error('[BlockchainService] updateDonationStatus failed:', error);
       return {
         success: false,
-        txHash: null,
+        txHash: submittedSignature(error),
         error: error.message || 'Unknown blockchain error',
       };
     }
@@ -402,6 +420,34 @@ export class BlockchainService {
     return balance / 1e9; // Convert lamports to SOL
   }
 
+  private async submitProgramTransaction(transaction: Transaction): Promise<string> {
+    const latest = await this.connection.getLatestBlockhash('confirmed');
+    transaction.feePayer = this.wallet.publicKey;
+    transaction.recentBlockhash = latest.blockhash;
+    transaction.lastValidBlockHeight = latest.lastValidBlockHeight;
+    transaction.sign(this.wallet);
+    const signature = anchor.utils.bytes.bs58.encode(transaction.signature!);
+
+    try {
+      await this.connection.sendRawTransaction(transaction.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+        maxRetries: 0,
+      });
+      const confirmation = await waitForSignatureConfirmation(
+        this.connection,
+        signature,
+        'confirmed',
+      );
+      if (confirmation.err) {
+        throw new Error(`transaction ${signature} failed: ${JSON.stringify(confirmation.err)}`);
+      }
+      return signature;
+    } catch (error) {
+      throw new SubmittedTransactionConfirmationError(signature, error);
+    }
+  }
+
   /**
    * Register an NGO on-chain.
    * Called after NGO approval in the backend.
@@ -419,14 +465,15 @@ export class BlockchainService {
         this.programId
       );
 
-      const tx = await this.program.methods
+      const transaction = await this.program.methods
         .registerNgo(params.ngoId, params.metadataHash)
         .accounts({
           ngoRecord: ngoPda,
           authority: this.wallet.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
-        .rpc({ commitment: 'confirmed' });
+        .transaction();
+      const tx = await this.submitProgramTransaction(transaction);
 
       return { success: true, txHash: tx };
     } catch (error: any) {
@@ -439,7 +486,7 @@ export class BlockchainService {
       console.error('[BlockchainService] registerNgo failed:', error);
       return {
         success: false,
-        txHash: null,
+        txHash: submittedSignature(error),
         error: error.message || 'Unknown blockchain error',
       };
     }
@@ -462,7 +509,7 @@ export class BlockchainService {
         this.programId
       );
 
-      const tx = await this.program.methods
+      const transaction = await this.program.methods
         .registerCohort(params.cohortId, params.ngoId, params.metadataHash)
         .accounts({
           cohortRecord: cohortPda,
@@ -470,14 +517,15 @@ export class BlockchainService {
           authority: this.wallet.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
-        .rpc({ commitment: 'confirmed' });
+        .transaction();
+      const tx = await this.submitProgramTransaction(transaction);
 
       return { success: true, txHash: tx };
     } catch (error: any) {
       console.error('[BlockchainService] registerCohort failed:', error);
       return {
         success: false,
-        txHash: null,
+        txHash: submittedSignature(error),
         error: error.message || 'Unknown blockchain error',
       };
     }
@@ -500,7 +548,7 @@ export class BlockchainService {
         this.programId
       );
 
-      const tx = await this.program.methods
+      const transaction = await this.program.methods
         .recordDisbursement(
           params.disbursementId,
           params.ngoId,
@@ -516,14 +564,15 @@ export class BlockchainService {
           authority: this.wallet.publicKey,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
-        .rpc({ commitment: 'confirmed' });
+        .transaction();
+      const tx = await this.submitProgramTransaction(transaction);
 
       return { success: true, txHash: tx };
     } catch (error: any) {
       console.error('[BlockchainService] recordDisbursement failed:', error);
       return {
         success: false,
-        txHash: null,
+        txHash: submittedSignature(error),
         error: error.message || 'Unknown blockchain error',
       };
     }

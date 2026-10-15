@@ -7,7 +7,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, Shield } from "lucide-react";
+import { Copy, Loader2, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiService } from "@/utils/apiClient";
 import type { Donation, Attestation, DonationAnchorStatus } from "@/types";
@@ -26,7 +26,7 @@ function describeAnchorState(anchor: DonationAnchorStatus): string {
     anchor.batchStatus === "CONFIRMED" &&
     isValidSolanaSignature(anchor.transactionSignature)
   ) {
-    return "Anchor batch confirmed (persisted status; not independently rechecked)";
+    return "Anchor batch confirmed (Trace-It persisted status)";
   }
   if (anchor.status === "FAILED") return "Anchoring failed; this event is not confirmed";
   if (anchor.status === "PENDING") return "Waiting to be batched; not confirmed";
@@ -75,6 +75,25 @@ function isValidSolanaSignature(signature: string | null): signature is string {
   return byteLength + leadingZeroBytes === 64;
 }
 
+function HelpText({ children }: { children: string }) {
+  return <details className="relative inline-block align-middle"><summary aria-label="Explain this term" className="ml-1 inline-flex h-5 w-5 cursor-pointer list-none items-center justify-center rounded-full border border-border text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">i</summary><span className="absolute left-0 top-full z-20 mt-1 w-64 max-w-[calc(100vw-3rem)] rounded-md border border-border bg-popover p-3 text-xs font-normal text-popover-foreground shadow-md">{children}</span></details>;
+}
+
+function CopyValue({ label, value }: { label: string; value: string }) {
+  const { toast } = useToast();
+  return <div className="flex min-w-0 items-start gap-2"><span className="min-w-0 break-all">{value}</span><Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0" aria-label={`Copy ${label}`} onClick={async () => { try { await navigator.clipboard.writeText(value); toast({ title: `${label} copied` }); } catch { toast({ title: "Could not copy value", variant: "destructive" }); } }}><Copy className="h-3.5 w-3.5" /></Button></div>;
+}
+
+function checkLabel(status?: string): string {
+  switch (status) {
+    case "PASSED": return "Passed";
+    case "FAILED": return "Failed";
+    case "PENDING": return "Pending";
+    case "NOT_APPLICABLE": return "Not applicable";
+    default: return "Unavailable";
+  }
+}
+
 export default function AttestationVerificationDialog({
   donation,
   open,
@@ -116,7 +135,7 @@ export default function AttestationVerificationDialog({
 
       toast({
         title: result.length > 0 ? "Attestation record found" : "Anchor status found",
-        description: "These are persisted Trace-It records. This screen does not independently verify blockchain state or the underlying real-world claims.",
+        description: "Persisted records are shown with separate integrity checks where evidence is available. No underlying real-world claim is verified.",
       });
     } catch (error) {
       console.error("Failed to verify attestation:", error);
@@ -132,8 +151,8 @@ export default function AttestationVerificationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl border border-border bg-card shadow-sm">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-border bg-card p-0 shadow-sm">
+        <DialogHeader className="shrink-0 border-b border-border px-6 py-5 pr-12">
         <DialogTitle className="text-xl">Donation and anchor records</DialogTitle>
           <DialogDescription>
           Load persisted records for this donation. Opening this dialog does not verify integrity or query Solana.
@@ -141,91 +160,25 @@ export default function AttestationVerificationDialog({
         </DialogHeader>
 
         {attestations.length > 0 || anchors.length > 0 ? (
-          <div className="space-y-6 p-6">
-            {attestations.map((attestation) => (
-              <div key={attestation.id} className="space-y-4">
-                <div className="flex items-center space-x-4">
-                  <div>
-                    <h3 className="flex items-center gap-2 font-semibold text-trust-green">
-                      <span
-                        aria-hidden="true"
-                        className="h-2 w-2 rounded-full bg-trust-green"
-                      />
-                      Attestation Record Found
-                    </h3>
-                    <p className="text-muted-foreground">
-                      This attestation record exists in the Trace-It database.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <p className="font-medium">Attestation Details:</p>
-                    <div className="space-y-2 text-sm">
-                      <p>
-                        <strong>Attestation ID:</strong> {attestation.id}
-                      </p>
-                      <p>
-                        <strong>Type:</strong>{" "}
-                        {attestation.type.toUpperCase() === "RECEIPT"
-                          ? "Receipt Confirmation"
-                          : "Delivery Confirmation"}
-                      </p>
-                      <p>
-                        <strong>Status:</strong> {attestation.status}
-                      </p>
-                      <p>
-                        <strong>Timestamp:</strong>{" "}
-                        {new Date(attestation.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <p className="font-medium">Attestation Statement:</p>
-                    <p className="text-muted-foreground bg-muted/50 p-4 rounded">
-                      This record is stored in the Trace-It database.
-                    </p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <p className="font-medium">Verification Information:</p>
-                    <div className="space-y-2 text-sm">
-                      <p>
-                        <strong>Database Status:</strong>{" "}
-                        <span className="inline-flex items-center gap-2 text-trust-green">
-                          <span
-                            aria-hidden="true"
-                            className="h-2 w-2 rounded-full bg-trust-green"
-                          />
-                          Record found
-                        </span>
-                      </p>
-                      <p>
-                        <strong>Integrity:</strong> This lookup confirms database
-                        existence only.
-                      </p>
-                      <p>
-                        <strong>Not verified:</strong> No cryptographic signature
-                        or blockchain anchor was checked.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button
-                    onClick={() => onOpenChange(false)}
-                    className="w-full md:w-auto"
-                  >
-                    Close
-                  </Button>
-                </div>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-4">
+            <section className="rounded-md border border-border bg-muted/20 p-4" aria-label="Verification status">
+              <h3 className="font-semibold">Persisted records found <HelpText>Trace-It returned database records. This does not independently verify a signature, blockchain state, or real-world claim.</HelpText></h3>
+              <p className="mt-1 text-sm text-muted-foreground">The records were found in Trace-It. Checks below report local hash consistency and, when configured evidence is available, an independent Devnet account and transaction check. Attestation signatures and real-world claims are not verified.</p>
+            </section>
+            <section className="space-y-3" aria-label="Attestation records">
+              <h3 className="font-semibold">Attestations <HelpText>An attestation is a stored confirmation associated with a donation workflow stage; the record itself is not independent verification.</HelpText></h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+              {attestations.map((attestation) => (
+                <article key={attestation.id} className="min-w-0 rounded-md border border-border p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="font-medium">{attestation.type.toUpperCase() === "RECEIPT" ? "Receipt confirmation" : "Delivery confirmation"}</h4><span className="rounded border border-border px-2 py-0.5 text-xs">{attestation.status}</span></div>
+                  <p className="mt-1 text-xs text-muted-foreground">Record found · {new Date(attestation.createdAt).toLocaleString()}</p>
+                  <details className="mt-2 text-sm"><summary className="cursor-pointer text-primary">Technical details</summary><div className="mt-2 space-y-2"><p className="font-medium">Attestation ID</p><CopyValue label="Attestation ID" value={attestation.id} /></div></details>
+                </article>
+              ))}
               </div>
-            ))}
+            </section>
             <section className="space-y-3 rounded-md border border-border p-4" aria-label="Blockchain anchor status">
-              <h3 className="font-semibold">Blockchain anchor status</h3>
+              <h3 className="font-semibold">Blockchain anchor records <HelpText>An anchor submits a cryptographic value to the configured blockchain; this screen displays persisted status and does not recheck the chain.</HelpText></h3>
               {anchors.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No chained provenance proof was returned for this donation.
@@ -234,25 +187,24 @@ export default function AttestationVerificationDialog({
                 <div className="space-y-4">
                   {anchors.map((anchor, index) => {
                     return (
-                      <div className="space-y-1 text-sm" key={`${anchor.eventType}-${anchor.batchId ?? index}`}>
+                      <div className="min-w-0 rounded-md bg-muted/30 p-3 text-sm" key={`${anchor.eventType}-${anchor.batchId ?? index}`}>
                         <p><strong>Event:</strong> {anchor.eventType}</p>
-                        <p className="break-all"><strong>Payload hash:</strong> {anchor.payloadHash}</p>
-                        <p className="break-all"><strong>Chain hash:</strong> {anchor.chainHash ?? "Unavailable (legacy event)"}</p>
                         <p><strong>Status:</strong> {describeAnchorState(anchor)}</p>
                         {anchor.anchoredAt && <p><strong>Recorded at:</strong> {new Date(anchor.anchoredAt).toLocaleString()}</p>}
+                        {anchor.verification && <div className="mt-2 rounded border border-border bg-card p-3"><p className="font-medium">Independent checks <HelpText>These checks validate stored hashes and query configured blockchain data. They do not prove an underlying real-world claim.</HelpText></p><dl className="mt-2 grid gap-1 text-xs sm:grid-cols-2"><div><dt>Provenance hashes</dt><dd>{checkLabel(anchor.verification.provenance.status)}</dd></div><div><dt>Batch root</dt><dd>{checkLabel(anchor.verification.batchRoot.status)}</dd></div><div><dt>On-chain anchor record</dt><dd>{checkLabel(anchor.verification.onChainRecord.status)}</dd></div><div><dt>Transaction</dt><dd>{checkLabel(anchor.verification.transaction.status)}</dd></div><div><dt>Attestation signature</dt><dd>{checkLabel(anchor.verification.attestationSignature.status)}</dd></div></dl>{[anchor.verification.provenance, anchor.verification.batchRoot, anchor.verification.onChainRecord, anchor.verification.transaction, anchor.verification.attestationSignature].filter((check) => check.reason).map((check, reasonIndex) => <p key={reasonIndex} className="mt-1 text-xs text-muted-foreground">{check.reason}</p>)}</div>}
+                        <details className="mt-2"><summary className="cursor-pointer">Hashes and transaction details</summary><div className="mt-2 space-y-2"><div><p className="font-medium">Payload hash <HelpText>Fingerprint of the canonical provenance event representation; it does not establish that the event is true.</HelpText></p><CopyValue label="Payload hash" value={anchor.payloadHash} /></div><div><p className="font-medium">Chain hash <HelpText>SHA-512 of this event payload hash and the preceding chain hash.</HelpText></p><CopyValue label="Chain hash" value={anchor.chainHash ?? "Unavailable (legacy event)"} /></div>
                         {anchor.transactionSignature && isValidSolanaSignature(anchor.transactionSignature) && (
-                          <p>
-                            <strong>Transaction:</strong>{" "}
-                            <a
+                          <div>
+                            <p className="font-medium">Transaction signature <HelpText>Identifier used to locate this transaction in the blockchain explorer; it does not verify associated application data.</HelpText></p><a
                               className="break-all text-primary underline underline-offset-2"
                               href={`https://explorer.solana.com/tx/${encodeURIComponent(anchor.transactionSignature)}?cluster=devnet`}
                               target="_blank"
                               rel="noreferrer"
                             >
-                              {anchor.transactionSignature}
-                            </a>
-                          </p>
-                        )}
+                              <span className="break-all">{anchor.transactionSignature}</span>
+                            </a><CopyValue label="Transaction signature" value={anchor.transactionSignature} />
+                          </div>
+                        )}</div></details>
                         {anchor.transactionSignature && !isValidSolanaSignature(anchor.transactionSignature) && (
                           <p className="text-destructive">The returned transaction reference is invalid; no Explorer link is shown.</p>
                         )}
@@ -261,18 +213,11 @@ export default function AttestationVerificationDialog({
                   })}
                 </div>
               )}
-              <p className="text-xs text-muted-foreground">
-                Status comes from Trace-It&apos;s database. An on-chain digest commits to recorded event data; it does not prove the event&apos;s real-world claims.
-              </p>
+              <p className="text-xs text-muted-foreground">Anchor lifecycle status is persisted by Trace-It. The separate checks above query Devnet when the batch and RPC evidence are available; they do not establish that the underlying event occurred.</p>
             </section>
-            {attestations.length === 0 && (
-              <div className="flex justify-end">
-                <Button onClick={() => onOpenChange(false)}>Close</Button>
-              </div>
-            )}
           </div>
         ) : (
-          <div className="space-y-6 p-6">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-6">
             {verifying ? (
               <div className="flex items-center justify-center space-x-4">
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -337,32 +282,18 @@ export default function AttestationVerificationDialog({
                   </ol>
                 </div>
 
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => onOpenChange(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={verifyAttestation}
-                    disabled={verifying}
-                    className="w-full md:w-auto"
-                  >
-                    {verifying ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Verifying...
-                      </>
-                    ) : (
-                      hasChecked || loadError ? "Retry record lookup" : "Load records"
-                    )}
-                  </Button>
-                </div>
               </div>
             )}
           </div>
         )}
+        <div className="flex shrink-0 justify-end gap-2 border-t border-border bg-card px-6 py-3">
+          {(attestations.length > 0 || anchors.length > 0) ? <Button onClick={() => onOpenChange(false)}>Close</Button> : <>
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                  <Button onClick={verifyAttestation} disabled={verifying}>
+                    {verifying ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</> : hasChecked || loadError ? "Retry record lookup" : "Load records"}
+                  </Button>
+                </>}
+        </div>
       </DialogContent>
     </Dialog>
   );

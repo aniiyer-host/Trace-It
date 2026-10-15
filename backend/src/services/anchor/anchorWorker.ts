@@ -1,4 +1,5 @@
 import type { AnchorResult, AnchorResultStatus } from "./anchorTypes.js";
+import { formatAnchorOperatorError } from "./anchorDiagnostics.js";
 import {
   DEFAULT_ANCHOR_WORKER_POLICY,
   type AnchorAuthorityMonitor,
@@ -14,7 +15,12 @@ import {
 const NOOP_LOGGER: AnchorWorkerLogger = {
   info: () => undefined,
   warn: () => undefined,
-  error: () => undefined,
+  error: (event, fields) => {
+    const diagnostic = typeof fields.diagnostic === "string"
+      ? fields.diagnostic
+      : formatAnchorOperatorError(fields);
+    console.error(`[Blockchain] ${event}\n${diagnostic}`);
+  },
 };
 
 const NOOP_METRICS: AnchorWorkerMetrics = {
@@ -74,7 +80,7 @@ export class AnchorWorker {
     await this.runPromise;
   }
 
-  async runOnce(batchId?: string): Promise<"IDLE" | "PROCESSED"> {
+  async runOnce(batchId?: string): Promise<"IDLE" | "HANDLED" | "FAILED"> {
     if (batchId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(batchId)) {
       throw new Error("a valid anchor batch ID is required");
     }
@@ -102,27 +108,30 @@ export class AnchorWorker {
     } catch (error) {
       // A persistence failure deliberately leaves the lease/state intact. A
       // later worker recovers it and reconciles on-chain state before sending.
+      if (batchId !== undefined) throw error;
       this.logger.error("anchor_worker_persistence_failure", {
         batchId: batch.id,
         claimedFromStatus: batch.claimedFromStatus,
         error: errorMessage(error),
+        diagnostic: formatAnchorOperatorError(error),
       });
-      // Selected runs are operator initiated: let the caller report the actual
-      // failure and exit unsuccessfully. The background worker remains resilient.
-      if (batchId !== undefined) throw error;
+      return "FAILED";
     } finally {
       stopHeartbeat();
     }
-    return "PROCESSED";
+    return "HANDLED";
   }
 
   private async runLoop(): Promise<void> {
     while (!this.abortController.signal.aborted) {
       try {
         const outcome = await this.runOnce();
-        if (outcome === "IDLE") await delay(this.policy.pollIntervalMs, this.abortController.signal);
+        if (outcome !== "HANDLED") await delay(this.policy.pollIntervalMs, this.abortController.signal);
       } catch (error) {
-        this.logger.error("anchor_worker_loop_failure", { error: errorMessage(error) });
+        this.logger.error("anchor_worker_loop_failure", {
+          error: errorMessage(error),
+          diagnostic: formatAnchorOperatorError(error),
+        });
         await delay(this.policy.pollIntervalMs, this.abortController.signal);
       }
     }
@@ -174,22 +183,13 @@ export class AnchorWorker {
       const transition = this.transition(batch, batch.attemptCount, result, {
         reconciliationCount,
       });
-      if (reconciliationCount >= this.policy.reconciliationChecksBeforeResubmit) {
-        await this.scheduleRetry(
-          batch,
-          {
-            ...transition,
-            transactionSignature: undefined,
-            clearTransactionSignature: true,
-          },
-          "anchor absent after bounded reconciliation",
-        );
-      } else {
-        await this.repository.markReconciliationRequired(batch.id, {
-          ...transition,
-          nextAttemptAt: this.nextAttemptAt(reconciliationCount),
-        });
-      }
+      // An absent PDA cannot prove an ambiguous transaction was never
+      // broadcast. Keep reconciling; never turn this state into a resend.
+      await this.repository.markReconciliationRequired(batch.id, {
+        ...transition,
+        error: result.error ?? "anchor is not visible yet; automatic resubmission is disabled for ambiguous submissions",
+        nextAttemptAt: this.nextAttemptAt(reconciliationCount),
+      });
       return;
     }
     await this.handleResult(batch, result, batch.attemptCount + 1, false);
@@ -225,8 +225,9 @@ export class AnchorWorker {
       return;
     }
     if (result.status === "RETRYABLE_RPC_FAILURE" || result.status === "RETRYABLE_BLOCKHASH_FAILURE") {
-      // Once a transaction may have been sent, an RPC result is ambiguous.
-      if (submissionStarted && result.signature) {
+      // A generic RPC error while submitting may mean the send was accepted
+      // but its response was lost, even when no signature was returned.
+      if (submissionStarted && result.status === "RETRYABLE_RPC_FAILURE") {
         await this.repository.markReconciliationRequired(batch.id, {
           ...transition,
           nextAttemptAt: this.nextAttemptAt(Math.max(1, attemptCount)),
@@ -359,6 +360,7 @@ export class AnchorWorker {
           this.logger.error("anchor_worker_claim_renewal_failed", {
             batchId: batch.id,
             error: errorMessage(error),
+            diagnostic: formatAnchorOperatorError(error),
           });
         });
     }, Math.max(1, Math.floor(this.policy.leaseMs / 3)));
@@ -378,7 +380,6 @@ function validatePolicy(policy: AnchorWorkerPolicy): void {
     policy.baseRetryDelayMs <= 0 ||
     policy.maxRetryDelayMs < policy.baseRetryDelayMs ||
     policy.maxAttempts <= 0 ||
-    policy.reconciliationChecksBeforeResubmit <= 0 ||
     policy.jitterRatio < 0 ||
     policy.jitterRatio > 1
   ) {

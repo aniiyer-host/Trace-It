@@ -32,6 +32,8 @@ export interface ActivityItem {
   id: string;
   title: string;
   description: string;
+  beneficiaryName?: string;
+  beneficiaryDescription?: string;
   timeAgo: string;
   status?: string;
   statusColor?: string;
@@ -132,6 +134,14 @@ export interface DonationAnchorStatus {
   transactionSignature: string | null;
   anchorPda: string | null;
   anchoredAt: string | null;
+  verification?: {
+    provenance: { status: "PASSED" | "FAILED" | "PENDING" | "UNAVAILABLE" | "NOT_APPLICABLE"; reason?: string };
+    batchRoot: { status: "PASSED" | "FAILED" | "PENDING" | "UNAVAILABLE" | "NOT_APPLICABLE"; reason?: string };
+    anchorStatus: string;
+    onChainRecord: { status: "PASSED" | "FAILED" | "PENDING" | "UNAVAILABLE" | "NOT_APPLICABLE"; reason?: string };
+    transaction: { status: "PASSED" | "FAILED" | "PENDING" | "UNAVAILABLE" | "NOT_APPLICABLE"; reason?: string };
+    attestationSignature: { status: "PASSED" | "FAILED" | "PENDING" | "UNAVAILABLE" | "NOT_APPLICABLE"; reason?: string };
+  };
 }
 
 export interface WalletState {

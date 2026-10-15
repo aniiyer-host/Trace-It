@@ -13,6 +13,7 @@ import {
   AnchorAdapterError,
   type AnchorBatch,
 } from "./anchorTypes.js";
+import { waitForSignatureConfirmation } from "../solanaRpc.js";
 
 export interface AnchorChainAdapter {
   getAccountInfo(address: PublicKey): Promise<AccountInfo<Buffer> | null>;
@@ -30,6 +31,8 @@ export class SolanaAnchorAdapter implements AnchorChainAdapter {
     private readonly connection: Connection,
     private readonly authority: Keypair,
     private readonly commitment: Commitment = "confirmed",
+    private readonly confirmationPollIntervalMs = 1_000,
+    private readonly confirmationTimeoutMs = 60_000,
   ) {}
 
   getAccountInfo(address: PublicKey): Promise<AccountInfo<Buffer> | null> {
@@ -94,18 +97,11 @@ export class SolanaAnchorAdapter implements AnchorChainAdapter {
           maxRetries: 0,
         },
       );
-      const confirmation = await this.connection.confirmTransaction(
-        {
-          signature,
-          blockhash: latest.blockhash,
-          lastValidBlockHeight: latest.lastValidBlockHeight,
-        },
-        this.commitment,
-      );
-      if (confirmation.value.err) {
+      const confirmation = await this.waitForConfirmation(signature);
+      if (confirmation.err) {
         throw new AnchorAdapterError(
           "PROGRAM",
-          `anchor transaction was rejected: ${JSON.stringify(confirmation.value.err)}`,
+          `anchor transaction was rejected: ${JSON.stringify(confirmation.err)}`,
           undefined,
           signature,
         );
@@ -126,6 +122,27 @@ export class SolanaAnchorAdapter implements AnchorChainAdapter {
         throw new AnchorAdapterError("BLOCKHASH", message, error);
       }
       throw new AnchorAdapterError("RPC", message, error);
+    }
+  }
+
+  private async waitForConfirmation(signature: string): Promise<{ err: unknown | null }> {
+    try {
+      return await waitForSignatureConfirmation(
+        this.connection,
+        signature,
+        this.commitment,
+        {
+          pollIntervalMs: this.confirmationPollIntervalMs,
+          timeoutMs: this.confirmationTimeoutMs,
+        },
+      );
+    } catch (error) {
+      throw new AnchorAdapterError(
+        "CONFIRMATION",
+        `submission ${signature} has an ambiguous confirmation result: ${error instanceof Error ? error.message : String(error)}`,
+        error,
+        signature,
+      );
     }
   }
 }

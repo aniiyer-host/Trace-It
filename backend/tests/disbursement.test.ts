@@ -444,6 +444,22 @@ describe("Disbursement API Integration Tests", () => {
   });
 
   test("POST /api/admin/disburse/:id/approve - approve final disbursement auto-closes campaign", async () => {
+    // Earlier tests left one completed request and one unrelated approval.
+    // Model their terminal outcomes so exactly ₹6,000 remains committed and
+    // this final ₹4,000 request is eligible under the one-outstanding rule.
+    await prisma.disbursement.update({
+      where: { id: disbursementId },
+      data: { status: DisbursementStatus.SETTLED },
+    });
+    await prisma.disbursement.updateMany({
+      where: {
+        campaignId,
+        id: { not: disbursementId },
+        status: { in: [DisbursementStatus.PENDING, DisbursementStatus.APPROVED, DisbursementStatus.SENT] },
+      },
+      data: { status: DisbursementStatus.REJECTED },
+    });
+
     // Create another disbursement for the remaining 4000
     const disRes = await request(app)
       .post("/api/charity/disburse")
@@ -452,6 +468,7 @@ describe("Disbursement API Integration Tests", () => {
         campaignId,
         amountInr: 4000,
       });
+    expect(disRes.status).toBe(201);
     const finalDisbursementId = disRes.body.id;
 
     // Approve it
@@ -490,12 +507,17 @@ describe("Disbursement API Integration Tests", () => {
     expect(res.status).toBe(200);
     expect(res.body.donations).toBeDefined();
     
-    // Find a donation that has attestations
-    const donation = res.body.donations.find((d: any) => d.attestations && d.attestations.length > 0);
+    // Select the allocation created by this suite's first approval. Other
+    // later attestations are unordered in the dashboard response.
+    const donation = res.body.donations.find((d: any) =>
+      d.attestations?.some((a: any) => a.disbursementId === disbursementId),
+    );
     expect(donation).toBeDefined();
     
-    // Verify the structure of the attestation
-    const attestation = donation.attestations[0];
+    const attestation = donation.attestations.find((a: any) =>
+      a.disbursementId === disbursementId && a.type === "RECEIPT",
+    );
+    expect(attestation).toBeDefined();
     expect(attestation.type).toBe("RECEIPT");
     expect(attestation).toHaveProperty("disbursementId");
     expect(attestation.disbursementId).toBeTruthy(); // Should not be null

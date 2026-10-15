@@ -101,6 +101,9 @@ describe("Charity API Integration Tests", () => {
         title: "Save the Turtles",
         description: "Help us save sea turtles",
         targetAmount: 50000,
+        beneficiaryName: "Turtle rescue beneficiary",
+        beneficiaryDescription: "Private test assistance",
+        beneficiaryPan: "ABCDE1234F",
       });
 
     expect(res.status).toBe(201);

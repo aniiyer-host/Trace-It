@@ -101,7 +101,7 @@ describe("AnchorWorker", () => {
     });
     repo.markConfirmed.mockImplementation(async () => { order.push("confirmed"); });
 
-    await expect(worker(repo, chain).runOnce()).resolves.toBe("PROCESSED");
+    await expect(worker(repo, chain).runOnce()).resolves.toBe("HANDLED");
 
     expect(order).toEqual(["submitting", "send", "confirmed"]);
     expect(repo.markConfirmed).toHaveBeenCalledWith(
@@ -120,7 +120,7 @@ describe("AnchorWorker", () => {
     const repo = repository();
     const chain = publisher();
 
-    await expect(worker(repo, chain).runOnce(batchId)).resolves.toBe("PROCESSED");
+    await expect(worker(repo, chain).runOnce(batchId)).resolves.toBe("HANDLED");
 
     expect(repo.recoverExpiredClaims).not.toHaveBeenCalled();
     expect(repo.claimNext).toHaveBeenCalledWith("worker-1", NOW, 30_000, batchId);
@@ -241,7 +241,7 @@ describe("AnchorWorker", () => {
     expect(repo.markConfirmed).toHaveBeenCalled();
   });
 
-  it("requires bounded absence checks before making an ambiguous batch retryable", async () => {
+  it("continues reconciling an absent ambiguous submission without enabling resubmission", async () => {
     const repo = repository(claim({
       status: "RECONCILIATION_REQUIRED",
       claimedFromStatus: "RECONCILIATION_REQUIRED",
@@ -250,18 +250,38 @@ describe("AnchorWorker", () => {
     }));
     const chain = publisher();
 
-    await worker(repo, chain, {
-      policy: { reconciliationChecksBeforeResubmit: 3 },
-    }).runOnce();
+    await worker(repo, chain).runOnce();
 
-    expect(repo.markRetryable).toHaveBeenCalledWith(
+    expect(repo.markReconciliationRequired).toHaveBeenCalledWith(
       "batch-1",
       expect.objectContaining({
         reconciliationCount: 3,
-        clearTransactionSignature: true,
+        nextAttemptAt: expect.any(Date),
+        error: expect.stringContaining("automatic resubmission is disabled"),
       }),
     );
+    expect(repo.markRetryable).not.toHaveBeenCalled();
     expect(chain.submitAnchorBatch).not.toHaveBeenCalled();
+  });
+
+  it("reconciles generic submission RPC failures even when no signature was returned", async () => {
+    const repo = repository();
+    const chain = publisher();
+    chain.submitAnchorBatch.mockResolvedValue({
+      status: "RETRYABLE_RPC_FAILURE",
+      error: "connection reset while submitting",
+    });
+
+    await worker(repo, chain).runOnce();
+
+    expect(repo.markReconciliationRequired).toHaveBeenCalledWith(
+      "batch-1",
+      expect.objectContaining({
+        error: "connection reset while submitting",
+        nextAttemptAt: expect.any(Date),
+      }),
+    );
+    expect(repo.markRetryable).not.toHaveBeenCalled();
   });
 
   it("dead-letters a retryable failure after the attempt budget", async () => {
@@ -332,7 +352,7 @@ describe("AnchorWorker", () => {
     };
     repo.markConfirmed.mockRejectedValue(new Error("database unavailable"));
 
-    await expect(worker(repo, chain, { logger }).runOnce()).resolves.toBe("PROCESSED");
+    await expect(worker(repo, chain, { logger }).runOnce()).resolves.toBe("FAILED");
 
     expect(repo.markSubmitting).toHaveBeenCalled();
     expect(repo.markRetryable).not.toHaveBeenCalled();
@@ -342,7 +362,7 @@ describe("AnchorWorker", () => {
     );
   });
 
-  it("propagates persistence failures for a selected batch so the runner exits unsuccessfully", async () => {
+  it("propagates a failed SUBMITTING write for a selected batch before any submission", async () => {
     const repo = repository();
     const chain = publisher();
     const failure = new Error("selected persistence failure");
@@ -350,6 +370,33 @@ describe("AnchorWorker", () => {
 
     await expect(worker(repo, chain).runOnce("02468100-6f1a-44a1-b3b1-87ba538a00b8"))
       .rejects.toBe(failure);
+    expect(chain.submitAnchorBatch).not.toHaveBeenCalled();
+  });
+
+  it("does not report a selected batch handled when confirmed-state persistence fails", async () => {
+    const repo = repository();
+    const chain = publisher();
+    const failure = new Error("confirmation persistence failed");
+    repo.markConfirmed.mockRejectedValue(failure);
+
+    await expect(worker(repo, chain).runOnce("02468100-6f1a-44a1-b3b1-87ba538a00b8"))
+      .rejects.toBe(failure);
+    expect(chain.submitAnchorBatch).toHaveBeenCalledTimes(1);
+    expect(repo.markConfirmed).toHaveBeenCalledWith(
+      "batch-1",
+      expect.objectContaining({ transactionSignature: "signature-1", anchorPda: "anchor-pda" }),
+    );
+  });
+
+  it("propagates claim failures without invoking the publisher", async () => {
+    const repo = repository();
+    const chain = publisher();
+    const failure = new Error("claim database unavailable");
+    repo.claimNext.mockReset().mockRejectedValue(failure);
+
+    await expect(worker(repo, chain).runOnce("02468100-6f1a-44a1-b3b1-87ba538a00b8"))
+      .rejects.toBe(failure);
+    expect(chain.verifyAnchorRecord).not.toHaveBeenCalled();
     expect(chain.submitAnchorBatch).not.toHaveBeenCalled();
   });
 

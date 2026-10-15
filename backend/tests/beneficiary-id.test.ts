@@ -25,10 +25,7 @@ describe("Beneficiary ID Feature", () => {
   let adminId: string;
   let donorId: string;
   let campaignId: string;
-  let rawBeneficiaryId = HashService.beneficiaryIdFromPan(
-    "ABCDE1234F",
-    process.env.BENEFICIARY_HMAC_SECRET!,
-  );
+  let rawBeneficiaryId: string;
   let ngoToken: string;
   let otherNgoToken: string;
   let adminToken: string;
@@ -87,7 +84,7 @@ describe("Beneficiary ID Feature", () => {
       .post("/api/charity/campaigns")
       .set("Authorization", `Bearer ${ngoToken}`)
       .send({
-        title: "Test Beneficiary",
+        title: "Identity fixture campaign",
         description: "Testing",
         targetAmount: 1000,
         category: "Test",
@@ -105,6 +102,11 @@ describe("Beneficiary ID Feature", () => {
     expect(res.body.id).toBeDefined();
 
     campaignId = res.body.id;
+    rawBeneficiaryId = HashService.beneficiaryIdFromPan(
+      "ABCDE1234F",
+      process.env.BENEFICIARY_HMAC_SECRET!,
+      campaignId,
+    );
   });
 
   // afterAll(async () => {
@@ -165,12 +167,14 @@ describe("Beneficiary ID Feature", () => {
       expect(res.body.beneficiaryPan).toBeUndefined();
     });
 
-    it("persists private details and the keyed identifier on the campaign without storing PAN", async () => {
+    it("persists encrypted private details and a campaign-bound verifier without storing PAN", async () => {
       const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } });
-      expect(campaign.beneficiaryName).toBe("Test Beneficiary");
-      expect(campaign.beneficiaryDescription).toBe("Private assistance test description");
+      expect(campaign.beneficiaryName).toBeNull();
+      expect(campaign.beneficiaryDescription).toBeNull();
+      expect(HashService.decryptSensitiveValue(campaign.beneficiaryNameEncrypted!)).toBe("Test Beneficiary");
+      expect(HashService.decryptSensitiveValue(campaign.beneficiaryDescriptionEncrypted!)).toBe("Private assistance test description");
       expect(campaign.beneficiaryIdHash).toBe(
-        HashService.hmacSha512(rawBeneficiaryId, process.env.BENEFICIARY_HMAC_SECRET!),
+        HashService.beneficiaryIdVerifier(rawBeneficiaryId, campaignId, process.env.BENEFICIARY_HMAC_SECRET!),
       );
       expect(JSON.stringify(campaign)).not.toContain("ABCDE1234F");
     });
@@ -185,7 +189,52 @@ describe("Beneficiary ID Feature", () => {
       res.body.forEach((c: any) => {
         expect(c.beneficiaryIdEncrypted).toBeUndefined();
         expect(c.beneficiaryIdHash).toBeUndefined();
+        expect(c.beneficiaryNameEncrypted).toBeUndefined();
+        expect(c.beneficiaryDescriptionEncrypted).toBeUndefined();
       });
+      expect(res.body.find((c: any) => c.id === campaignId)).toMatchObject({
+        beneficiaryName: "Test Beneficiary",
+        beneficiaryDescription: "Private assistance test description",
+      });
+
+      const donorCampaigns = await request(app)
+        .get("/api/charity/campaigns")
+        .set("Authorization", `Bearer ${donorToken}`);
+      expect(donorCampaigns.status).toBe(403);
+
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { status: "PENDING_APPROVAL" },
+      });
+      const adminCampaigns = await request(app)
+        .get("/api/admin/campaigns/pending")
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(adminCampaigns.status).toBe(200);
+      expect(adminCampaigns.body.find((c: any) => c.id === campaignId)).toMatchObject({
+        beneficiaryName: "Test Beneficiary",
+        beneficiaryDescription: "Private assistance test description",
+      });
+      const adminCampaign = adminCampaigns.body.find((c: any) => c.id === campaignId);
+      expect(adminCampaign.beneficiaryNameEncrypted).toBeUndefined();
+      expect(adminCampaign.beneficiaryDescriptionEncrypted).toBeUndefined();
+      await prisma.campaign.update({ where: { id: campaignId }, data: { status: "DRAFT" } });
+    });
+
+    it("rejects invalid PAN input without returning the submitted PAN", async () => {
+      const pan = "NOTAPAN123";
+      const res = await request(app)
+        .post("/api/charity/campaigns")
+        .set("Authorization", `Bearer ${ngoToken}`)
+        .send({
+          title: "Invalid PAN",
+          description: "Testing",
+          targetAmount: 1000,
+          beneficiaryName: "Test Beneficiary",
+          beneficiaryDescription: "Private assistance test description",
+          beneficiaryPan: pan,
+        });
+      expect(res.status).toBe(400);
+      expect(JSON.stringify(res.body)).not.toContain(pan);
     });
   });
 
@@ -206,6 +255,10 @@ describe("Beneficiary ID Feature", () => {
 
       expect(res.status).toBe(404);
       expect(res.body.error).toContain("access denied");
+      const privateCampaigns = await request(app)
+        .get("/api/charity/campaigns")
+        .set("Authorization", `Bearer ${otherNgoToken}`);
+      expect(privateCampaigns.body).toEqual([]);
     });
 
     it("returns 403 for ADMIN role", async () => {
@@ -225,7 +278,7 @@ describe("Beneficiary ID Feature", () => {
     });
   });
 
-  it("requires the generated campaign ID during the delivery attestation", async () => {
+  it("requires the campaign-bound Beneficiary ID during the delivery attestation", async () => {
     const donation = await prisma.donation.create({
       data: {
         donorId,
@@ -262,5 +315,73 @@ describe("Beneficiary ID Feature", () => {
       await prisma.attestation.deleteMany({ where: { donationId: donation.id } });
       await prisma.donation.delete({ where: { id: donation.id } });
     }
+  });
+
+  it("rejects an otherwise valid ID copied from a different campaign", async () => {
+    const secondCampaign = await request(app)
+      .post("/api/charity/campaigns")
+      .set("Authorization", `Bearer ${ngoToken}`)
+      .send({
+        title: "Second test campaign",
+        description: "Testing cross-campaign binding",
+        targetAmount: 1000,
+        beneficiaryName: "Test Beneficiary",
+        beneficiaryDescription: "Private assistance test description",
+        beneficiaryPan: "ABCDE1234F",
+      });
+    expect(secondCampaign.status).toBe(201);
+    const secondBeneficiaryId = HashService.beneficiaryIdFromPan(
+      "ABCDE1234F",
+      process.env.BENEFICIARY_HMAC_SECRET!,
+      secondCampaign.body.id,
+    );
+    expect(secondBeneficiaryId).not.toBe(rawBeneficiaryId);
+
+    const donation = await prisma.donation.create({
+      data: {
+        donorId,
+        ngoId,
+        campaignId: secondCampaign.body.id,
+        amount: 100,
+        paymentMethod: "UPI",
+        status: "SUCCESS",
+      },
+    });
+    const attestation = await prisma.attestation.create({
+      data: { donationId: donation.id, type: "DELIVERY", requestedBy: donorId },
+    });
+    try {
+      const response = await request(app)
+        .post("/api/charity/attestations")
+        .set("Authorization", `Bearer ${ngoToken}`)
+        .send({
+          donationId: donation.id,
+          attestationId: attestation.id,
+          type: "DELIVERY",
+          beneficiaryId: rawBeneficiaryId,
+        });
+      expect(response.status).toBe(422);
+      expect(response.body.error).toBe("BENEFICIARY_MISMATCH");
+    } finally {
+      await prisma.attestation.deleteMany({ where: { donationId: donation.id } });
+      await prisma.donation.delete({ where: { id: donation.id } });
+      await prisma.campaign.delete({ where: { id: secondCampaign.body.id } });
+    }
+  });
+
+  it("keeps beneficiary information out of public campaign responses", async () => {
+    await prisma.campaign.update({ where: { id: campaignId }, data: { status: "ACTIVE" } });
+    const res = await request(app).get(`/api/public/campaigns/${campaignId}`);
+    expect(res.status).toBe(200);
+    const campaign = res.body.campaign ?? res.body;
+    expect(campaign.beneficiaryName).toBeUndefined();
+    expect(campaign.beneficiaryDescription).toBeUndefined();
+    expect(campaign.beneficiaryNameEncrypted).toBeUndefined();
+    expect(campaign.beneficiaryDescriptionEncrypted).toBeUndefined();
+    expect(JSON.stringify(res.body)).not.toContain("ABCDE1234F");
+    expect(JSON.stringify(res.body)).not.toContain("beneficiaryId");
+    const listResponse = await request(app).get("/api/public/campaigns");
+    expect(JSON.stringify(listResponse.body)).not.toContain("Private assistance test description");
+    expect(JSON.stringify(listResponse.body)).not.toContain("beneficiaryName");
   });
 });

@@ -8,6 +8,7 @@ const REQUIRED_PRODUCTION_SECRETS = [
   "GMAIL_APP_PASSWORD",
   "EMAIL_FROM",
   "BENEFICIARY_HMAC_SECRET",
+  "AES_BENEFICIARY_KEY",
   "AES_DOCUMENT_KEY",
 ] as const;
 
@@ -58,6 +59,9 @@ export function validateEnvironment(
 
   if (!/^[a-fA-F0-9]{64}$/.test(environment.AES_DOCUMENT_KEY?.trim() ?? "")) {
     throw new Error("AES_DOCUMENT_KEY must be a 64-character hex key");
+  }
+  if (!/^[a-fA-F0-9]{64}$/.test(environment.AES_BENEFICIARY_KEY?.trim() ?? "")) {
+    throw new Error("AES_BENEFICIARY_KEY must be a 64-character hex key");
   }
 }
 

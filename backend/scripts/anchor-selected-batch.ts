@@ -23,7 +23,9 @@ try {
   const result = await runtime.processOneBatch(batchId);
   console.log(result === "IDLE"
     ? "Selected anchor batch was not eligible; no processing occurred."
-    : "Selected anchor batch handler returned. This does not confirm transaction submission or database persistence; inspect the batch status and signature.");
+    : result === "FAILED"
+      ? "Selected anchor batch processing failed; inspect the sanitized diagnostic above."
+      : "Selected anchor batch was handled. This does not confirm an on-chain anchor; verify persisted status, PDA, and signature.");
 } catch (error) {
   console.error(formatAnchorOperatorError(error));
   process.exitCode = 1;

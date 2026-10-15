@@ -12,7 +12,7 @@ describe("validateEnvironment", () => {
         JWT_REFRESH_SECRET: "",
       }),
     ).toThrow(
-      "Missing required production environment variables: JWT_REFRESH_SECRET, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET, GMAIL_USER, GMAIL_APP_PASSWORD, EMAIL_FROM, AES_DOCUMENT_KEY",
+      "Missing required production environment variables: JWT_REFRESH_SECRET, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET, GMAIL_USER, GMAIL_APP_PASSWORD, EMAIL_FROM, BENEFICIARY_HMAC_SECRET, AES_BENEFICIARY_KEY, AES_DOCUMENT_KEY",
     );
   });
 
@@ -28,6 +28,8 @@ describe("validateEnvironment", () => {
         GMAIL_USER: "sender@gmail.com",
         GMAIL_APP_PASSWORD: "gmail-app-password",
         EMAIL_FROM: "Trace-It <noreply@example.org>",
+        BENEFICIARY_HMAC_SECRET: "beneficiary-hmac-secret",
+        AES_BENEFICIARY_KEY: "b".repeat(64),
         AES_DOCUMENT_KEY: "a".repeat(64),
       }),
     ).not.toThrow();
@@ -49,6 +51,8 @@ describe("validateEnvironment", () => {
         GMAIL_USER: "not-an-email",
         GMAIL_APP_PASSWORD: "app-password",
         EMAIL_FROM: "Trace-It <noreply@example.org>",
+        BENEFICIARY_HMAC_SECRET: "beneficiary-hmac-secret",
+        AES_BENEFICIARY_KEY: "b".repeat(64),
         AES_DOCUMENT_KEY: "a".repeat(64),
       }),
     ).toThrow("GMAIL_USER must be a valid email address for Gmail SMTP");

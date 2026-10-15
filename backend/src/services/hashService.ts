@@ -1,12 +1,21 @@
 import crypto from 'crypto';
 
 export class HashService {
-  static beneficiaryIdFromPan(pan: string, key: string): string {
+  static normalizePan(pan: string): string {
     const normalizedPan = pan.trim().toUpperCase();
     if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(normalizedPan)) {
       throw new Error('Invalid PAN format');
     }
-    return `BEN-${HashService.hmacSha256(normalizedPan, key)}`;
+    return normalizedPan;
+  }
+
+  static beneficiaryIdFromPan(pan: string, key: string, campaignId: string): string {
+    const normalizedPan = HashService.normalizePan(pan);
+    return `BEN-${HashService.hmacSha256(`traceit:beneficiary-id:v1:${campaignId}:${normalizedPan}`, key)}`;
+  }
+
+  static beneficiaryIdVerifier(id: string, campaignId: string, key: string): string {
+    return HashService.hmacSha256(`traceit:beneficiary:v1:${campaignId}:${id.trim()}`, key);
   }
   /**
    * Compute SHA-512 hash of a buffer.
@@ -35,39 +44,46 @@ export class HashService {
     return crypto.createHmac('sha256', key).update(data).digest('hex');
   }
 
-  /**
-   * Encrypt the raw beneficiary ID using AES-256-CBC
-   * @param id - The raw beneficiary ID string
-   * @returns Base64 string of IV + Ciphertext
-   */
   static encryptBeneficiaryId(id: string): string {
-    const keyString = process.env.AES_BENEFICIARY_KEY;
-    if (!keyString) throw new Error('AES_BENEFICIARY_KEY is not defined in environment variables');
-    const key = Buffer.from(keyString, 'hex');
-    if (key.length !== 32) throw new Error('AES_BENEFICIARY_KEY must be a 64-character hex string (32 bytes)');
-
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-    
-    const encrypted = Buffer.concat([cipher.update(id, 'utf8'), cipher.final()]);
-    return Buffer.concat([iv, encrypted]).toString('base64');
+    return HashService.encryptSensitiveValue(id);
   }
 
-  /**
-   * Decrypt the beneficiary ID using AES-256-CBC
-   * @param encryptedBase64 - The Base64 string (IV + Ciphertext)
-   * @returns The decrypted raw beneficiary ID string
-   */
   static decryptBeneficiaryId(encryptedBase64: string): string {
+    return HashService.decryptSensitiveValue(encryptedBase64);
+  }
+
+  static encryptSensitiveValue(value: string): string {
     const keyString = process.env.AES_BENEFICIARY_KEY;
     if (!keyString) throw new Error('AES_BENEFICIARY_KEY is not defined in environment variables');
     const key = Buffer.from(keyString, 'hex');
     if (key.length !== 32) throw new Error('AES_BENEFICIARY_KEY must be a 64-character hex string (32 bytes)');
 
-    const data = Buffer.from(encryptedBase64, 'base64');
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+    return `v1:${Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString('base64')}`;
+  }
+
+  static decryptSensitiveValue(encryptedValue: string): string {
+    const keyString = process.env.AES_BENEFICIARY_KEY;
+    if (!keyString) throw new Error('AES_BENEFICIARY_KEY is not defined in environment variables');
+    const key = Buffer.from(keyString, 'hex');
+    if (key.length !== 32) throw new Error('AES_BENEFICIARY_KEY must be a 64-character hex string (32 bytes)');
+
+    if (encryptedValue.startsWith('v1:')) {
+      const data = Buffer.from(encryptedValue.slice(3), 'base64');
+      const iv = data.subarray(0, 12);
+      const tag = data.subarray(12, 28);
+      const ciphertext = data.subarray(28);
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(tag);
+      return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+    }
+
+    // Legacy CBC ciphertext compatibility for IDs created before v1.
+    const data = Buffer.from(encryptedValue, 'base64');
     const iv = data.subarray(0, 16);
     const encrypted = data.subarray(16);
-    
     const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
     const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
     return decrypted.toString('utf8');

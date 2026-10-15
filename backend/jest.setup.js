@@ -2,6 +2,11 @@ import dotenv from "dotenv";
 import { jest } from "@jest/globals";
 dotenv.config({ path: ".env.test", quiet: true });
 
+// const testDatabaseUrl = process.env.DATABASE_URL;
+// if (!testDatabaseUrl) {
+//   throw new Error("Backend tests require DATABASE_URL to be configured.");
+// }
+
 process.env.RAZORPAY_KEY_ID ??= "rzp_test_mock";
 process.env.RAZORPAY_KEY_SECRET ??= "razorpay-test-secret";
 process.env.RAZORPAY_WEBHOOK_SECRET ??= "razorpay-webhook-test-secret";

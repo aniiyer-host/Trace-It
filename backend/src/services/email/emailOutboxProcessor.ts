@@ -9,6 +9,7 @@ const POLL_INTERVAL_MS = 10_000;
 const LOCK_LEASE_MS = 5 * 60_000;
 const MAX_ATTEMPTS = 8;
 const MAX_BACKOFF_MS = 6 * 60 * 60_000;
+const RETRY_JITTER_RATIO = 0.2;
 const MAX_CONFIGURED_JOBS_PER_RUN = 10;
 
 type ClaimedJob = {
@@ -57,6 +58,20 @@ const parsePayload = (value: unknown): OutboxEmail => {
     text: payload.text as string | undefined,
   };
 };
+
+const isPlaceholderAddress = (email: string): boolean => {
+  const domain = email.trim().toLowerCase().split('@').at(-1) ?? '';
+  return domain === 'localhost' || domain.endsWith('.localhost') ||
+    domain.endsWith('.invalid') || domain.endsWith('.test') ||
+    domain === 'example.com' || domain === 'example.net' || domain === 'example.org' ||
+    domain.endsWith('.example');
+};
+
+export function emailRetryDelayMs(attemptCount: number, random = Math.random): number {
+  const base = Math.min(30_000 * 2 ** Math.max(attemptCount - 1, 0), MAX_BACKOFF_MS);
+  const jitter = base * RETRY_JITTER_RATIO * (2 * random() - 1);
+  return Math.max(0, Math.min(MAX_BACKOFF_MS, Math.round(base + jitter)));
+}
 
 export class EmailOutboxProcessor {
   private running = false;
@@ -142,7 +157,18 @@ export class EmailOutboxProcessor {
   private async claimBatch(limit: number): Promise<ClaimedJob[]> {
     return this.database.$transaction((tx) =>
       tx.$queryRaw<ClaimedJob[]>`
-        WITH eligible AS (
+        WITH exhausted AS (
+          UPDATE "email_outbox"
+          SET "status" = 'FAILED'::"EmailOutboxStatus",
+              "lockedAt" = NULL,
+              "lockedBy" = NULL,
+              "lastError" = 'Retry limit reached after the processing lease expired',
+              "updatedAt" = CURRENT_TIMESTAMP
+          WHERE "status" = 'PROCESSING'::"EmailOutboxStatus"
+            AND "lockedAt" <= CURRENT_TIMESTAMP - (${LOCK_LEASE_MS} * INTERVAL '1 millisecond')
+            AND "attemptCount" >= ${MAX_ATTEMPTS}
+          RETURNING "id"
+        ), eligible AS (
           SELECT "id"
           FROM "email_outbox"
           WHERE (
@@ -173,6 +199,10 @@ export class EmailOutboxProcessor {
   private async deliver(job: ClaimedJob): Promise<void> {
     try {
       const payload = parsePayload(job.payload);
+      if (payload.to.some((recipient) => isPlaceholderAddress(recipient.email))) {
+        await this.recordFailure(job, 'Placeholder recipient address; delivery was not attempted', false);
+        return;
+      }
       const response = await this.provider.send({
         ...payload,
         idempotencyKey: job.eventKey,
@@ -213,10 +243,7 @@ export class EmailOutboxProcessor {
       .replace(/\bBearer\s+\S+/gi, 'Bearer [redacted]')
       .replace(/\bre_[A-Za-z0-9_-]+\b/g, '[credential redacted]');
     const isTerminal = !retryable || job.attemptCount >= MAX_ATTEMPTS;
-    const backoffMs = Math.min(
-      30_000 * 2 ** Math.max(job.attemptCount - 1, 0),
-      MAX_BACKOFF_MS,
-    );
+    const backoffMs = emailRetryDelayMs(job.attemptCount);
 
     await this.database.emailOutbox.updateMany({
       where: { id: job.id, status: 'PROCESSING', lockedBy: this.workerId },

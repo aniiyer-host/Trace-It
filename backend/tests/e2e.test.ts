@@ -148,15 +148,68 @@ describe("End-to-End Flow Tests", () => {
           description: "Testing end-to-end flow",
           targetAmount: 10000,
           category: "Test",
+          beneficiaryName: "E2E Test Beneficiary",
+          beneficiaryDescription: "Private E2E assistance reason",
+          beneficiaryPan: "ABCDE1234F",
         });
 
       expect(campaignRes.status).toBe(201);
       campaignId = campaignRes.body.id;
 
-      // Submit campaign for approval
-      await request(app)
+      // NGO submission intentionally makes this campaign ACTIVE.
+      const submitRes = await request(app)
         .post(`/api/charity/campaigns/${campaignId}/submit`)
         .set("Authorization", `Bearer ${ngoToken}`);
+      expect(submitRes.status).toBe(200);
+      expect(submitRes.body.status).toBe(CampaignStatus.ACTIVE);
+
+      // Exercise the existing unlock/reveal API and confirm private details stay
+      // out of the public campaign contract.
+      const revealRes = await request(app)
+        .get(`/api/charity/campaigns/${campaignId}/beneficiary-id`)
+        .set("Authorization", `Bearer ${ngoToken}`);
+      expect(revealRes.status).toBe(200);
+      expect(revealRes.body.beneficiaryId).toMatch(/^BEN-[a-f0-9]{64}$/);
+      const storedCampaign = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } });
+      expect(storedCampaign.beneficiaryName).toBeNull();
+      expect(storedCampaign.beneficiaryDescription).toBeNull();
+      expect(storedCampaign.beneficiaryNameEncrypted).toBeTruthy();
+      expect(storedCampaign.beneficiaryDescriptionEncrypted).toBeTruthy();
+      const publicCampaignRes = await request(app).get(`/api/public/campaigns/${campaignId}`);
+      expect(publicCampaignRes.status).toBe(200);
+      expect(publicCampaignRes.body.beneficiaryName).toBeUndefined();
+      expect(publicCampaignRes.body.beneficiaryDescription).toBeUndefined();
+
+      const deliveryDonation = await prisma.donation.create({
+        data: {
+          donorId: donorUserId,
+          ngoId: ngoUserId,
+          campaignId,
+          amount: 100,
+          paymentMethod: "UPI",
+          status: DonationStatus.SUCCESS,
+        },
+      });
+      const deliveryAttestation = await prisma.attestation.create({
+        data: {
+          donationId: deliveryDonation.id,
+          type: "DELIVERY",
+          requestedBy: donorUserId,
+        },
+      });
+      const deliveryRes = await request(app)
+        .post("/api/charity/attestations")
+        .set("Authorization", `Bearer ${ngoToken}`)
+        .send({
+          donationId: deliveryDonation.id,
+          attestationId: deliveryAttestation.id,
+          type: "DELIVERY",
+          beneficiaryId: revealRes.body.beneficiaryId,
+        });
+      expect(deliveryRes.status).toBe(200);
+      expect(deliveryRes.body.status).toBe("NGO_SIGNED");
+      await prisma.attestation.delete({ where: { id: deliveryAttestation.id } });
+      await prisma.donation.delete({ where: { id: deliveryDonation.id } });
 
       // Admin approves campaign
       await request(app)
@@ -227,6 +280,9 @@ describe("End-to-End Flow Tests", () => {
           description: "Testing donation timeline",
           targetAmount: 10000,
           category: "Test",
+          beneficiaryName: "E2E Test Beneficiary",
+          beneficiaryDescription: "Private E2E assistance reason",
+          beneficiaryPan: "ABCDE1234F",
         });
 
       expect(campaignRes.status).toBe(201);
@@ -459,6 +515,9 @@ describe("End-to-End Flow Tests", () => {
           description: "Testing FCRA report",
           targetAmount: 10000,
           category: "Test",
+          beneficiaryName: "E2E Test Beneficiary",
+          beneficiaryDescription: "Private E2E assistance reason",
+          beneficiaryPan: "ABCDE1234F",
         });
 
       expect(campaignRes.status).toBe(201);
@@ -530,6 +589,9 @@ describe("End-to-End Flow Tests", () => {
           description: "Testing 80G report",
           targetAmount: 10000,
           category: "Test",
+          beneficiaryName: "E2E Test Beneficiary",
+          beneficiaryDescription: "Private E2E assistance reason",
+          beneficiaryPan: "ABCDE1234F",
         });
 
       expect(campaignRes.status).toBe(201);

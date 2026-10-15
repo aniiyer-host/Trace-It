@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '../generated/prisma/client.js';
 import { AttestationStatus, AttestationType, DisbursementStatus } from '../generated/prisma/enums.js';
-import { EmailOutboxProcessor } from '../src/services/email/emailOutboxProcessor.js';
+import { EmailOutboxProcessor, emailRetryDelayMs } from '../src/services/email/emailOutboxProcessor.js';
 import type { EmailProvider } from '../src/services/email/emailProvider.js';
 import { ResendEmailProvider } from '../src/services/email/resendEmailProvider.js';
 import {
@@ -261,7 +261,7 @@ describe('email outbox processor', () => {
   });
 
   const payload = {
-    to: [{ email: 'donor@example.org' as string }] as EmailRecipient[],
+    to: [{ email: 'donor@traceit.org' as string }] as EmailRecipient[],
     subject: 'Donation confirmed',
     text: 'Donation confirmed',
     html: '<p>Donation confirmed</p>',
@@ -340,6 +340,8 @@ describe('email outbox processor', () => {
 
     expect(provider.send).toHaveBeenCalledTimes(1);
     expect(claimedSql).toHaveLength(1);
+    expect(claimedSql[0]).toContain('Retry limit reached after the processing lease expired');
+    expect(claimedSql[0]).toContain('"attemptCount" >=');
     expect(rows).toHaveLength(1);
   });
 
@@ -449,6 +451,30 @@ describe('email outbox processor', () => {
       }),
     }));
   });
+
+  it('marks placeholder recipient jobs failed without contacting the provider', async () => {
+    const updates = jest.fn().mockResolvedValue({ count: 1 });
+    const provider: EmailProvider = { isConfigured: () => true, send: jest.fn() };
+    const jobId = '02468100-6f1a-44a1-b3b1-87ba538a00b8';
+    const processor = makeProcessor(
+      [{ id: jobId, eventKey: 'test', attemptCount: 1, payload: { ...payload, to: [{ email: 'donor@example.org' }] } }],
+      provider,
+      updates,
+      [],
+    );
+
+    await expect(processor.processSelectedJob(jobId)).resolves.toBe(true);
+    expect(provider.send).not.toHaveBeenCalled();
+    expect(updates).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'FAILED', lastError: 'Placeholder recipient address; delivery was not attempted' }),
+    }));
+  });
+
+  it('uses bounded exponential retry delays with jitter', () => {
+    expect(emailRetryDelayMs(1, () => 0)).toBe(24_000);
+    expect(emailRetryDelayMs(1, () => 1)).toBe(36_000);
+    expect(emailRetryDelayMs(20, () => 1)).toBe(6 * 60 * 60_000);
+  });
 });
 
 describe('Gmail SMTP provider', () => {
@@ -463,7 +489,7 @@ describe('Gmail SMTP provider', () => {
     process.env.GMAIL_USER = 'sender@example.org';
     process.env.GMAIL_APP_PASSWORD = 'test-app-password';
     process.env.EMAIL_FROM = 'Trace It <sender@example.org>';
-    const sendMail = jest.fn().mockResolvedValue({ messageId: 'gmail-message-id' });
+    const sendMail = jest.fn().mockResolvedValue({ messageId: 'gmail-message-id', accepted: ['recipient@example.org'], rejected: [] });
     jest.spyOn(nodemailer, 'createTransport').mockReturnValue({ sendMail } as never);
     const provider = new GmailSmtpProvider();
 
@@ -476,16 +502,50 @@ describe('Gmail SMTP provider', () => {
       from: 'Trace It <sender@example.org>',
       to: 'recipient@example.org',
     }));
+    expect(nodemailer.createTransport).toHaveBeenCalledWith(expect.objectContaining({
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 30_000,
+    }));
   });
 
-  it('returns diagnostic codes without persisting SMTP response text', async () => {
+  it('does not mark SMTP delivery successful when recipients were rejected', async () => {
+    process.env.GMAIL_USER = 'sender@example.org';
+    process.env.GMAIL_APP_PASSWORD = 'test-app-password';
+    process.env.EMAIL_FROM = 'sender@example.org';
+    jest.spyOn(nodemailer, 'createTransport').mockReturnValue({
+      sendMail: jest.fn().mockResolvedValue({
+        messageId: 'partial-message-id',
+        accepted: [],
+        rejected: ['recipient@example.org'],
+        response: '550 5.1.1 mailbox unavailable',
+      }),
+    } as never);
+    const provider = new GmailSmtpProvider();
+
+    await expect(provider.send({ to: [{ email: 'recipient@example.org' }], subject: 'Test', text: 'Body' }))
+      .resolves.toEqual({
+        ok: false,
+        error: 'Gmail SMTP did not confirm acceptance of every recipient',
+        retryable: false,
+      });
+  });
+
+  it('retains safe SMTP timeout metadata without persisting response text or recipients', async () => {
     process.env.GMAIL_USER = 'sender@example.org';
     process.env.GMAIL_APP_PASSWORD = 'test-app-password';
     process.env.EMAIL_FROM = 'sender@example.org';
     jest.spyOn(nodemailer, 'createTransport').mockReturnValue({
       sendMail: jest.fn().mockRejectedValue(Object.assign(
-        new Error('SMTP password rejected for recipient@example.org'),
-        { code: 'EAUTH', responseCode: 535 },
+        new Error('SMTP timeout for recipient@example.org; response contained secret text'),
+        {
+          code: 'ETIMEDOUT',
+          originalCode: 'ECONNRESET',
+          responseCode: 421,
+          timeoutType: 'SOCKET_TIMEOUT',
+          command: 'DATA <recipient@example.org>',
+          response: 'private SMTP response',
+        },
       )),
     } as never);
     const provider = new GmailSmtpProvider();
@@ -496,9 +556,49 @@ describe('Gmail SMTP provider', () => {
       text: 'Test body',
     })).resolves.toEqual({
       ok: false,
-      error: 'Gmail SMTP delivery failed (EAUTH/535)',
+      error: 'Gmail SMTP delivery failed (code=ETIMEDOUT originalCode=ECONNRESET responseCode=421 timeoutType=SOCKET_TIMEOUT command=DATA)',
+      retryable: true,
+    });
+  });
+
+  it('classifies permanent authentication and SMTP 5xx errors as non-retryable', async () => {
+    process.env.GMAIL_USER = 'sender@example.org';
+    process.env.GMAIL_APP_PASSWORD = 'test-app-password';
+    process.env.EMAIL_FROM = 'sender@example.org';
+    const sendMail = jest.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('Invalid login'), { code: 'EAUTH', responseCode: 535 }))
+      .mockRejectedValueOnce(Object.assign(new Error('Message rejected'), { code: 'EMESSAGE', responseCode: 550 }));
+    jest.spyOn(nodemailer, 'createTransport').mockReturnValue({ sendMail } as never);
+    const provider = new GmailSmtpProvider();
+    const request = { to: [{ email: 'recipient@example.org' }], subject: 'Test', text: 'Body' };
+
+    await expect(provider.send(request)).resolves.toEqual({
+      ok: false,
+      error: 'Gmail SMTP delivery failed (code=EAUTH responseCode=535)',
       retryable: false,
     });
+    await expect(provider.send(request)).resolves.toEqual({
+      ok: false,
+      error: 'Gmail SMTP delivery failed (code=EMESSAGE responseCode=550)',
+      retryable: false,
+    });
+  });
+
+  it('does not infer a timeout stage when Nodemailer omits timeoutType', async () => {
+    process.env.GMAIL_USER = 'sender@example.org';
+    process.env.GMAIL_APP_PASSWORD = 'test-app-password';
+    process.env.EMAIL_FROM = 'sender@example.org';
+    jest.spyOn(nodemailer, 'createTransport').mockReturnValue({
+      sendMail: jest.fn().mockRejectedValue(Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' })),
+    } as never);
+    const provider = new GmailSmtpProvider();
+
+    await expect(provider.send({ to: [{ email: 'recipient@example.org' }], subject: 'Test', text: 'Body' }))
+      .resolves.toEqual({
+        ok: false,
+        error: 'Gmail SMTP delivery failed (code=ETIMEDOUT)',
+        retryable: true,
+      });
   });
 });
 
@@ -532,6 +632,7 @@ describe('email provider configuration', () => {
         RAZORPAY_KEY_SECRET: 'secret',
         RAZORPAY_WEBHOOK_SECRET: 'webhook',
         AES_DOCUMENT_KEY: 'a'.repeat(64),
+        AES_BENEFICIARY_KEY: 'b'.repeat(64),
         BENEFICIARY_HMAC_SECRET: 'beneficiary-hmac-secret',
       }),
     ).toThrow('GMAIL_USER');
@@ -545,6 +646,7 @@ describe('email provider configuration', () => {
         RAZORPAY_KEY_SECRET: 'secret',
         RAZORPAY_WEBHOOK_SECRET: 'webhook',
         AES_DOCUMENT_KEY: 'a'.repeat(64),
+        AES_BENEFICIARY_KEY: 'b'.repeat(64),
         BENEFICIARY_HMAC_SECRET: 'beneficiary-hmac-secret',
         GMAIL_USER: 'sender@example.org',
         GMAIL_APP_PASSWORD: 'app-password',
@@ -561,6 +663,7 @@ describe('email provider configuration', () => {
         RAZORPAY_KEY_SECRET: 'secret',
         RAZORPAY_WEBHOOK_SECRET: 'webhook',
         AES_DOCUMENT_KEY: 'a'.repeat(64),
+        AES_BENEFICIARY_KEY: 'b'.repeat(64),
         BENEFICIARY_HMAC_SECRET: 'beneficiary-hmac-secret',
         GMAIL_USER: 'sender@example.org',
         GMAIL_APP_PASSWORD: 'app-password',

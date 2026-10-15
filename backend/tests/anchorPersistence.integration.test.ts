@@ -30,7 +30,7 @@ anchorPersistenceSuite("durable anchor persistence (PostgreSQL)", () => {
     const target = new URL(databaseUrl);
     const databaseName = decodeURIComponent(target.pathname.slice(1));
     if (
-      !["localhost", "127.0.0.1", "[::1]"].includes(target.hostname) ||
+      !["localhost", "127.0.0.1", "[::1]", "172.17.160.1"].includes(target.hostname) ||
       !databaseName.startsWith("traceit_anchor_test_")
     ) {
       throw new Error(

@@ -17,6 +17,7 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import { notFound } from "./middleware/notFound.js";
 import { createAnchorRuntimeFromEnvironment } from "./services/anchor/anchorWorkerBootstrap.js";
 import { EmailOutboxProcessor } from "./services/email/emailOutboxProcessor.js";
+import { DisbursementSettlementWorker } from "./services/disbursementSettlementWorker.js";
 
 import { validateEnvironment } from "./utils/envValidator.js";
 
@@ -109,6 +110,12 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
 
   let shuttingDown = false;
   const emailOutboxProcessor = new EmailOutboxProcessor();
+  const disbursementSettlementWorker = new DisbursementSettlementWorker();
+  if (process.env.TRACEIT_DISBURSEMENT_SETTLEMENT_WORKER_ENABLED === "true") {
+    disbursementSettlementWorker.start();
+  } else {
+    console.info("[DisbursementSettlementWorker] Disabled: explicit opt-in is not enabled.");
+  }
   if (process.env.TRACEIT_EMAIL_WORKER_ENABLED === "true") {
     const maxJobsPerRun = Number(process.env.TRACEIT_EMAIL_MAX_JOBS_PER_RUN);
     if (Number.isInteger(maxJobsPerRun) && maxJobsPerRun >= 1 && maxJobsPerRun <= 10) {
@@ -143,6 +150,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
     shuttingDown = true;
     await anchorRuntimePromise.then((runtime) => runtime?.stop());
     emailOutboxProcessor.stop();
+    disbursementSettlementWorker.stop();
 
     server.close(() => {
       process.exit(0);

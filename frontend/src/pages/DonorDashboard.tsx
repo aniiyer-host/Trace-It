@@ -130,6 +130,26 @@ export default function DonorDashboard() {
     loadCampaigns();
   }, [loadCampaigns]);
 
+  const hasUnfinishedDisbursement = campaigns.some((campaign) =>
+    campaign.milestones.some((milestone) =>
+      milestone.disbursementStatus === "APPROVED" || milestone.disbursementStatus === "SENT",
+    ),
+  );
+  useEffect(() => {
+    if (!hasUnfinishedDisbursement) return;
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") void loadCampaigns();
+    };
+    const timer = window.setInterval(() => {
+      refreshIfVisible();
+    }, 5_000);
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+    };
+  }, [hasUnfinishedDisbursement, loadCampaigns]);
+
   //Cause of LINT Error
   // const loadDonations = useCallback(async () => {
   //   if (!user?.id) return;
@@ -528,6 +548,22 @@ export default function DonorDashboard() {
                             <h4 className="text-sm font-bold uppercase tracking-wider text-foreground/50 mb-2">
                               Disbursement {index + 1}
                             </h4>
+                            {(() => {
+                              const status = selectedCampaign.milestones.find(
+                                (milestone) => milestone.id === disbursementId,
+                              )?.disbursementStatus;
+                              if (!status || status === "SETTLED") return null;
+                              return (
+                                <p className="mb-3 text-sm text-muted-foreground" aria-live="polite">
+                                  {status === "SENT" ? "Awaiting Fund Transfer" : "Awaiting transfer confirmation"}
+                                </p>
+                              );
+                            })()}
+                            {selectedCampaign.milestones.find((milestone) => milestone.id === disbursementId)?.disbursementStatus === "SETTLED" && (
+                              <p className="mb-3 text-sm font-medium text-trust-green" aria-live="polite">
+                                Funds Transferred Successfully
+                              </p>
+                            )}
                             <Stepper journey={buildJourney(selectedCampaign, selectedDonation, disbursementId)} />
                           </div>
                         ))}

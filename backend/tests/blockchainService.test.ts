@@ -1,6 +1,6 @@
 import { HashService } from '../src/services/hashService.js';
 import { BlockchainService, OnChainStatus } from '../src/services/blockchainService.js';
-import { PublicKey, Keypair } from '@solana/web3.js';
+import { PublicKey, Keypair, SystemProgram, Transaction } from '@solana/web3.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -61,6 +61,49 @@ describe('BlockchainService & HashService Unit Tests', () => {
       });
 
       expect(service).toBeDefined();
+    });
+
+    it('submits program transactions and confirms with HTTP polling, without Anchor .rpc WebSockets', async () => {
+      const service = new BlockchainService({
+        programId: dummyProgramId,
+        walletKeypairJson: validKeypairBytes,
+        hmacSecret,
+      });
+      const transaction = new Transaction().add(SystemProgram.transfer({
+        fromPubkey: validKeypair.publicKey,
+        toPubkey: Keypair.generate().publicKey,
+        lamports: 1,
+      }));
+      const builder = {
+        accounts: jest.fn().mockReturnThis(),
+        transaction: jest.fn().mockResolvedValue(transaction),
+        rpc: jest.fn().mockRejectedValue(new Error('Anchor .rpc must not be used')),
+      };
+      const confirmTransaction = jest.fn();
+      const getSignatureStatuses = jest.fn().mockResolvedValue({
+        context: { slot: 1 },
+        value: [{ err: null, confirmationStatus: 'confirmed' }],
+      });
+      (service as any).program = {
+        methods: { updateDonationStatus: jest.fn(() => builder) },
+      };
+      (service as any).connection = {
+        getLatestBlockhash: jest.fn().mockResolvedValue({
+          blockhash: PublicKey.default.toBase58(),
+          lastValidBlockHeight: 100,
+        }),
+        sendRawTransaction: jest.fn().mockResolvedValue('provider-signature'),
+        getSignatureStatuses,
+        confirmTransaction,
+      };
+
+      const result = await service.updateDonationStatus('123e4567-e89b-12d3-a456-426614174000', 1);
+
+      expect(result.success).toBe(true);
+      expect(result.txHash).toMatch(/^[1-9A-HJ-NP-Za-km-z]{80,90}$/);
+      expect(builder.rpc).not.toHaveBeenCalled();
+      expect(getSignatureStatuses).toHaveBeenCalledTimes(1);
+      expect(confirmTransaction).not.toHaveBeenCalled();
     });
 
     it('generates correct explorer URLs', () => {

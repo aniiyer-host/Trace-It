@@ -278,9 +278,9 @@ describe("SolanaAnchorAdapter", () => {
         calls.push("send");
         return "signature";
       }),
-      confirmTransaction: jest.fn(async () => {
-        calls.push("confirm");
-        return { context: { slot: 2 }, value: { err: null } };
+      getSignatureStatuses: jest.fn(async () => {
+        calls.push("poll-confirmation");
+        return { context: { slot: 2 }, value: [{ err: null, confirmationStatus: "confirmed" }] };
       }),
     } as unknown as Connection;
     const adapter = new SolanaAnchorAdapter(connection, signer);
@@ -296,7 +296,11 @@ describe("SolanaAnchorAdapter", () => {
       authority: signer.publicKey,
     });
     expect(signature).toBe("signature");
-    expect(calls).toEqual(["blockhash", "simulate", "send", "confirm"]);
+    expect(calls).toEqual(["blockhash", "simulate", "send", "poll-confirmation"]);
+    expect(connection.getSignatureStatuses).toHaveBeenCalledWith(["signature"], {
+      searchTransactionHistory: true,
+    });
+    expect(connection.confirmTransaction).toBeUndefined();
   });
 
   it("classifies an unauthorized preflight simulation without submitting", async () => {
@@ -345,11 +349,9 @@ describe("SolanaAnchorAdapter", () => {
         value: { err: null, logs: [] },
       })),
       sendRawTransaction: jest.fn(async () => "ambiguous-signature"),
-      confirmTransaction: jest.fn(async () => {
-        throw new Error("confirmation timed out");
-      }),
+      getSignatureStatuses: jest.fn(async () => ({ context: { slot: 2 }, value: [null] })),
     } as unknown as Connection;
-    const adapter = new SolanaAnchorAdapter(connection, signer);
+    const adapter = new SolanaAnchorAdapter(connection, signer, "confirmed", 0, 1);
     const value = batch();
     await expect(
       adapter.submitRecordAnchor({
@@ -377,9 +379,9 @@ describe("SolanaAnchorAdapter", () => {
         value: { err: null, logs: [] },
       })),
       sendRawTransaction: jest.fn(async () => "rejected-signature"),
-      confirmTransaction: jest.fn(async () => ({
+      getSignatureStatuses: jest.fn(async () => ({
         context: { slot: 2 },
-        value: { err: { InstructionError: [0, "InvalidAccountData"] } },
+        value: [{ err: { InstructionError: [0, "InvalidAccountData"] }, confirmationStatus: "confirmed" }],
       })),
     } as unknown as Connection;
     const adapter = new SolanaAnchorAdapter(connection, signer);

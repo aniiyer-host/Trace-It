@@ -268,17 +268,21 @@ export default function AttestationSignDialog({
                   Verify Beneficiary
                 </h4>
                 <p className="text-xs text-foreground/60 mt-1">
-                  Enter the wallet ID of the beneficiary you delivered funds to.
+                  Enter the Beneficiary ID you unlocked for this campaign.
                   This must match the ID registered when the campaign was
                   created.
                 </p>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-foreground/80">
-                  Beneficiary Wallet ID
+                  Beneficiary ID
                 </label>
+                <details className="inline-block align-middle">
+                  <summary aria-label="What is a Beneficiary ID?" className="ml-1 inline-flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full border border-border text-[10px] text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">i</summary>
+                  <span className="absolute z-10 mt-1 max-w-xs rounded-md border border-border bg-popover p-3 text-xs font-normal text-popover-foreground shadow-md">A campaign-scoped identifier derived from the beneficiary’s PAN using a server-side keyed hash. It is not the PAN itself.</span>
+                </details>
                 <Input
-                  placeholder="SOL... enter wallet ID"
+                  placeholder="BEN-... paste Beneficiary ID"
                   value={beneficiaryId}
                   onChange={(e) => {
                     setBeneficiaryId(e.target.value);

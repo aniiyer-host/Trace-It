@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useToast } from "@/hooks/use-toast";
 import { formatUSD } from "@/lib/utils";
 import { apiService } from "@/utils/apiClient";
-import type { Campaign, ActionItem, AuditLog } from "@/types";
+import type { Campaign, ActionItem, AuditLog, DisbursementResponse } from "@/types";
 
 function ActionRow({
   item,
@@ -257,6 +257,18 @@ export default function AdminPanel() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [auditLogsLoading, setAuditLogsLoading] = useState(false);
   const [campaignSearch, setCampaignSearch] = useState("");
+  const [awaitingTransfers, setAwaitingTransfers] = useState<DisbursementResponse[]>([]);
+  const [confirmingTransferId, setConfirmingTransferId] = useState<string | null>(null);
+
+  const loadAwaitingTransfers = useCallback(async () => {
+    try {
+      const disbursements = await apiService.admin.getDisbursements("APPROVED");
+      setAwaitingTransfers(disbursements);
+    } catch (error) {
+      console.error("Failed to load approved disbursements:", error);
+      toast({ title: "Could not load disbursements awaiting transfer", variant: "destructive" });
+    }
+  }, [toast]);
 
   const loadAuditLogs = async () => {
     try {
@@ -282,6 +294,7 @@ export default function AdminPanel() {
       loadCampaigns();
       fetchPendingAttestations();
       fetchPendingMilestoneApprovals();
+      void loadAwaitingTransfers();
       fetchPendingCampaigns();
       //   loadAuditLogs();
       void (async () => {
@@ -294,7 +307,30 @@ export default function AdminPanel() {
     fetchPendingAttestations,
     fetchPendingMilestoneApprovals,
     fetchPendingCampaigns,
+    loadAwaitingTransfers,
   ]);
+
+  const handleManualTransferConfirmation = async (disbursementId: string) => {
+    const confirmed = window.confirm(
+      "Only continue if you have already verified that this transfer was made outside Trace-It. This records your manual confirmation; it does not send money.",
+    );
+    if (!confirmed) return;
+
+    setConfirmingTransferId(disbursementId);
+    try {
+      const result = await apiService.admin.confirmManualTransfer(disbursementId);
+      await loadAwaitingTransfers();
+      toast({ title: result.message });
+    } catch (error) {
+      const apiError = error as { response?: { data?: { error?: string } } };
+      toast({
+        title: apiError.response?.data?.error || "Manual transfer confirmation failed",
+        variant: "destructive",
+      });
+    } finally {
+      setConfirmingTransferId(null);
+    }
+  };
 
   const handleApproveCampaign = async (campaignId: string) => {
     setApprovingCampId(campaignId);
@@ -372,6 +408,7 @@ export default function AdminPanel() {
       if (type === "milestone") {
         await approveMilestone(id);
         await fetchPendingMilestoneApprovals();
+        await loadAwaitingTransfers();
         toast({ title: "Disbursement approved!" });
       } else {
         await approveAttestation(id);
@@ -596,6 +633,51 @@ export default function AdminPanel() {
                   />
                 ))
               )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">
+            Approved disbursements awaiting manual transfer confirmation
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Confirm here only after verifying the transfer was made outside Trace-It. This action records your confirmation and starts the five-second settlement delay; it does not transfer funds.
+          </p>
+        </div>
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-sm text-left whitespace-nowrap">
+            <thead>
+              <tr className="border-b border-border/20 text-muted-foreground">
+                <th className="py-3 px-4 font-medium">Campaign</th>
+                <th className="py-3 px-4 font-medium">NGO</th>
+                <th className="py-3 px-4 font-medium text-right">Amount</th>
+                <th className="py-3 px-4 font-medium text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {awaitingTransfers.length === 0 ? (
+                <tr><td colSpan={4} className="py-6 px-4 text-center text-muted-foreground">No approved disbursements are awaiting transfer confirmation.</td></tr>
+              ) : awaitingTransfers.map((disbursement) => (
+                <tr key={disbursement.id} className="border-b border-border/10">
+                  <td className="py-3 px-4">{disbursement.campaign?.title || disbursement.campaignId}</td>
+                  <td className="py-3 px-4 text-muted-foreground">{disbursement.ngo?.organisationName || disbursement.ngoId || "NGO"}</td>
+                  <td className="py-3 px-4 text-right tabular-nums">{formatUSD(Number(disbursement.amountInr))}</td>
+                  <td className="py-3 px-4 text-right">
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      disabled={confirmingTransferId !== null}
+                      onClick={() => void handleManualTransferConfirmation(disbursement.id)}
+                    >
+                      {confirmingTransferId === disbursement.id ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
+                      Record manual confirmation
+                    </Button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

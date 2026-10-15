@@ -93,7 +93,6 @@ export interface AnchorWorkerPolicy {
   maxRetryDelayMs: number;
   jitterRatio: number;
   maxAttempts: number;
-  reconciliationChecksBeforeResubmit: number;
 }
 
 export const DEFAULT_ANCHOR_WORKER_POLICY: AnchorWorkerPolicy = {
@@ -103,5 +102,4 @@ export const DEFAULT_ANCHOR_WORKER_POLICY: AnchorWorkerPolicy = {
   maxRetryDelayMs: 60_000,
   jitterRatio: 0.2,
   maxAttempts: 8,
-  reconciliationChecksBeforeResubmit: 3,
 };
