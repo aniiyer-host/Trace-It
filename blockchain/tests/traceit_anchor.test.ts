@@ -10,6 +10,7 @@ import {
 
 const CONFIG_SEED = Buffer.from("anchor_config");
 const ANCHOR_SEED = Buffer.from("anchor");
+const TEST_ANCHOR_SEED = Buffer.from("test_anchor");
 
 function bytes(length: number, label: string): number[] {
   return Array.from(
@@ -283,6 +284,11 @@ describe("traceit_anchor", () => {
     expect(record.bump).to.equal(bump);
     const accountInfo = await provider.connection.getAccountInfo(recordPda);
     expect(accountInfo?.data.length).to.equal(167);
+    const [testMarkerPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [TEST_ANCHOR_SEED, Buffer.from(batchKey)],
+      ANCHOR_PROGRAM_ID,
+    );
+    expect(await provider.connection.getAccountInfo(testMarkerPda)).to.equal(null);
 
     await expectFailure(() => request.simulate(), "already in use");
     const unchanged = await program.account.anchorRecord.fetch(recordPda);
@@ -307,6 +313,113 @@ describe("traceit_anchor", () => {
         schemaVersion: 1,
       }),
     ).to.equal(false);
+  });
+
+  it("marks synthetic test anchors in a separate linked on-chain account", async () => {
+    const batchKey = bytes(32, "explicit-test-anchor");
+    const auditRoot = bytes(64, "explicit-test-root");
+    const [recordPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [ANCHOR_SEED, Buffer.from(batchKey)],
+      ANCHOR_PROGRAM_ID,
+    );
+    const [markerPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [TEST_ANCHOR_SEED, Buffer.from(batchKey)],
+      ANCHOR_PROGRAM_ID,
+    );
+    const request = program.methods
+      .recordTestAnchor(
+        batchKey,
+        auditRoot,
+        new anchor.BN(42),
+        new anchor.BN(44),
+        3,
+      )
+      .accounts({
+        config: configPda,
+        anchorRecord: recordPda,
+        testMarker: markerPda,
+        authority: bootstrap,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      });
+    await request.simulate();
+    await request.rpc({ commitment: "confirmed" });
+
+    const record = await program.account.anchorRecord.fetch(recordPda);
+    expect(record.batchKey).to.deep.equal(batchKey);
+    expect(record.auditRoot).to.deep.equal(auditRoot);
+    expect(record.startSequence.toString()).to.equal("42");
+    expect(record.endSequence.toString()).to.equal("44");
+    expect(record.eventCount).to.equal(3);
+    expect(record.schemaVersion).to.equal(1);
+    const marker = await program.account.testAnchorMarker.fetch(markerPda);
+    expect(marker.anchorRecord.equals(recordPda)).to.equal(true);
+    expect(marker.batchKey).to.deep.equal(batchKey);
+    expect(marker.markerVersion).to.equal(1);
+    const markerInfo = await provider.connection.getAccountInfo(markerPda);
+    expect(markerInfo?.owner.equals(ANCHOR_PROGRAM_ID)).to.equal(true);
+    expect(markerInfo?.data.length).to.equal(73);
+  });
+
+  it("applies authorization and batch validation to test anchors", async () => {
+    const batchKey = bytes(32, "unauthorized-test-anchor");
+    const [recordPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [ANCHOR_SEED, Buffer.from(batchKey)],
+      ANCHOR_PROGRAM_ID,
+    );
+    const [markerPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [TEST_ANCHOR_SEED, Buffer.from(batchKey)],
+      ANCHOR_PROGRAM_ID,
+    );
+    const request = program.methods
+      .recordTestAnchor(
+        batchKey,
+        bytes(64, "unauthorized-test-root"),
+        new anchor.BN(1),
+        new anchor.BN(2),
+        1,
+      )
+      .accounts({
+        config: configPda,
+        anchorRecord: recordPda,
+        testMarker: markerPda,
+        authority: unauthorized.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([unauthorized]);
+    await expectFailure(
+      () => request.rpc({ commitment: "confirmed" }),
+      "Unauthorized",
+    );
+
+    const invalidBatchKey = bytes(32, "invalid-test-anchor");
+    const [invalidRecordPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [ANCHOR_SEED, Buffer.from(invalidBatchKey)],
+      ANCHOR_PROGRAM_ID,
+    );
+    const [invalidMarkerPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [TEST_ANCHOR_SEED, Buffer.from(invalidBatchKey)],
+      ANCHOR_PROGRAM_ID,
+    );
+    await expectFailure(
+      () =>
+        program.methods
+          .recordTestAnchor(
+            invalidBatchKey,
+            bytes(64, "invalid-test-root"),
+            new anchor.BN(1),
+            new anchor.BN(2),
+            1,
+          )
+          .accounts({
+            config: configPda,
+            anchorRecord: invalidRecordPda,
+            testMarker: invalidMarkerPda,
+            authority: bootstrap,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .simulate(),
+      "CountMismatch",
+    );
   });
 
   it("supports the maximum u64 sequence without overflow", async () => {
@@ -357,6 +470,36 @@ describe("traceit_anchor", () => {
           .accounts({
             config: configPda,
             anchorRecord: recordPda,
+            authority: bootstrap,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .simulate(),
+      "ProgramPaused",
+    );
+
+    const testBatchKey = bytes(32, "paused-test-batch");
+    const [testRecordPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [ANCHOR_SEED, Buffer.from(testBatchKey)],
+      ANCHOR_PROGRAM_ID,
+    );
+    const [testMarkerPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [TEST_ANCHOR_SEED, Buffer.from(testBatchKey)],
+      ANCHOR_PROGRAM_ID,
+    );
+    await expectFailure(
+      () =>
+        program.methods
+          .recordTestAnchor(
+            testBatchKey,
+            bytes(64, "paused-test-root"),
+            new anchor.BN(1),
+            new anchor.BN(1),
+            1,
+          )
+          .accounts({
+            config: configPda,
+            anchorRecord: testRecordPda,
+            testMarker: testMarkerPda,
             authority: bootstrap,
             systemProgram: anchor.web3.SystemProgram.programId,
           })

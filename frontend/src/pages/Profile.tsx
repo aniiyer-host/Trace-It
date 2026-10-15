@@ -33,7 +33,7 @@ const NgoOnboardSchema = z.object({
 });
 
 export default function Profile() {
-  const { user, setUser } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -241,13 +241,13 @@ export default function Profile() {
     setLoading(true);
     try {
       await apiService.auth.logout();
-      setUser(null);
     } catch {
       toast({
-        title: "Logout failed",
-        variant: "destructive",
+        title: "Signed out locally",
+        description: "The server session could not be cleared.",
       });
     } finally {
+      logout();
       setLoading(false);
     }
   };

@@ -408,6 +408,19 @@ export default function NGODashboard() {
     );
   }
 
+  if (user.role !== "CHARITY") {
+    const destination = user.role === "ADMIN" ? "/admin" : "/donor";
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-6">
+        <h2 className="text-4xl font-bold tracking-tighter">Access Denied</h2>
+        <p className="text-muted-foreground text-lg max-w-md text-balance">
+          This dashboard is available to NGO accounts.
+        </p>
+        <Button onClick={() => navigate(destination)}>Go to your dashboard</Button>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto min-h-[80vh] flex flex-col md:flex-row pb-20 animate-fade-in md:pt-16">
       {/* LEFT PANE - Typographic Sidebar (Mobile Sticky Ribbon) */}

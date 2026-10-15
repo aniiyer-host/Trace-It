@@ -1,6 +1,13 @@
 import crypto from 'crypto';
 
 export class HashService {
+  static beneficiaryIdFromPan(pan: string, key: string): string {
+    const normalizedPan = pan.trim().toUpperCase();
+    if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(normalizedPan)) {
+      throw new Error('Invalid PAN format');
+    }
+    return `BEN-${HashService.hmacSha256(normalizedPan, key)}`;
+  }
   /**
    * Compute SHA-512 hash of a buffer.
    * @param data - The data to hash (Buffer or string)
@@ -22,6 +29,10 @@ export class HashService {
     const hmac = crypto.createHmac('sha512', key);
     hmac.update(data);
     return hmac.digest('hex');
+  }
+
+  static hmacSha256(data: Buffer | string, key: Buffer | string): string {
+    return crypto.createHmac('sha256', key).update(data).digest('hex');
   }
 
   /**

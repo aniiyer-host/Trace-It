@@ -109,11 +109,27 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
 
   let shuttingDown = false;
   const emailOutboxProcessor = new EmailOutboxProcessor();
-  void emailOutboxProcessor.start().catch((error) => {
-    console.error("[EmailOutboxProcessor] Stopped unexpectedly:", error);
-  });
+  if (process.env.TRACEIT_EMAIL_WORKER_ENABLED === "true") {
+    const maxJobsPerRun = Number(process.env.TRACEIT_EMAIL_MAX_JOBS_PER_RUN);
+    if (Number.isInteger(maxJobsPerRun) && maxJobsPerRun >= 1 && maxJobsPerRun <= 10) {
+      void emailOutboxProcessor.start(maxJobsPerRun).catch(() => {
+        console.error("[EmailOutboxProcessor] Stopped unexpectedly; error details omitted.");
+      });
+    } else {
+      console.warn(
+        "[EmailOutboxProcessor] Not started: TRACEIT_EMAIL_MAX_JOBS_PER_RUN must be an integer from 1 to 10.",
+      );
+    }
+  } else {
+    console.info("[EmailOutboxProcessor] Disabled: set TRACEIT_EMAIL_WORKER_ENABLED=true to opt in.");
+  }
 
-  const anchorRuntimePromise = createAnchorRuntimeFromEnvironment();
+  const anchorRuntimePromise = process.env.TRACEIT_ANCHOR_WORKER_ENABLED === "true"
+    ? createAnchorRuntimeFromEnvironment()
+    : Promise.resolve(null);
+  if (process.env.TRACEIT_ANCHOR_WORKER_ENABLED !== "true") {
+    console.info("[Blockchain] Anchor worker disabled: explicit opt-in is not enabled.");
+  }
   void anchorRuntimePromise
     .then((runtime) => {
       if (!runtime || shuttingDown) return;

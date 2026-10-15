@@ -141,6 +141,68 @@
           "type": "u16"
         }
       ]
+    },
+    {
+      "name": "recordTestAnchor",
+      "accounts": [
+        {
+          "name": "config",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "anchorRecord",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "testMarker",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "batchKey",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "auditRoot",
+          "type": {
+            "array": [
+              "u8",
+              64
+            ]
+          }
+        },
+        {
+          "name": "startSequence",
+          "type": "u64"
+        },
+        {
+          "name": "endSequence",
+          "type": "u64"
+        },
+        {
+          "name": "eventCount",
+          "type": "u32"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -223,6 +285,31 @@
           },
           {
             "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TestAnchorMarker",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "anchorRecord",
+            "type": "publicKey"
+          },
+          {
+            "name": "batchKey",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "markerVersion",
             "type": "u8"
           }
         ]

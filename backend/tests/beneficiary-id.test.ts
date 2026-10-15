@@ -10,6 +10,8 @@ import crypto from "crypto";
 process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "test_secret";
 process.env.AES_BENEFICIARY_KEY =
   process.env.AES_BENEFICIARY_KEY || crypto.randomBytes(32).toString("hex");
+process.env.BENEFICIARY_HMAC_SECRET =
+  process.env.BENEFICIARY_HMAC_SECRET || "beneficiary-test-hmac-secret";
 
 const generateToken = (userId: string) => {
   return jwt.sign({ userId }, process.env.JWT_ACCESS_SECRET!, {
@@ -23,7 +25,10 @@ describe("Beneficiary ID Feature", () => {
   let adminId: string;
   let donorId: string;
   let campaignId: string;
-  let rawBeneficiaryId = "SOL" + crypto.randomBytes(16).toString("hex");
+  let rawBeneficiaryId = HashService.beneficiaryIdFromPan(
+    "ABCDE1234F",
+    process.env.BENEFICIARY_HMAC_SECRET!,
+  );
   let ngoToken: string;
   let otherNgoToken: string;
   let adminToken: string;
@@ -87,7 +92,9 @@ describe("Beneficiary ID Feature", () => {
         targetAmount: 1000,
         category: "Test",
         currencyCode: "INR",
-        beneficiaryId: rawBeneficiaryId,
+        beneficiaryName: "Test Beneficiary",
+        beneficiaryDescription: "Private assistance test description",
+        beneficiaryPan: " ABCDE1234F ",
       });
 
     // campaignId = res.body.id;
@@ -148,11 +155,24 @@ describe("Beneficiary ID Feature", () => {
           targetAmount: 1000,
           category: "Test",
           currencyCode: "INR",
-          beneficiaryId: rawBeneficiaryId,
+          beneficiaryName: "Test Beneficiary",
+          beneficiaryDescription: "Private assistance test description",
+          beneficiaryPan: "BCDEF1234G",
         });
 
       expect(res.body.beneficiaryIdEncrypted).toBeUndefined();
       expect(res.body.beneficiaryIdHash).toBeUndefined();
+      expect(res.body.beneficiaryPan).toBeUndefined();
+    });
+
+    it("persists private details and the keyed identifier on the campaign without storing PAN", async () => {
+      const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } });
+      expect(campaign.beneficiaryName).toBe("Test Beneficiary");
+      expect(campaign.beneficiaryDescription).toBe("Private assistance test description");
+      expect(campaign.beneficiaryIdHash).toBe(
+        HashService.hmacSha512(rawBeneficiaryId, process.env.BENEFICIARY_HMAC_SECRET!),
+      );
+      expect(JSON.stringify(campaign)).not.toContain("ABCDE1234F");
     });
 
     it("beneficiaryIdEncrypted is never present in GET /api/charity/campaigns", async () => {
@@ -203,5 +223,44 @@ describe("Beneficiary ID Feature", () => {
 
       expect(res.status).toBe(403);
     });
+  });
+
+  it("requires the generated campaign ID during the delivery attestation", async () => {
+    const donation = await prisma.donation.create({
+      data: {
+        donorId,
+        ngoId,
+        campaignId,
+        amount: 100,
+        paymentMethod: "UPI",
+        status: "SUCCESS",
+      },
+    });
+    const attestation = await prisma.attestation.create({
+      data: {
+        donationId: donation.id,
+        type: "DELIVERY",
+        requestedBy: donorId,
+      },
+    });
+
+    try {
+      const mismatch = await request(app)
+        .post("/api/charity/attestations")
+        .set("Authorization", `Bearer ${ngoToken}`)
+        .send({ donationId: donation.id, attestationId: attestation.id, type: "DELIVERY", beneficiaryId: "BEN-invalid" });
+      expect(mismatch.status).toBe(422);
+      expect(mismatch.body.error).toBe("BENEFICIARY_MISMATCH");
+
+      const accepted = await request(app)
+        .post("/api/charity/attestations")
+        .set("Authorization", `Bearer ${ngoToken}`)
+        .send({ donationId: donation.id, attestationId: attestation.id, type: "DELIVERY", beneficiaryId: rawBeneficiaryId });
+      expect(accepted.status).toBe(200);
+      expect(accepted.body.status).toBe("NGO_SIGNED");
+    } finally {
+      await prisma.attestation.deleteMany({ where: { donationId: donation.id } });
+      await prisma.donation.delete({ where: { id: donation.id } });
+    }
   });
 });

@@ -121,6 +121,19 @@ export interface Donation {
   ngoName?: string;
 }
 
+export interface DonationAnchorStatus {
+  eventType: string;
+  payloadHash: string;
+  chainHash: string | null;
+  status: "PENDING" | "BATCHED" | "ANCHORED" | "FAILED";
+  batchId: string | null;
+  batchStatus: string | null;
+  auditRoot: string | null;
+  transactionSignature: string | null;
+  anchorPda: string | null;
+  anchoredAt: string | null;
+}
+
 export interface WalletState {
   connected: boolean;
   publicKey: string | null; // mock pubkey e.g. "Trc7...Demo"

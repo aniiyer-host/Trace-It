@@ -18,15 +18,20 @@ const NAV_LINKS = [
 ];
 
 export function NavBar() {
-  const { user, setUser } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { pendingAttestations } = useNGOStore();
   const location = useLocation();
   const isNGOPage = location.pathname.startsWith("/ngo");
   const pendingCount = Object.keys(pendingAttestations).length;
 
   const handleLogout = async () => {
-    await apiService.auth.logout();
-    setUser(null);
+    try {
+      await apiService.auth.logout();
+    } catch {
+      // Clear the local session even when server-side logout is unavailable.
+    } finally {
+      logout();
+    }
   };
 
   return (

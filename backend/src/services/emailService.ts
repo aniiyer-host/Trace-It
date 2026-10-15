@@ -4,9 +4,9 @@ export * from './email/notificationService.js';
 export * from './email/emailProvider.js';
 export * from './email/resendEmailProvider.js';
 
-// For now, we'll just log the OTP. In production, this would use Resend.
-export const sendOTP = async (email: string, otp: string) => {
-  console.log(`OTP for ${email}: ${otp}`);
+// OTP delivery is not wired to a provider yet. Never write the credential or
+// its recipient to logs while this stub remains in place.
+export const sendOTP = async (_email: string, _otp: string) => {
   await delay(1000);
 };
 
@@ -15,6 +15,7 @@ export const generateOTP = (): string => {
 };
 
 export const notifyAdmin = async (subject: string, message: string) => {
-  console.log(`[ADMIN NOTIFICATION] ${subject}: ${message}`);
+  void subject;
+  void message;
   await delay(500);
 };

@@ -16,6 +16,7 @@ import {
 import { writeAuditLog } from "../services/auditLogService.js";
 import { allocateDonation } from "../services/statusService.js";
 import { HashService } from "../services/hashService.js";
+import { requireEnvironmentVariable } from "../utils/envValidator.js";
 import { enqueueFundsAllocatedForCompletedAttestation } from "../services/email/notificationService.js";
 import {
   createBankTransfer,
@@ -199,6 +200,9 @@ export const createCampaign = async (
       coverImageUrl,
       sdgTags,
       beneficiaryId,
+      beneficiaryName,
+      beneficiaryDescription,
+      beneficiaryPan,
     } = req.body;
 
     if (!title || !description || targetAmount === undefined) {
@@ -207,51 +211,60 @@ export const createCampaign = async (
         .json({ error: "Title, description, and targetAmount are required" });
     }
 
-    const campaign = await prisma.campaign.create({
-      data: {
-        ngoId: userId,
-        title,
-        description,
-        targetAmount: new Prisma.Decimal(targetAmount.toString()),
-        currencyCode: currencyCode || "INR",
-        category,
-        coverImageUrl,
-        sdgTags: sdgTags || [],
-        status: CampaignStatus.DRAFT,
-      },
-    });
-
-    // TODO: Phase 4 - Store this hash on-chain via blockchainService
-    // See BENEFICIARY_BLOCKCHAIN_HANDOFF.md
-    if (beneficiaryId) {
-      const beneficiaryIdHash = HashService.hmacSha512(
-        beneficiaryId,
-        //campaign.id,
-        process.env.BENEFICIARY_HMAC_SECRET!,
-      );
-      const beneficiaryIdEncrypted =
-        HashService.encryptBeneficiaryId(beneficiaryId);
-
-      // await prisma.campaign.update({
-      //   where: { id: campaign.id },
-      //   data: { beneficiaryIdHash, beneficiaryIdEncrypted },
-      // });
-      try {
-        await prisma.campaign.update({
-          where: { id: campaign.id },
-          data: { beneficiaryIdHash, beneficiaryIdEncrypted },
-        });
-      } catch (err: any) {
-        if (err.code === "P2002") {
-          // Prisma unique constraint violation
-          return res.status(409).json({
-            error: "BENEFICIARY_ALREADY_USED",
-            message:
-              "This beneficiary is already registered under another campaign.",
-          });
-        }
-        throw err;
+    let idToStore: string | undefined;
+    const beneficiaryDetailsProvided =
+      beneficiaryName !== undefined || beneficiaryDescription !== undefined || beneficiaryPan !== undefined;
+    if (beneficiaryDetailsProvided) {
+      if (typeof beneficiaryName !== "string" || !beneficiaryName.trim() || beneficiaryName.trim().length > 160 ||
+          typeof beneficiaryDescription !== "string" || !beneficiaryDescription.trim() || beneficiaryDescription.trim().length > 2000 ||
+          typeof beneficiaryPan !== "string") {
+        return res.status(400).json({ error: "Beneficiary name, reason, and a valid PAN are required" });
       }
+      try {
+        idToStore = HashService.beneficiaryIdFromPan(
+          beneficiaryPan,
+          requireEnvironmentVariable("BENEFICIARY_HMAC_SECRET"),
+        );
+      } catch {
+        return res.status(400).json({ error: "Beneficiary name, reason, and a valid PAN are required" });
+      }
+    } else if (beneficiaryId) {
+      // Keep the existing API compatible while clients migrate to PAN-derived IDs.
+      idToStore = beneficiaryId;
+    }
+    const beneficiaryIdHash = idToStore
+      ? HashService.hmacSha512(idToStore, requireEnvironmentVariable("BENEFICIARY_HMAC_SECRET"))
+      : undefined;
+    const beneficiaryIdEncrypted = idToStore
+      ? HashService.encryptBeneficiaryId(idToStore)
+      : undefined;
+
+    let campaign;
+    try {
+      campaign = await prisma.campaign.create({
+        data: {
+          ngoId: userId,
+          title,
+          description,
+          targetAmount: new Prisma.Decimal(targetAmount.toString()),
+          currencyCode: currencyCode || "INR",
+          category,
+          coverImageUrl,
+          sdgTags: sdgTags || [],
+          ...(typeof beneficiaryName === "string" ? { beneficiaryName: beneficiaryName.trim() } : {}),
+          ...(typeof beneficiaryDescription === "string" ? { beneficiaryDescription: beneficiaryDescription.trim() } : {}),
+          ...(beneficiaryIdHash ? { beneficiaryIdHash, beneficiaryIdEncrypted } : {}),
+          status: CampaignStatus.DRAFT,
+        },
+      });
+    } catch (err: any) {
+      if (err.code === "P2002" && idToStore) {
+        return res.status(409).json({
+          error: "BENEFICIARY_ALREADY_USED",
+          message: "This beneficiary is already registered under another campaign.",
+        });
+      }
+      throw err;
     }
 
     await writeAuditLog({
@@ -907,9 +920,8 @@ export const signAttestation = async (
         }
 
         const submittedHash = HashService.hmacSha512(
-          beneficiaryId,
-          // donation.campaignId,
-          process.env.BENEFICIARY_HMAC_SECRET!,
+          typeof beneficiaryId === "string" ? beneficiaryId.trim() : "",
+          requireEnvironmentVariable("BENEFICIARY_HMAC_SECRET"),
         );
 
         if (submittedHash !== campaign.beneficiaryIdHash) {

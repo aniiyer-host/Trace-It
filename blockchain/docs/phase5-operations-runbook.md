@@ -34,7 +34,7 @@ Production must place upgrade authority under offline or multisig custody and ke
 5. Review cluster, program ID, fee payer, upgrade authority, hashes, balance, and peak rent estimate. Obtain explicit transaction approval.
 6. After approval, set the guarded consent variable and invoke `bash scripts/deploy-devnet.sh`. The script rebuilds, checks the binary hash against the reviewed manifest, confirms the supplied fee payer/upgrade authority public keys, refreshes the Devnet preflight, and refuses to proceed if preflight is not ready or the program account already exists. It uses the same `ANCHOR_WALLET` as fee payer and upgrade authority. It does not upgrade an existing program.
 7. Record program ID, ProgramData address, deployment slot, authorities, artifact hashes, and explorer evidence in the manifest.
-8. Configuration initialization and anchor creation are separate approvals and separate invocations of the guarded `npm run phase5:smoke`. Set `TRACEIT_SMOKE_ACTION=initialize-config` for only the config instruction; after verifying its result and obtaining a new approval, set `TRACEIT_SMOKE_ACTION=write-anchor` to write only the public `multiple_events` fixture. Each action checks Devnet genesis and authority, simulates its instruction before sending, and verifies the resulting account. Anchor mode refuses to initialize a missing config.
+8. Configuration initialization and anchor creation are separate approvals and separate invocations of the guarded `npm run phase5:smoke`. Set `TRACEIT_SMOKE_ACTION=initialize-config` for only the config instruction. Phase 5's original acceptance criteria require the public `multiple_events` fixture and exact read-back, not an on-chain synthetic marker, so an in-place upgrade is not required for the smoke anchor. With separate approval, set `TRACEIT_SMOKE_ACTION=write-anchor` to write only that fixture through deployed `record_anchor`. This creates the ordinary 167-byte `AnchorRecord`; its on-chain data does not identify it as synthetic, so the fixture meaning must remain documented off-chain. The guarded path checks Devnet genesis, signer, config, and target PDA; refuses an existing target; simulates and submits the same signed transaction with preflight enabled; then verifies the record. Anchor mode refuses to initialize a missing config. The local `record_test_anchor`/`TestAnchorMarker` candidate is optional and remains undeployed.
 9. Rerun preflight with `TRACEIT_EXPECT_DEPLOYED=true` and archive command output with the release evidence.
 
 The preflight queries current rent rather than assuming static fees. The read-only preflight on 2026-10-15 verified the 232,136-byte artifact and estimated peak temporary funding at 3,592,842,800 lamports, including program, doubled ProgramData capacity, deploy buffer, config, first anchor, and a 0.05 SOL fee reserve. The observed fee-payer balance was 4,870,691,200 lamports. The buffer is temporary but must be fundable during deployment. Refresh all values immediately before any transaction.
@@ -43,6 +43,13 @@ The current deployment identity and artifact hash are recorded in
 [`../deployments/devnet-anchor.json`](../deployments/devnet-anchor.json). The
 last preflight there is historical; deployment requires a fresh successful
 preflight immediately before submission.
+
+The standard deployment script refuses to overwrite an existing program and
+is not an upgrade procedure. Any program change after the initial deployment
+requires a separately reviewed in-place upgrade path, fresh ProgramData and
+upgrade-authority checks, an artifact hash review, and explicit approval for
+that upgrade transaction. Do not use the deployment script to bypass this
+boundary.
 
 ## Submission and RPC policy
 

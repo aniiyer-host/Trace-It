@@ -3,12 +3,11 @@ import { login } from './src/services/authService.js';
 
 async function main() {
   try {
-    const res = await login('donor@traceit.dev', 'donor-secret');
-    console.log('Login success:', res.accessToken.substring(0, 20) + '...');
+    const donorEmail = process.env.TRACEIT_TEST_DONOR_EMAIL?.trim() || 'donor@traceit.dev';
+    const res = await login(donorEmail, 'donor-secret');
+    console.log('Login success.');
   } catch (e) {
-    console.error('Login failed:', e);
-    const u = await prisma.profile.findUnique({where: {email: 'donor@traceit.dev'}});
-    console.log('User in DB:', u);
+    console.error(`Login failed (${e instanceof Error ? e.name : 'UnknownError'}).`);
   } finally {
     await prisma.$disconnect();
   }

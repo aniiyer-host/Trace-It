@@ -236,8 +236,10 @@ model Campaign {
   solanaProgramId    String?
   solanaVaultAddress String?
   ipfsCid            String?
-  beneficiaryIdHash        String? @unique  // HMAC-SHA512(walletId, campaignId) — raw ID never stored
+  beneficiaryIdHash        String? @unique  // HMAC-SHA512 of the beneficiary ID; raw ID never stored
   beneficiaryIdEncrypted   String?  // AES-256-CBC encrypted beneficiary ID for NGO retrieval
+  beneficiaryName         String?
+  beneficiaryDescription  String?
   createdAt                DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

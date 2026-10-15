@@ -30,8 +30,8 @@ export default function AttestationRequestDialog({
       // await requestAttestation(donation.id, 'receipt')
       await apiService.donations.requestAttestation(donation.id, 'receipt')
       toast({
-        title: 'Attestation requested successfully!',
-        description: 'The NGO has been notified to confirm receipt of this donation.',
+        title: 'Attestation request submitted',
+        description: 'The request will appear in the NGO’s pending attestations list.',
       })
       onAttestationRequested()
     } catch (error) {
@@ -51,9 +51,9 @@ export default function AttestationRequestDialog({
         <DialogHeader>
           <DialogTitle className="text-xl">Request NGO Attestation</DialogTitle>
           <DialogDescription>
-            Request the NGO to confirm receipt of funds for this donation.
-            Once confirmed, the attestation will be recorded in the Trace-It
-            database.
+            Request the NGO to confirm receipt of funds for this donation. The
+            request appears in the NGO’s pending attestations list; this does
+            not send an email notification.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 p-6">
@@ -73,11 +73,10 @@ export default function AttestationRequestDialog({
             <p className="font-medium">What happens next?</p>
             <ol className="list-decimal list-inside space-y-2 text-sm">
               <li>
-                The NGO will receive a notification to confirm receipt of funds.
+                The request will appear in the NGO’s pending attestations list.
               </li>
               <li>
-                Upon confirmation, an attestation will be generated and stored
-                in the Trace-It database.
+                The NGO’s confirmation updates the stored attestation record.
               </li>
               <li>
                 You will be able to verify this attestation anytime.

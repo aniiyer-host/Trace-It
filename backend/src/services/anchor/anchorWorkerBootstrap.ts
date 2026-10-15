@@ -13,6 +13,7 @@ import { SolanaAnchorAdapter } from "./solanaAnchorAdapter.js";
 
 export interface AnchorRuntime {
   start(): void;
+  processOneBatch(batchId: string): Promise<"IDLE" | "PROCESSED">;
   stop(): Promise<void>;
 }
 
@@ -96,6 +97,9 @@ export async function createAnchorRuntimeFromEnvironment(
     const scheduler = new AnchorBatchScheduler(batches);
 
     return {
+      processOneBatch(batchId) {
+        return worker.runOnce(batchId);
+      },
       start() {
         scheduler.start();
         worker.start();

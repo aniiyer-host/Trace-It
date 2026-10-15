@@ -5,7 +5,9 @@ declare_id!("3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa");
 
 pub const CONFIG_SEED: &[u8] = b"anchor_config";
 pub const ANCHOR_SEED: &[u8] = b"anchor";
+pub const TEST_ANCHOR_SEED: &[u8] = b"test_anchor";
 pub const SUPPORTED_SCHEMA_VERSION: u16 = 1;
+pub const TEST_MARKER_VERSION: u8 = 1;
 pub const BOOTSTRAP_AUTHORITY: Pubkey = pubkey!("5jV2gq2stVAbNnrHW8w55LyDWEhcAQPdZpWFwxpW9q7W");
 
 #[program]
@@ -56,39 +58,114 @@ pub mod traceit_anchor {
         event_count: u32,
         schema_version: u16,
     ) -> Result<()> {
-        require!(!ctx.accounts.config.paused, AnchorError::ProgramPaused);
-        require!(
-            schema_version == SUPPORTED_SCHEMA_VERSION,
-            AnchorError::UnsupportedSchemaVersion
-        );
-        require!(
-            audit_root.iter().any(|byte| *byte != 0),
-            AnchorError::ZeroRoot
-        );
-        require!(event_count > 0, AnchorError::EmptyBatch);
-        require!(end_sequence >= start_sequence, AnchorError::InvalidRange);
-
-        let expected_count = end_sequence
-            .checked_sub(start_sequence)
-            .and_then(|span| span.checked_add(1))
-            .ok_or(AnchorError::ArithmeticOverflow)?;
-        require!(
-            expected_count == u64::from(event_count),
-            AnchorError::CountMismatch
-        );
-
-        let record = &mut ctx.accounts.anchor_record;
-        record.batch_key = batch_key;
-        record.audit_root = audit_root;
-        record.start_sequence = start_sequence;
-        record.end_sequence = end_sequence;
-        record.event_count = event_count;
-        record.schema_version = schema_version;
-        record.authority = ctx.accounts.authority.key();
-        record.anchored_at = Clock::get()?.unix_timestamp;
-        record.bump = ctx.bumps.anchor_record;
+        validate_anchor(
+            ctx.accounts.config.paused,
+            &audit_root,
+            start_sequence,
+            end_sequence,
+            event_count,
+            schema_version,
+        )?;
+        populate_anchor_record(
+            &mut ctx.accounts.anchor_record,
+            batch_key,
+            audit_root,
+            start_sequence,
+            end_sequence,
+            event_count,
+            schema_version,
+            ctx.accounts.authority.key(),
+            ctx.bumps.anchor_record,
+        )?;
         Ok(())
     }
+
+    pub fn record_test_anchor(
+        ctx: Context<RecordTestAnchor>,
+        batch_key: [u8; 32],
+        audit_root: [u8; 64],
+        start_sequence: u64,
+        end_sequence: u64,
+        event_count: u32,
+    ) -> Result<()> {
+        validate_anchor(
+            ctx.accounts.config.paused,
+            &audit_root,
+            start_sequence,
+            end_sequence,
+            event_count,
+            SUPPORTED_SCHEMA_VERSION,
+        )?;
+        populate_anchor_record(
+            &mut ctx.accounts.anchor_record,
+            batch_key,
+            audit_root,
+            start_sequence,
+            end_sequence,
+            event_count,
+            SUPPORTED_SCHEMA_VERSION,
+            ctx.accounts.authority.key(),
+            ctx.bumps.anchor_record,
+        )?;
+        let marker = &mut ctx.accounts.test_marker;
+        marker.anchor_record = ctx.accounts.anchor_record.key();
+        marker.batch_key = batch_key;
+        marker.marker_version = TEST_MARKER_VERSION;
+        Ok(())
+    }
+}
+
+fn validate_anchor(
+    paused: bool,
+    audit_root: &[u8; 64],
+    start_sequence: u64,
+    end_sequence: u64,
+    event_count: u32,
+    schema_version: u16,
+) -> Result<()> {
+    require!(!paused, AnchorError::ProgramPaused);
+    require!(
+        schema_version == SUPPORTED_SCHEMA_VERSION,
+        AnchorError::UnsupportedSchemaVersion
+    );
+    require!(
+        audit_root.iter().any(|byte| *byte != 0),
+        AnchorError::ZeroRoot
+    );
+    require!(event_count > 0, AnchorError::EmptyBatch);
+    require!(end_sequence >= start_sequence, AnchorError::InvalidRange);
+    let expected_count = end_sequence
+        .checked_sub(start_sequence)
+        .and_then(|span| span.checked_add(1))
+        .ok_or(AnchorError::ArithmeticOverflow)?;
+    require!(
+        expected_count == u64::from(event_count),
+        AnchorError::CountMismatch
+    );
+    Ok(())
+}
+
+fn populate_anchor_record(
+    record: &mut AnchorRecord,
+    batch_key: [u8; 32],
+    audit_root: [u8; 64],
+    start_sequence: u64,
+    end_sequence: u64,
+    event_count: u32,
+    schema_version: u16,
+    authority: Pubkey,
+    bump: u8,
+) -> Result<()> {
+    record.batch_key = batch_key;
+    record.audit_root = audit_root;
+    record.start_sequence = start_sequence;
+    record.end_sequence = end_sequence;
+    record.event_count = event_count;
+    record.schema_version = schema_version;
+    record.authority = authority;
+    record.anchored_at = Clock::get()?.unix_timestamp;
+    record.bump = bump;
+    Ok(())
 }
 
 #[derive(Accounts)]
@@ -155,6 +232,36 @@ pub struct RecordAnchor<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+#[instruction(batch_key: [u8; 32])]
+pub struct RecordTestAnchor<'info> {
+    #[account(
+        seeds = [CONFIG_SEED],
+        bump = config.bump,
+        has_one = authority @ AnchorError::Unauthorized,
+    )]
+    pub config: Account<'info, AnchorConfig>,
+    #[account(
+        init,
+        payer = authority,
+        space = AnchorRecord::SPACE,
+        seeds = [ANCHOR_SEED, batch_key.as_ref()],
+        bump,
+    )]
+    pub anchor_record: Account<'info, AnchorRecord>,
+    #[account(
+        init,
+        payer = authority,
+        space = TestAnchorMarker::SPACE,
+        seeds = [TEST_ANCHOR_SEED, batch_key.as_ref()],
+        bump,
+    )]
+    pub test_marker: Account<'info, TestAnchorMarker>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct AnchorConfig {
@@ -184,6 +291,18 @@ pub struct AnchorRecord {
 }
 
 impl AnchorRecord {
+    pub const SPACE: usize = 8 + Self::INIT_SPACE;
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct TestAnchorMarker {
+    pub anchor_record: Pubkey,
+    pub batch_key: [u8; 32],
+    pub marker_version: u8,
+}
+
+impl TestAnchorMarker {
     pub const SPACE: usize = 8 + Self::INIT_SPACE;
 }
 

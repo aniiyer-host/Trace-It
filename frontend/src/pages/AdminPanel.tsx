@@ -12,12 +12,6 @@ import { formatUSD } from "@/lib/utils";
 import { apiService } from "@/utils/apiClient";
 import type { Campaign, ActionItem, AuditLog } from "@/types";
 
-/*
- * TODO: RBAC-pending
- * When user.role exists in the backend, add a check here on mount.
- * If user.role !== 'admin', navigate away (e.g. to /donor).
- */
-
 function ActionRow({
   item,
   loadingId,
@@ -422,6 +416,19 @@ export default function AdminPanel() {
           Please sign in to access the administrator console.
         </p>
         <Button onClick={() => navigate("/login")}>Sign In</Button>
+      </div>
+    );
+  }
+
+  if (user.role !== "ADMIN") {
+    const destination = user.role === "CHARITY" ? "/ngo" : "/donor";
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-6">
+        <h2 className="text-4xl font-bold tracking-tighter">Access Denied</h2>
+        <p className="text-muted-foreground text-lg max-w-md text-balance">
+          This console is available to administrator accounts.
+        </p>
+        <Button onClick={() => navigate(destination)}>Go to your dashboard</Button>
       </div>
     );
   }

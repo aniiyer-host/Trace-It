@@ -13,13 +13,44 @@ describe("phase 5 release controls", () => {
       status: string;
       blockers: string[];
       program: { binarySha256: string; idlSha256: string };
+      deployment: { binarySha256OnChain: string };
+      pendingUpgrade?: {
+        status: string;
+        binarySha256: string;
+        binaryBytes: number;
+        idlSha256: string;
+        existingProgramDataCodeCapacityBytes: number;
+        fitsExistingProgramDataCapacity: boolean;
+        onChainUpgradeSubmitted: boolean;
+      };
     };
     expect(manifest.program.binarySha256).to.equal(
-      sha256(path.join(root, "target/deploy/traceit_anchor.so")),
+      manifest.deployment.binarySha256OnChain,
     );
-    expect(manifest.program.idlSha256).to.equal(
-      sha256(path.join(root, "idl/traceit_anchor.json")),
+    const reviewedBinaryHash = sha256(
+      path.join(root, "target/deploy/traceit_anchor.so"),
     );
+    const reviewedIdlHash = sha256(path.join(root, "idl/traceit_anchor.json"));
+    if (manifest.pendingUpgrade) {
+      expect(manifest.pendingUpgrade.status).to.equal(
+        "BUILT_AWAITING_REVIEW_AND_APPROVAL",
+      );
+      expect(manifest.pendingUpgrade.binarySha256).to.equal(reviewedBinaryHash);
+      expect(manifest.pendingUpgrade.binaryBytes).to.equal(
+        readFileSync(path.join(root, "target/deploy/traceit_anchor.so")).length,
+      );
+      expect(manifest.pendingUpgrade.idlSha256).to.equal(reviewedIdlHash);
+      expect(manifest.pendingUpgrade.binaryBytes).to.be.lessThan(
+        manifest.pendingUpgrade.existingProgramDataCodeCapacityBytes,
+      );
+      expect(manifest.pendingUpgrade.fitsExistingProgramDataCapacity).to.equal(
+        true,
+      );
+      expect(manifest.pendingUpgrade.onChainUpgradeSubmitted).to.equal(false);
+    } else {
+      expect(manifest.program.binarySha256).to.equal(reviewedBinaryHash);
+      expect(manifest.program.idlSha256).to.equal(reviewedIdlHash);
+    }
     if (manifest.status !== "DEPLOYED") {
       expect(manifest.blockers).not.to.be.empty;
     }

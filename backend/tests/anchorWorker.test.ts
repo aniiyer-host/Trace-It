@@ -115,6 +115,18 @@ describe("AnchorWorker", () => {
     );
   });
 
+  it("can process one explicitly selected batch without recovering unrelated claims", async () => {
+    const batchId = "02468100-6f1a-44a1-b3b1-87ba538a00b8";
+    const repo = repository();
+    const chain = publisher();
+
+    await expect(worker(repo, chain).runOnce(batchId)).resolves.toBe("PROCESSED");
+
+    expect(repo.recoverExpiredClaims).not.toHaveBeenCalled();
+    expect(repo.claimNext).toHaveBeenCalledWith("worker-1", NOW, 30_000, batchId);
+    expect(chain.submitAnchorBatch).toHaveBeenCalledTimes(1);
+  });
+
   it("backs off an unavailable RPC without submitting", async () => {
     const repo = repository();
     const chain = publisher();
@@ -328,6 +340,17 @@ describe("AnchorWorker", () => {
       "anchor_worker_persistence_failure",
       expect.objectContaining({ batchId: "batch-1", error: "database unavailable" }),
     );
+  });
+
+  it("propagates persistence failures for a selected batch so the runner exits unsuccessfully", async () => {
+    const repo = repository();
+    const chain = publisher();
+    const failure = new Error("selected persistence failure");
+    repo.markSubmitting.mockRejectedValue(failure);
+
+    await expect(worker(repo, chain).runOnce("02468100-6f1a-44a1-b3b1-87ba538a00b8"))
+      .rejects.toBe(failure);
+    expect(chain.submitAnchorBatch).not.toHaveBeenCalled();
   });
 
   it("allows only the repository's single atomic claim across workers", async () => {

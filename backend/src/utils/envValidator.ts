@@ -4,8 +4,10 @@ const REQUIRED_PRODUCTION_SECRETS = [
   "RAZORPAY_KEY_ID",
   "RAZORPAY_KEY_SECRET",
   "RAZORPAY_WEBHOOK_SECRET",
-  "RESEND_API_KEY",
+  "GMAIL_USER",
+  "GMAIL_APP_PASSWORD",
   "EMAIL_FROM",
+  "BENEFICIARY_HMAC_SECRET",
   "AES_DOCUMENT_KEY",
 ] as const;
 
@@ -16,6 +18,9 @@ const isValidSender = (value: string): boolean => {
   const address = value.match(/<([^<>]+)>/)?.[1] ?? value;
   return /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(address);
 };
+
+const isValidEmailAddress = (value: string): boolean =>
+  /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(value);
 
 /**
  * Verifies configuration that must be supplied before the production server
@@ -38,10 +43,13 @@ export function validateEnvironment(
     );
   }
 
-  const resendApiKey = environment.RESEND_API_KEY?.trim() ?? '';
   const emailFrom = environment.EMAIL_FROM?.trim() ?? '';
-  if (!/^re_[A-Za-z0-9_-]+$/.test(resendApiKey)) {
-    throw new Error("RESEND_API_KEY must be a valid Resend API key");
+  const gmailUser = environment.GMAIL_USER?.trim() ?? "";
+  if (!isValidEmailAddress(gmailUser)) {
+    throw new Error("GMAIL_USER must be a valid email address for Gmail SMTP");
+  }
+  if (!environment.GMAIL_APP_PASSWORD?.trim()) {
+    throw new Error("GMAIL_APP_PASSWORD must be configured for Gmail SMTP");
   }
 
   if (!isValidSender(emailFrom)) {

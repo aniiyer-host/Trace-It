@@ -1,17 +1,18 @@
 {
   "schemaVersion": 1,
   "cluster": "devnet",
-  "status": "BLOCKED_PREDEPLOYMENT",
-  "observedAt": "2026-10-14",
+  "status": "SMOKE_TEST_VERIFIED",
+  "observedAt": "2026-10-15",
   "program": {
     "declaredDevelopmentId": "3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa",
     "candidateDeploymentKeypairId": "3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa",
-    "deployedProgramId": null,
-    "programDataAddress": null,
-    "deploymentSlot": null,
+    "deployedProgramId": "3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa",
+    "programDataAddress": "8q1qfVdA4atWqse3bd8nSLm7WdMxcdwN6StKjFaghQA1",
+    "deploymentSlot": 511237360,
     "binarySha256": "a4722659f20a5990da82b5f83d40a81e59b2f740d50e10cb7d02e666f7c9a17a",
     "idlSha256": "4283336d28fa716d37ca5be36991b1d7f031cad990af8fabbf85329eef198bd1",
-    "idlVersion": "0.1.0"
+    "idlVersion": "0.1.0",
+    "deploymentSignature": "4o8naSdxt8psBnFMbPZ22PNz4B56vT9cnK5pPRVwjRiNMee4BmrwAGRWjsUNU8bXjJbpWZX5ubeN1agcTdxehMZE"
   },
   "authorities": {
     "bootstrap": "5jV2gq2stVAbNnrHW8w55LyDWEhcAQPdZpWFwxpW9q7W",
@@ -22,27 +23,114 @@
   },
   "preflight": {
     "genesisHash": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
-    "walletBalanceLamports": 4870691200,
+    "walletBalanceLamports": 2509307480,
     "requiredPeakLamports": 3592842800,
     "minimumOperatingLamports": 1000000000,
-    "programAccountExists": false
+    "programAccountExists": true
   },
   "balanceChecks": {
-    "observedAt": "2026-10-14",
-    "programIdentityLamports": 0,
-    "bootstrapRuntimeAuthorityLamports": 0,
-    "deploymentFeePayerLamports": 4870691200
+    "observedAt": "2026-10-15",
+    "programIdentityLamports": 833120,
+    "bootstrapRuntimeAuthorityLamports": 10000000000,
+    "deploymentFeePayerLamports": 2509307480
   },
   "blockers": [
-    "Verify the local deployment keypair matches the declared and configured program ID.",
-    "Obtain explicit transaction approval before deployment, initialization, or smoke-test writes."
+    "Backend runtime configuration, disposable database readiness, and one focused end-to-end verification remain pending. The populated TraceIt database must not be accessed."
   ],
   "smokeTest": {
     "fixture": "multiple_events",
-    "configPda": null,
-    "anchorPda": null,
-    "initializationSignature": null,
-    "anchorSignature": null,
-    "verified": false
+    "configPda": "8N5q5EGcTPcjDMGa2zKQTEp2RmZKLSdZdPDMaundRav8",
+    "configVerified": true,
+    "fixtureIsSynthetic": true,
+    "onChainTestMarker": false,
+    "batchKeyHex": "a6915b71ed47fb244f3267b9a3aa0f1d1ab880caa536fa1e1112326b0903a6b4",
+    "auditRootHex": "0b193cd34ee7360229fe7c4b8799cd2bf36c7eaa7273858eac27aac304caf0bd9ad3ec2e70443f0f84429f53533940a85601550dce79a309f3ec7e6477e0d46c",
+    "startSequence": 42,
+    "endSequence": 44,
+    "eventCount": 3,
+    "schemaVersion": 1,
+    "anchorPda": "H8kUqQkJZQAK9BxCGGxZ9fYuHeEQ56rgEW787zW9Z4gj",
+    "anchorOwner": "3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa",
+    "anchorDataLengthBytes": 167,
+    "initializationSignature": "5kJQBRAbsv6sax9o49t5p2hzbPqr6UpMv5CFRSbPcCNms78Ryb1wwTgogggsmACkNELaFBJHQz7XbkaLdri17aCK",
+    "anchorSignature": "636Ca1QTwMTKgDVN1vHwNn4KAGCMZbCTsRHpTvQNuunQnSWAmuSgQX83uzzny1i1XKgnitgiamQjVUY1XkH6RZ8b",
+    "confirmationStatus": "finalized",
+    "confirmationSlot": 511247078,
+    "actualTransactionFeeLamports": 5000,
+    "anchorRentLamports": 1498600,
+    "runtimeAuthorityBalanceBeforeLamports": 9998953600,
+    "runtimeAuthorityBalanceAfterLamports": 9997450000,
+    "explorerUrl": "https://explorer.solana.com/tx/636Ca1QTwMTKgDVN1vHwNn4KAGCMZbCTsRHpTvQNuunQnSWAmuSgQX83uzzny1i1XKgnitgiamQjVUY1XkH6RZ8b?cluster=devnet",
+    "verified": true
+  },
+  "deployment": {
+    "confirmationStatus": "finalized",
+    "binarySha256OnChain": "a4722659f20a5990da82b5f83d40a81e59b2f740d50e10cb7d02e666f7c9a17a",
+    "binaryMatchesReviewed": true,
+    "programDataCodeCapacityBytes": 464272,
+    "programBinaryBytes": 232136,
+    "zeroPaddedCapacityBytes": 232136,
+    "programDataRentLamports": 2359380600,
+    "programAccountRentLamports": 833120
+  },
+  "configInitialization": {
+    "observedAt": "2026-10-15",
+    "status": "FINALIZED_AND_VERIFIED",
+    "attempts": 1,
+    "configPda": "8N5q5EGcTPcjDMGa2zKQTEp2RmZKLSdZdPDMaundRav8",
+    "accountExists": true,
+    "owner": "3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa",
+    "dataLengthBytes": 77,
+    "authority": "5jV2gq2stVAbNnrHW8w55LyDWEhcAQPdZpWFwxpW9q7W",
+    "pendingAuthority": null,
+    "version": 1,
+    "paused": false,
+    "bump": 253,
+    "estimatedRentLamports": 1041400,
+    "estimatedTransactionFeeLamports": 5000,
+    "transactionSignature": "5kJQBRAbsv6sax9o49t5p2hzbPqr6UpMv5CFRSbPcCNms78Ryb1wwTgogggsmACkNELaFBJHQz7XbkaLdri17aCK",
+    "confirmationStatus": "finalized",
+    "confirmationSlot": 511241376,
+    "actualTransactionFeeLamports": 5000,
+    "runtimeAuthorityBalanceAfterLamports": 9998953600,
+    "verified": true
+  },
+  "backendIntegration": {
+    "status": "DEVNET_READ_ONLY_VERIFIED_DATABASE_INTEGRATION_BLOCKED",
+    "cluster": "devnet",
+    "rpcUrl": "https://api.devnet.solana.com",
+    "programId": "3CLytt82BKNwqMQA7M9fqJrMAhgD5t9dpuDC4TwutVFa",
+    "runtimeAuthority": "5jV2gq2stVAbNnrHW8w55LyDWEhcAQPdZpWFwxpW9q7W",
+    "workerEnabled": false,
+    "focusedAnchorTestsPassed": 45,
+    "focusedAnchorTestSuitesPassed": 4,
+    "anchorServiceReadOnlyProbe": "CONFIRMED",
+    "backendHealthCheck": 200,
+    "backendRestartPort": 3101,
+    "backendAnchorAndEmailWorkersDisabledDuringProbe": true,
+    "databaseUrlConfiguredButNotConnected": true,
+    "disposableDatabaseAvailable": false,
+    "populatedTraceItDatabaseAccessed": false,
+    "databaseMigrationsRun": false,
+    "additionalOnChainTransactionsSubmitted": 0
+  },
+  "pendingUpgrade": {
+    "status": "OPTIONAL_UNDEPLOYED_CANDIDATE",
+    "binarySha256": "360f16ce7b43cfbb8483e4c7728871e755ad6ac1e3ab97fac4504b2f2790aa57",
+    "binaryBytes": 252560,
+    "idlSha256": "42b37eb7d1826171df9ca9e688f5a7985a539ff058f6c608b6b3d91af37e0b8f",
+    "existingProgramDataCodeCapacityBytes": 464272,
+    "fitsExistingProgramDataCapacity": true,
+    "change": "Adds record_test_anchor and linked TestAnchorMarker PDA; existing AnchorRecord layout and PDA are unchanged.",
+    "requiredForPhase5Smoke": false,
+    "plannedSmokeTest": {
+      "fixture": "multiple_events",
+      "anchorPda": "H8kUqQkJZQAK9BxCGGxZ9fYuHeEQ56rgEW787zW9Z4gj",
+      "testMarkerPda": "Bsr3iN8sE74AeiunjokurQcBZ8JcQL6427VjTuhAqFuK",
+      "submitted": false
+    },
+    "programIdUnchanged": true,
+    "accountMigrationRequired": false,
+    "onChainUpgradeSubmitted": false
   }
 }

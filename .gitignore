@@ -3,7 +3,6 @@ CLAUDE.md
 **/dist/
 **/.*
 !**/.dockerignore
-!**/.env.example
 !.github/
 **/skills-lock.json
 **/generated

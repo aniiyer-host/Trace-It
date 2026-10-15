@@ -23,7 +23,12 @@ const programId = new anchor.web3.PublicKey(
 const bootstrapAuthority = new anchor.web3.PublicKey(
   required("TRACEIT_BOOTSTRAP_AUTHORITY"),
 );
-const provider = anchor.AnchorProvider.env();
+const envProvider = anchor.AnchorProvider.env();
+const provider = new anchor.AnchorProvider(
+  new anchor.web3.Connection(required("ANCHOR_PROVIDER_URL"), "confirmed"),
+  envProvider.wallet,
+  { commitment: "confirmed", preflightCommitment: "confirmed" },
+);
 anchor.setProvider(provider);
 
 async function main(): Promise<void> {
@@ -55,10 +60,11 @@ async function main(): Promise<void> {
       authority: provider.wallet.publicKey,
       systemProgram: anchor.web3.SystemProgram.programId,
     });
-    await initialize.simulate();
-    configInitializationSignature = await initialize.rpc({
-      commitment: "confirmed",
-    });
+    configInitializationSignature = await submitGuarded(
+      provider,
+      await initialize.instruction(),
+      "config initialization",
+    );
   }
   if (!configInfo && action === "write-anchor") {
     throw new Error(
@@ -116,31 +122,31 @@ async function main(): Promise<void> {
     [Buffer.from("anchor"), Buffer.from(batchKey)],
     programId,
   );
-
-  let anchorSignature: string | null = null;
-  const anchorInfo = await provider.connection.getAccountInfo(
-    anchorPda,
-    "confirmed",
-  );
-  if (!anchorInfo) {
-    const record = program.methods
-      .recordAnchor(
-        batchKey,
-        auditRoot,
-        new anchor.BN(fixture.startSequence),
-        new anchor.BN(fixture.endSequence),
-        fixture.eventCount,
-        fixture.schemaVersion,
-      )
-      .accounts({
-        config: configPda,
-        anchorRecord: anchorPda,
-        authority: provider.wallet.publicKey,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      });
-    await record.simulate();
-    anchorSignature = await record.rpc({ commitment: "confirmed" });
+  const anchorInfo = await provider.connection.getAccountInfo(anchorPda, "confirmed");
+  if (anchorInfo) {
+    throw new Error("refusing smoke test because its AnchorRecord target already exists");
   }
+
+  const recordRequest = program.methods
+    .recordAnchor(
+      batchKey,
+      auditRoot,
+      new anchor.BN(fixture.startSequence),
+      new anchor.BN(fixture.endSequence),
+      fixture.eventCount,
+      fixture.schemaVersion,
+    )
+    .accounts({
+      config: configPda,
+      anchorRecord: anchorPda,
+      authority: provider.wallet.publicKey,
+      systemProgram: anchor.web3.SystemProgram.programId,
+    });
+  const anchorSignature = await submitGuarded(
+    provider,
+    await recordRequest.instruction(),
+    "public synthetic-fixture anchor",
+  );
 
   const record = await program.account.anchorRecord.fetch(anchorPda);
   const checks = [
@@ -151,11 +157,14 @@ async function main(): Promise<void> {
     record.eventCount === fixture.eventCount,
     record.schemaVersion === fixture.schemaVersion,
     record.authority.equals(bootstrapAuthority),
+    record.bump === anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("anchor"), Buffer.from(batchKey)],
+      programId,
+    )[1],
   ];
   if (checks.some((matches) => !matches)) {
     throw new Error("devnet anchor record does not match the public fixture");
   }
-
   process.stdout.write(
     `${JSON.stringify(
       {
@@ -165,6 +174,10 @@ async function main(): Promise<void> {
         anchorPda: anchorPda.toBase58(),
         action,
         fixture: fixture.name,
+        fixtureIsSynthetic: true,
+        onChainTestMarker: false,
+        rpcUrl: redactRpcUrl(provider.connection.rpcEndpoint),
+        commitment: provider.opts.commitment,
         configInitializationSignature,
         anchorSignature,
         explorerUrl: anchorSignature
@@ -176,6 +189,68 @@ async function main(): Promise<void> {
       2,
     )}\n`,
   );
+}
+
+function redactRpcUrl(value: string): string {
+  const url = new URL(value);
+  url.username = "";
+  url.password = "";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+async function submitGuarded(
+  provider: anchor.AnchorProvider,
+  instruction: anchor.web3.TransactionInstruction,
+  label: string,
+): Promise<string> {
+  const validity = await provider.connection.getLatestBlockhash("confirmed");
+  const transaction = new anchor.web3.VersionedTransaction(
+    new anchor.web3.TransactionMessage({
+      payerKey: provider.wallet.publicKey,
+      recentBlockhash: validity.blockhash,
+      instructions: [instruction],
+    }).compileToV0Message(),
+  );
+  const signed = await provider.wallet.signTransaction(transaction);
+  const simulation = await provider.connection.simulateTransaction(signed, {
+    commitment: "confirmed",
+    sigVerify: true,
+  });
+  if (simulation.value.err) {
+    throw new Error(
+      `${label} simulation failed at slot ${simulation.context.slot}: ${JSON.stringify({
+        err: simulation.value.err,
+        logs: simulation.value.logs,
+        unitsConsumed: simulation.value.unitsConsumed,
+      })}`,
+    );
+  }
+  const currentBlockHeight = await provider.connection.getBlockHeight("confirmed");
+  if (currentBlockHeight > validity.lastValidBlockHeight) {
+    throw new Error(
+      `${label} blockhash expired before submission (height ${currentBlockHeight}, last valid ${validity.lastValidBlockHeight})`,
+    );
+  }
+  const signature = await provider.connection.sendRawTransaction(
+    signed.serialize(),
+    {
+      skipPreflight: false,
+      maxRetries: 0,
+      preflightCommitment: "confirmed",
+    },
+  );
+  const confirmation = await provider.connection.confirmTransaction(
+    { ...validity, signature },
+    "confirmed",
+  );
+  if (confirmation.value.err) {
+    throw new Error(
+      `${label} transaction ${signature} failed at slot ${confirmation.context.slot}: ${JSON.stringify(confirmation.value.err)}`,
+    );
+  }
+  return signature;
 }
 
 function required(name: string): string {

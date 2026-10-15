@@ -64,6 +64,7 @@ export class PrismaAnchorBatchRepository implements AnchorBatchRepository {
     workerId: string,
     now: Date,
     leaseMs: number,
+    batchId?: string,
   ): Promise<ClaimedAnchorBatch | null> {
     const claimToken = `${workerId}:${crypto.randomUUID()}`;
     return this.database.$transaction(async (tx) => {
@@ -75,6 +76,7 @@ export class PrismaAnchorBatchRepository implements AnchorBatchRepository {
           "anchorPda", "lastError"
         FROM "anchor_batches"
         WHERE "status" IN ('PENDING', 'RETRYABLE', 'SUBMITTING', 'RECONCILIATION_REQUIRED')
+          AND "id" = COALESCE(${batchId ?? null}::text, "id")
           AND "nextAttemptAt" <= ${now}
           AND ("claimToken" IS NULL OR "claimExpiresAt" <= ${now})
         ORDER BY "nextAttemptAt" ASC, "createdAt" ASC

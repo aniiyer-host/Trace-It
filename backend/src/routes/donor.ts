@@ -721,6 +721,67 @@ export const getDonationAttestation = async (
   }
 };
 
+export const getDonationAnchors = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const donationId = req.params["id"] as string;
+    const donorId = req.user?.id;
+    if (!donorId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    const donation = await prisma.donation.findFirst({
+      where: { id: donationId, donorId },
+      select: { id: true },
+    });
+    if (!donation) return res.status(404).json({ error: "Donation not found" });
+
+    const events = await prisma.provenanceEvent.findMany({
+      where: {
+        entityType: "Donation",
+        entityId: donationId,
+      },
+      orderBy: { id: "asc" },
+      select: {
+        eventType: true,
+        payloadHash: true,
+        chainHash: true,
+        anchorStatus: true,
+        anchorBatchId: true,
+        anchorBatch: {
+          select: {
+            status: true,
+            auditRoot: true,
+            solanaTxSignature: true,
+            anchorPda: true,
+            anchoredAt: true,
+          },
+        },
+      },
+    });
+
+    return res.json({
+      anchors: events.map((event) => ({
+        eventType: event.eventType,
+        payloadHash: event.payloadHash,
+        chainHash: event.chainHash,
+        status: event.anchorStatus,
+        batchId: event.anchorBatchId,
+        batchStatus: event.anchorBatch?.status ?? null,
+        auditRoot: event.anchorBatch?.auditRoot ?? null,
+        transactionSignature: event.anchorBatch?.solanaTxSignature ?? null,
+        anchorPda: event.anchorBatch?.anchorPda ?? null,
+        anchoredAt: event.anchorBatch?.anchoredAt?.toISOString() ?? null,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const requestDonationAttestation = async (
   req: Request,
   res: Response,
@@ -828,6 +889,11 @@ donorRouter.get(
   "/donations/:id/attestation",
   requireRole(UserRole.DONOR),
   getDonationAttestation,
+);
+donorRouter.get(
+  "/donations/:id/anchors",
+  requireRole(UserRole.DONOR),
+  getDonationAnchors,
 );
 donorRouter.post(
   "/donations/:id/attestation",

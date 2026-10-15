@@ -71,8 +71,8 @@ async function main() {
       data: {
         id: `test-${Date.now()}`,
         publicId: `TEST${Date.now()}`,
-        donorId: "33333333-3333-3333-3333-333333333333", // donor@traceit.dev
-        ngoId: "22222222-2222-2222-2222-222222222222", // ngo@traceit.dev
+        donorId: "33333333-3333-3333-3333-333333333333", // seeded donor account
+        ngoId: "22222222-2222-2222-2222-222222222222", // seeded NGO account
         campaignId: campaign.id,
         amount: 1000,
         currencyCode: "INR",

@@ -5,13 +5,13 @@ import { CheckCircle2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DonationHistoryTable from "@/components/DonationHistoryTable";
 import AttestationDetailsModal from "@/components/AttestationDetailsModal";
+import AttestationVerificationDialog from "@/components/AttestationVerificationDialog";
 import { DonateDialog } from "@/components/DonateDialog";
 import { useDonationStore } from "@/store/donationStore";
 import { useAuthStore } from "@/store/authStore";
 import { apiService } from "@/utils/apiClient";
 import type { Campaign, Donation } from "@/types";
 import { useCountUp } from "@/hooks/useCountUp";
-import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 function isFinancialDonation(donation: Donation): boolean {
@@ -81,17 +81,10 @@ function SmallStatBlock({
 export default function DonorDashboard() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   // -- CONSTRAINTS PRESERVED --
   const { campaigns, loadCampaigns, setDonations } = useDonationStore();
-  const { user, setUser } = useAuthStore();
-
-  /*
-   * TODO: RBAC-pending
-   * When user.role exists in the backend, add a check here on mount.
-   * If user.role !== 'donor', navigate away (e.g. to /ngo or /admin).
-   */
+  const { user, logout } = useAuthStore();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -100,6 +93,7 @@ export default function DonorDashboard() {
     null,
   );
   const [selectedDonationId, setSelectedDonationId] = useState<string | null>(null);
+  const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
   // const [attestationModalData, setAttestationModalData] = useState<{
   //   donationId: string
   //   attestationStatus: 'pending' | 'receipt_confirmed' | 'delivery_confirmed'
@@ -256,17 +250,28 @@ export default function DonorDashboard() {
     setAttestationModalData(data);
   };
 
-  //Below function removed unused donationId parameter
-  const handleVerifyIntegrity = () => {
-    toast({
-      title:
-        "Blockchain verification will be available once on-chain recording is active.",
-    });
+  const handleVerifyIntegrity = (donationId: string) => {
+    setSelectedDonationId(donationId);
+    setVerificationDialogOpen(true);
   };
 
   const handleCloseAttestationModal = () => {
     setAttestationModalData(null);
   };
+
+  const handleLogout = async () => {
+    try {
+      await apiService.auth.logout();
+    } catch {
+      // Clear the local session even when server-side logout is unavailable.
+    } finally {
+      logout();
+    }
+  };
+
+  const verificationDonation = donations.find(
+    (donation) => donation.id === selectedDonationId,
+  );
 
   if (!user) {
     return (
@@ -276,6 +281,19 @@ export default function DonorDashboard() {
           Please sign in to view your donor portfolio.
         </p>
         <Button onClick={() => navigate("/login")}>Sign In</Button>
+      </div>
+    );
+  }
+
+  if (user.role && user.role !== "DONOR") {
+    const destination = user.role === "ADMIN" ? "/admin" : "/ngo";
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center space-y-6">
+        <h2 className="text-4xl font-bold tracking-tighter">Access Denied</h2>
+        <p className="text-muted-foreground text-lg max-w-md text-balance">
+          This dashboard is available to donor accounts.
+        </p>
+        <Button onClick={() => navigate(destination)}>Go to your dashboard</Button>
       </div>
     );
   }
@@ -298,7 +316,7 @@ export default function DonorDashboard() {
             <Button variant="ghost" onClick={() => navigate("/profile")}>
               Profile
             </Button>
-            <Button variant="outline" onClick={() => setUser(null)}>
+            <Button variant="outline" onClick={() => void handleLogout()}>
               Sign Out
             </Button>
           </div>
@@ -564,6 +582,14 @@ export default function DonorDashboard() {
         onClose={() => setDialogOpen(false)}
         onDonationUpdated={handleDonationUpdated}
       />
+
+      {verificationDialogOpen && verificationDonation && (
+        <AttestationVerificationDialog
+          donation={verificationDonation}
+          open={verificationDialogOpen}
+          onOpenChange={setVerificationDialogOpen}
+        />
+      )}
 
       {attestationModalData && (
         <AttestationDetailsModal

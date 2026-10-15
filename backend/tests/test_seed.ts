@@ -4,18 +4,12 @@ async function main() {
   console.log("Testing seeded data...");
 
   // Test 1: Count profiles
-  const adminCount = await prisma.profile.count({
-    where: { email: "admin@traceit.dev" },
-  });
-  const ngoCount = await prisma.profile.count({
-    where: { email: "ngo@traceit.dev" },
-  });
-  const donorCount = await prisma.profile.count({
-    where: { email: "donor@traceit.dev" },
-  });
-  const donor2Count = await prisma.profile.count({
-    where: { email: "donor2@traceit.dev" },
-  });
+  const [adminCount, ngoCount, donorCount, donor2Count] = await Promise.all([
+    prisma.profile.count({ where: { id: "11111111-1111-1111-1111-111111111111" } }),
+    prisma.profile.count({ where: { id: "22222222-2222-2222-2222-222222222222" } }),
+    prisma.profile.count({ where: { id: "33333333-3333-3333-3333-333333333333" } }),
+    prisma.profile.count({ where: { id: "44444444-4444-4444-4444-444444444444" } }),
+  ]);
 
   console.log(`Admin profile exists: ${adminCount > 0}`);
   console.log(`NGO profile exists: ${ngoCount > 0}`);
@@ -60,7 +54,6 @@ async function main() {
   const allProfiles = await prisma.profile.findMany({
     select: {
       id: true,
-      email: true,
       role: true,
       isVerified: true,
       ngoStatus: true,
@@ -69,7 +62,7 @@ async function main() {
   console.log(`\\nAll profiles (${allProfiles.length}):`);
   for (const profile of allProfiles) {
     console.log(
-      `  - ${profile.email} (${profile.role}) verified: ${profile.isVerified}, NGO status: ${profile.ngoStatus}`,
+      `  - ${profile.role} profile verified: ${profile.isVerified}, NGO status: ${profile.ngoStatus}`,
     );
   }
 

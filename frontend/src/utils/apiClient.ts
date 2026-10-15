@@ -287,6 +287,7 @@ import type {
   Attestation,
   Campaign,
   Donation,
+  DonationAnchorStatus,
   PaymentMethod,
   DonationCreateResponse,
   DonorDashboardResponse,
@@ -370,7 +371,15 @@ apiClient.interceptors.response.use(
 
     // Log error for debugging (remove in production)
     if (import.meta.env.DEV) {
-      console.error("API Error:", error);
+      if (error.config?.url?.includes("/charity/campaigns")) {
+        // Campaign creation can carry a raw PAN in the request body. Do not log
+        // the Axios error object, whose config includes the serialized body.
+        console.error("Campaign API request failed", {
+          status: error.response?.status ?? "network_error",
+        });
+      } else {
+        console.error("API Error:", error);
+      }
     }
 
     return Promise.reject(error);
@@ -490,6 +499,8 @@ export const apiService = {
       ),
     getAttestation: (donationId: string): Promise<Attestation[]> =>
       get(`/donor/donations/${donationId}/attestation`),
+    getAnchors: (donationId: string): Promise<{ anchors: DonationAnchorStatus[] }> =>
+      get(`/donor/donations/${donationId}/anchors`),
     requestAttestation: (donationId: string, type: "receipt" | "delivery") =>
       post(`/donor/donations/${donationId}/attestation`, { type }),
   },
@@ -521,7 +532,9 @@ export const apiService = {
       category?: string;
       coverImageUrl?: string;
       sdgTags?: string[];
-      beneficiaryId?: string;
+      beneficiaryName: string;
+      beneficiaryDescription: string;
+      beneficiaryPan: string;
     }) => post<Campaign>("/charity/campaigns", campaignData),
     submit: (campaignId: string) =>
       post<Campaign>(`/charity/campaigns/${campaignId}/submit`),

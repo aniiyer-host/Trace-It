@@ -2,7 +2,6 @@ import { DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Donation } from "@/types";
 import { StatusBadge } from "@/components/StatusBadge";
-import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface DonationHistoryTableProps {
@@ -29,9 +28,8 @@ export default function DonationHistoryTable({
   donations,
   loading,
   onViewAttestation,
+  onVerifyIntegrity,
 }: DonationHistoryTableProps) {
-  const { toast } = useToast();
-
   if (loading) {
     return (
       <div className="space-y-4">
@@ -175,12 +173,7 @@ export default function DonationHistoryTable({
                         Details
                       </button>
                       <button
-                        onClick={() => {
-                          toast({
-                            title:
-                              "Blockchain verification will be available once on-chain recording is active.",
-                          });
-                        }}
+                        onClick={() => onVerifyIntegrity(donation.id)}
                         className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors bg-transparent border-none p-0 cursor-pointer"
                       >
                         Verify Integrity

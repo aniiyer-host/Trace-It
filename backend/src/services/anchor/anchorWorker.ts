@@ -74,19 +74,25 @@ export class AnchorWorker {
     await this.runPromise;
   }
 
-  async runOnce(): Promise<"IDLE" | "PROCESSED"> {
-    const now = this.now();
-    const recovered = await this.repository.recoverExpiredClaims(now);
-    if (recovered > 0) {
-      this.metrics.incrementRecoveredClaims?.(recovered);
-      this.logger.warn("anchor_worker_claims_recovered", { count: recovered });
+  async runOnce(batchId?: string): Promise<"IDLE" | "PROCESSED"> {
+    if (batchId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(batchId)) {
+      throw new Error("a valid anchor batch ID is required");
     }
-    await this.observeHealth(now);
+    const now = this.now();
+    if (batchId === undefined) {
+      const recovered = await this.repository.recoverExpiredClaims(now);
+      if (recovered > 0) {
+        this.metrics.incrementRecoveredClaims?.(recovered);
+        this.logger.warn("anchor_worker_claims_recovered", { count: recovered });
+      }
+      await this.observeHealth(now);
+    }
 
     const batch = await this.repository.claimNext(
       this.workerId,
       now,
       this.policy.leaseMs,
+      batchId,
     );
     if (!batch) return "IDLE";
 
@@ -101,6 +107,9 @@ export class AnchorWorker {
         claimedFromStatus: batch.claimedFromStatus,
         error: errorMessage(error),
       });
+      // Selected runs are operator initiated: let the caller report the actual
+      // failure and exit unsuccessfully. The background worker remains resilient.
+      if (batchId !== undefined) throw error;
     } finally {
       stopHeartbeat();
     }

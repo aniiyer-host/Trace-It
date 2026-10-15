@@ -14,7 +14,13 @@ export type EmailSendRequest = {
 
 export interface EmailProvider {
   isConfigured(): boolean;
-  send(request: EmailSendRequest): Promise<{ ok: boolean; id?: string; skipped?: boolean; error?: string }>;
+  send(request: EmailSendRequest): Promise<{
+    ok: boolean;
+    id?: string;
+    skipped?: boolean;
+    error?: string;
+    retryable?: boolean;
+  }>;
 }
 
 export const getConfiguredSender = (): string | undefined => {
@@ -23,7 +29,8 @@ export const getConfiguredSender = (): string | undefined => {
 };
 
 export const isEmailConfigured = (): boolean => {
-  const apiKey = process.env.RESEND_API_KEY?.trim();
+  const gmailUser = process.env.GMAIL_USER?.trim();
+  const gmailPass = process.env.GMAIL_APP_PASSWORD?.trim();
   const sender = getConfiguredSender();
-  return Boolean(apiKey && sender);
+  return Boolean(gmailUser && gmailPass && sender);
 };

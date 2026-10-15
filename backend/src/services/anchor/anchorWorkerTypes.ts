@@ -45,7 +45,7 @@ export interface AnchorTransition {
  */
 export interface AnchorBatchRepository {
   recoverExpiredClaims(now: Date): Promise<number>;
-  claimNext(workerId: string, now: Date, leaseMs: number): Promise<ClaimedAnchorBatch | null>;
+  claimNext(workerId: string, now: Date, leaseMs: number, batchId?: string): Promise<ClaimedAnchorBatch | null>;
   renewClaim(id: string, claimToken: string, now: Date, leaseMs: number): Promise<void>;
   markSubmitting(id: string, transition: AnchorTransition): Promise<void>;
   markReconciliationRequired(id: string, transition: AnchorTransition): Promise<void>;

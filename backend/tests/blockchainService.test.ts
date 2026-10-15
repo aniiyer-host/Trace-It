@@ -145,8 +145,12 @@ describe('BlockchainService & HashService Unit Tests', () => {
       let service: BlockchainService;
       let getAccountInfoMock: jest.SpyInstance;
       let getSignaturesMock: jest.SpyInstance;
+      let consoleWarn: jest.SpyInstance;
+      let consoleError: jest.SpyInstance;
 
       beforeEach(() => {
+        consoleWarn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+        consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
         service = new BlockchainService({
           programId: dummyProgramId,
           walletKeypairJson: validKeypairBytes,
@@ -167,6 +171,11 @@ describe('BlockchainService & HashService Unit Tests', () => {
             rpc: jest.fn().mockResolvedValue('fresh_tx_hash'),
           }
         };
+      });
+
+      afterEach(() => {
+        consoleWarn.mockRestore();
+        consoleError.mockRestore();
       });
 
       it('recovers creation signature using pagination when account already exists', async () => {

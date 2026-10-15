@@ -46,6 +46,19 @@ const requiredColumns = [
 });
 
 describe("anchor runtime bootstrap", () => {
+  let consoleWarn: jest.SpyInstance;
+  let consoleError: jest.SpyInstance;
+
+  beforeEach(() => {
+    consoleWarn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    consoleWarn.mockRestore();
+    consoleError.mockRestore();
+  });
+
   it("disables anchoring when configuration is incomplete", async () => {
     await expect(
       createAnchorRuntimeFromEnvironment({

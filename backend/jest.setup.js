@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import { jest } from "@jest/globals";
-dotenv.config({ path: ".env.test" });
+dotenv.config({ path: ".env.test", quiet: true });
 
 process.env.RAZORPAY_KEY_ID ??= "rzp_test_mock";
 process.env.RAZORPAY_KEY_SECRET ??= "razorpay-test-secret";
