@@ -13,6 +13,7 @@ import {
   buildFundsAllocatedEmail,
   buildBeneficiaryTransferReviewedEmail,
 } from './emailTemplates.js';
+import { getEmailAddressIssue } from './recipientValidation.js';
 
 export type DonationEmailContext = {
   id: string;
@@ -66,6 +67,19 @@ const enqueue = async (
     payload: EmailOutboxPayload;
   },
 ): Promise<void> => {
+  const recipientIssue = input.payload.to.length === 0
+    ? 'invalid'
+    : input.payload.to
+      .map((recipient) => getEmailAddressIssue(recipient.email))
+      .find((issue) => issue !== undefined);
+  if (recipientIssue) {
+    const reason = recipientIssue === 'placeholder' ? 'placeholder' : 'invalid';
+    console.warn(
+      `[EmailOutbox] Skipped ${input.milestone} notification (${input.eventKey}): ${reason} recipient address; correct the donor profile email for future notifications.`,
+    );
+    return;
+  }
+
   await tx.emailOutbox.create({
     data: {
       eventKey: input.eventKey,

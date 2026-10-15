@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import type { EmailProvider, EmailSendRequest } from './emailProvider.js';
 import { getConfiguredSender } from './emailProvider.js';
+import { getEmailAddressIssue } from './recipientValidation.js';
 
 export class GmailSmtpProvider implements EmailProvider {
   isConfigured(): boolean {
@@ -31,6 +32,21 @@ export class GmailSmtpProvider implements EmailProvider {
       };
     }
 
+    const recipientIssue = request.to.length === 0
+      ? 'invalid'
+      : request.to
+        .map((recipient) => getEmailAddressIssue(recipient?.email))
+        .find((issue) => issue !== undefined);
+    if (recipientIssue) {
+      return {
+        ok: false,
+        error: recipientIssue === 'placeholder'
+          ? 'Placeholder recipient address; delivery was not attempted'
+          : 'Invalid recipient address; delivery was not attempted',
+        retryable: false,
+      };
+    }
+
     const normalizedRecipients = request.to
       .filter((recipient) => Boolean(recipient?.email))
       .map((recipient) => recipient.email)
@@ -47,7 +63,10 @@ export class GmailSmtpProvider implements EmailProvider {
 
     try {
       const transporter = nodemailer.createTransport({
-        service: 'gmail',
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        requireTLS: true,
         auth: { user, pass },
         connectionTimeout: 10_000,
         greetingTimeout: 10_000,
@@ -115,7 +134,16 @@ export class GmailSmtpProvider implements EmailProvider {
         code === 'EAUTH' || responseCode === 535 ||
         (error instanceof Error && /auth|credential|username|password/i.test(error.message));
       const isPermanentMessage = error instanceof Error && /invalid/i.test(error.message);
-      const retryable = !isAuthenticationFailure && !isPermanentMessage &&
+      const networkFailure = [
+        'ECONNABORTED',
+        'ECONNRESET',
+        'EPIPE',
+        'ESOCKET',
+        'ETIMEDOUT',
+      ].includes(code);
+      const ambiguousSubmission =
+        safeCommand === 'DATA' && responseCode === undefined && networkFailure;
+      const retryable = !ambiguousSubmission && !isAuthenticationFailure && !isPermanentMessage &&
         (responseCode === undefined ? true : responseCode < 500);
       const diagnostic = [
         `code=${code}`,
@@ -123,6 +151,7 @@ export class GmailSmtpProvider implements EmailProvider {
         responseCode !== undefined ? `responseCode=${responseCode}` : undefined,
         timeoutType ? `timeoutType=${timeoutType}` : undefined,
         safeCommand ? `command=${safeCommand}` : undefined,
+        ambiguousSubmission ? 'submission=ambiguous' : undefined,
       ].filter(Boolean).join(' ');
       return {
         ok: false,

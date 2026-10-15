@@ -37,7 +37,7 @@ const transfer = {
       id: id('5'),
       publicId: 'donation-public-1',
       campaignId: id('6'),
-      donor: { email: 'donor@example.org', fullName: 'Donor' },
+      donor: { email: 'donor@traceit-testharness.com', fullName: 'Donor' },
       ngo: { fullName: 'NGO', organisationName: 'Example NGO' },
     },
   },
@@ -141,7 +141,7 @@ describe('bank transfer review lifecycle', () => {
       donationId: transfer.allocation.donation.id,
       disbursementId: transfer.allocation.disbursementId,
       payload: expect.objectContaining({
-        to: [{ email: 'donor@example.org', name: 'Donor' }],
+        to: [{ email: 'donor@traceit-testharness.com', name: 'Donor' }],
         text: expect.stringContaining('does not independently verify bank settlement'),
       }),
     });

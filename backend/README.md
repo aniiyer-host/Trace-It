@@ -87,11 +87,11 @@ npm start
 
 ### Milestone email delivery
 
-The API process starts the PostgreSQL-backed email outbox dispatcher automatically. Configure `RESEND_API_KEY` and `EMAIL_FROM` in the backend environment; `FRONTEND_URL` is optional and controls donation links. In development, the dispatcher stays stopped if Resend is not configured, and queued messages remain in PostgreSQL. Production startup rejects a missing or malformed Resend key/sender.
+The API process starts the PostgreSQL-backed email outbox dispatcher only when `TRACEIT_EMAIL_WORKER_ENABLED=true` and a per-run cap (`TRACEIT_EMAIL_MAX_JOBS_PER_RUN`, from 1 to 10) is configured; it is disabled by default. The configured provider is Gmail SMTP using `GMAIL_USER`, a Gmail app password in `GMAIL_APP_PASSWORD`, and `EMAIL_FROM`. It connects to `smtp.gmail.com:587` and requires STARTTLS. `FRONTEND_URL` is optional and controls donation links. In development, the dispatcher stays stopped if Gmail SMTP is not configured, and queued messages remain in PostgreSQL. Production startup rejects a missing or malformed Gmail sender configuration.
 
-Before deploying this code, apply the `add_email_outbox` migration using the normal release migration step (`npx prisma migrate deploy`), then start or restart the backend with `npm start`. No separate worker process is required. Failed sends retry with exponential backoff up to eight attempts, after which the row is retained with status `FAILED` and its last error for operator review. Inspect `email_outbox` for `PENDING`, `PROCESSING`, and `FAILED` rows when monitoring delivery.
+Before deploying this code, apply the `add_email_outbox` migration using the normal release migration step (`npx prisma migrate deploy`), then start or restart the backend with `npm start`. No separate worker process is required. Failed sends retry with exponential backoff up to eight attempts, after which the row is retained with status `FAILED` and its last error for operator review. Placeholder or malformed recipients are rejected before enqueueing and again before delivery. Inspect `email_outbox` for `PENDING`, `PROCESSING`, and `FAILED` rows when monitoring delivery. A network failure during SMTP `DATA` without a final server response is marked failed and not retried automatically because acceptance by the provider is uncertain.
 
-Delivery is at-least-once, not exactly-once: if Resend accepts a message but the worker loses its connection before persisting the provider response, a retry may send a duplicate.
+SMTP delivery cannot provide exactly-once guarantees: if Gmail accepts a message but the worker loses its connection before receiving the final response, delivery is uncertain and the job is retained as `FAILED` for operator review rather than retried automatically.
 
 ### NGO-reported beneficiary transfers
 

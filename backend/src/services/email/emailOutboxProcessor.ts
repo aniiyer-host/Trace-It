@@ -3,6 +3,7 @@ import type { PrismaClient } from '../../../generated/prisma/client.js';
 import { prisma } from '../../db/prisma.js';
 import type { EmailProvider, EmailRecipient } from './emailProvider.js';
 import { getGmailSmtpProvider } from './gmailSmtpProvider.js';
+import { getEmailAddressIssue } from './recipientValidation.js';
 
 const BATCH_SIZE = 10;
 const POLL_INTERVAL_MS = 10_000;
@@ -57,14 +58,6 @@ const parsePayload = (value: unknown): OutboxEmail => {
     html: payload.html as string | undefined,
     text: payload.text as string | undefined,
   };
-};
-
-const isPlaceholderAddress = (email: string): boolean => {
-  const domain = email.trim().toLowerCase().split('@').at(-1) ?? '';
-  return domain === 'localhost' || domain.endsWith('.localhost') ||
-    domain.endsWith('.invalid') || domain.endsWith('.test') ||
-    domain === 'example.com' || domain === 'example.net' || domain === 'example.org' ||
-    domain.endsWith('.example');
 };
 
 export function emailRetryDelayMs(attemptCount: number, random = Math.random): number {
@@ -199,8 +192,16 @@ export class EmailOutboxProcessor {
   private async deliver(job: ClaimedJob): Promise<void> {
     try {
       const payload = parsePayload(job.payload);
-      if (payload.to.some((recipient) => isPlaceholderAddress(recipient.email))) {
-        await this.recordFailure(job, 'Placeholder recipient address; delivery was not attempted', false);
+      const recipientIssue = payload.to.length === 0
+        ? 'invalid'
+        : payload.to
+          .map((recipient) => getEmailAddressIssue(recipient.email))
+          .find((issue) => issue !== undefined);
+      if (recipientIssue) {
+        const error = recipientIssue === 'placeholder'
+          ? 'Placeholder recipient address; delivery was not attempted'
+          : 'Invalid recipient address; delivery was not attempted';
+        await this.recordFailure(job, error, false);
         return;
       }
       const response = await this.provider.send({

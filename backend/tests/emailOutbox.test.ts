@@ -19,7 +19,7 @@ const donation = {
   publicId: 'public-1',
   amount: { toString: () => '250.00' },
   currencyCode: 'INR',
-  donor: { email: 'donor@example.org', fullName: 'Donor One' },
+  donor: { email: 'donor@traceit.org', fullName: 'Donor One' },
   ngo: {
     fullName: 'NGO One',
     organisationName: 'Community Fund',
@@ -48,13 +48,31 @@ describe('email outbox event creation', () => {
         milestone: 'DONATION_SUCCESS',
         donationId: 'donation-1',
         payload: expect.objectContaining({
-          to: [{ email: 'donor@example.org', name: 'Donor One' }],
+          to: [{ email: 'donor@traceit.org', name: 'Donor One' }],
           subject: expect.stringContaining('public-1'),
           text: expect.stringContaining('250.00 INR'),
           html: expect.stringContaining('Community Fund'),
         }),
       }),
     }));
+  });
+
+  it('does not enqueue a notification to a placeholder donor address', async () => {
+    const warning = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await enqueueDonationSuccessEmail(
+        transactionClient,
+        { ...donation, donor: { ...donation.donor, email: 'donor@traceit.dev' } },
+        new Date(),
+      );
+
+      expect(emailCreateMock).not.toHaveBeenCalled();
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining('placeholder recipient address'),
+      );
+    } finally {
+      warning.mockRestore();
+    }
   });
 
   it('uses allocated amount and exact disbursement attribution', async () => {
@@ -76,7 +94,7 @@ describe('email outbox event creation', () => {
     }));
     const storedPayload = emailCreateMock.mock.calls[0][0].data.payload;
     expect(storedPayload.text).toContain('disbursement-9');
-    expect(storedPayload.to).toEqual([{ email: 'donor@example.org', name: 'Donor One' }]);
+    expect(storedPayload.to).toEqual([{ email: 'donor@traceit.org', name: 'Donor One' }]);
   });
 
   it('does not enqueue allocation before the first attestation is approved', async () => {
@@ -161,7 +179,7 @@ describe('email outbox event creation', () => {
         eventKey: 'BENEFICIARY_TRANSFER_REVIEWED:transfer-1',
         milestone: 'BENEFICIARY_TRANSFER_REVIEWED',
         payload: expect.objectContaining({
-          to: [{ email: 'donor@example.org', name: 'Donor One' }],
+          to: [{ email: 'donor@traceit.org', name: 'Donor One' }],
           text: expect.stringContaining('37.50 INR'),
         }),
       }),
@@ -288,7 +306,7 @@ describe('email outbox processor', () => {
     return new EmailOutboxProcessor(database, provider);
   };
 
-  it('does not claim jobs if Resend is not configured in development', async () => {
+  it('does not claim jobs if the email provider is not configured in development', async () => {
     const updates = jest.fn();
     const claimedSql: string[] = [];
     const provider: EmailProvider = {
@@ -470,6 +488,96 @@ describe('email outbox processor', () => {
     }));
   });
 
+  it('marks malformed recipient jobs failed without contacting the provider', async () => {
+    const updates = jest.fn().mockResolvedValue({ count: 1 });
+    const provider: EmailProvider = { isConfigured: () => true, send: jest.fn() };
+    const processor = makeProcessor(
+      [{
+        id: 'job-invalid-recipient',
+        eventKey: 'test',
+        attemptCount: 1,
+        payload: { ...payload, to: [{ email: 'not-an-email' }] },
+      }],
+      provider,
+      updates,
+      [],
+    );
+
+    await expect(processor.processSelectedJob('02468100-6f1a-44a1-b3b1-87ba538a00b8')).resolves.toBe(true);
+    expect(provider.send).not.toHaveBeenCalled();
+    expect(updates).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: 'FAILED',
+        lastError: 'Invalid recipient address; delivery was not attempted',
+      }),
+    }));
+  });
+
+  it('retries transient SMTP connection timeouts within the existing backoff limit', async () => {
+    const updates = jest.fn().mockResolvedValue({ count: 1 });
+    const claimedSql: string[] = [];
+    let processor: EmailOutboxProcessor;
+    const provider: EmailProvider = {
+      isConfigured: () => true,
+      send: jest.fn(async () => {
+        processor.stop();
+        return {
+          ok: false,
+          retryable: true,
+          error: 'Gmail SMTP delivery failed (code=ETIMEDOUT timeoutType=CONNECT_TIMEOUT command=CONN)',
+        };
+      }),
+    };
+    processor = makeProcessor(
+      [{ id: 'job-connect-timeout', eventKey: 'DONATION_SUCCESS:donation-timeout', attemptCount: 1, payload }],
+      provider,
+      updates,
+      claimedSql,
+    );
+
+    await processor.start(1);
+
+    expect(updates).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: 'PENDING',
+        lastError: 'Gmail SMTP delivery failed (code=ETIMEDOUT timeoutType=CONNECT_TIMEOUT command=CONN)',
+        availableAt: expect.any(Date),
+      }),
+    }));
+  });
+
+  it('does not retry permanent SMTP authentication failures', async () => {
+    const updates = jest.fn().mockResolvedValue({ count: 1 });
+    const claimedSql: string[] = [];
+    let processor: EmailOutboxProcessor;
+    const provider: EmailProvider = {
+      isConfigured: () => true,
+      send: jest.fn(async () => {
+        processor.stop();
+        return {
+          ok: false,
+          retryable: false,
+          error: 'Gmail SMTP delivery failed (code=EAUTH responseCode=535)',
+        };
+      }),
+    };
+    processor = makeProcessor(
+      [{ id: 'job-auth-failure', eventKey: 'DONATION_SUCCESS:donation-auth', attemptCount: 1, payload }],
+      provider,
+      updates,
+      claimedSql,
+    );
+
+    await processor.start(1);
+
+    expect(updates).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: 'FAILED',
+        lastError: 'Gmail SMTP delivery failed (code=EAUTH responseCode=535)',
+      }),
+    }));
+  });
+
   it('uses bounded exponential retry delays with jitter', () => {
     expect(emailRetryDelayMs(1, () => 0)).toBe(24_000);
     expect(emailRetryDelayMs(1, () => 1)).toBe(36_000);
@@ -489,20 +597,24 @@ describe('Gmail SMTP provider', () => {
     process.env.GMAIL_USER = 'sender@example.org';
     process.env.GMAIL_APP_PASSWORD = 'test-app-password';
     process.env.EMAIL_FROM = 'Trace It <sender@example.org>';
-    const sendMail = jest.fn().mockResolvedValue({ messageId: 'gmail-message-id', accepted: ['recipient@example.org'], rejected: [] });
+    const sendMail = jest.fn().mockResolvedValue({ messageId: 'gmail-message-id', accepted: ['recipient@traceit.org'], rejected: [] });
     jest.spyOn(nodemailer, 'createTransport').mockReturnValue({ sendMail } as never);
     const provider = new GmailSmtpProvider();
 
     await expect(provider.send({
-      to: [{ email: 'recipient@example.org' }],
+      to: [{ email: 'recipient@traceit.org' }],
       subject: 'Test notification',
       text: 'Test body',
     })).resolves.toEqual({ ok: true, id: 'gmail-message-id' });
     expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({
       from: 'Trace It <sender@example.org>',
-      to: 'recipient@example.org',
+      to: 'recipient@traceit.org',
     }));
     expect(nodemailer.createTransport).toHaveBeenCalledWith(expect.objectContaining({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      requireTLS: true,
       connectionTimeout: 10_000,
       greetingTimeout: 10_000,
       socketTimeout: 30_000,
@@ -517,13 +629,13 @@ describe('Gmail SMTP provider', () => {
       sendMail: jest.fn().mockResolvedValue({
         messageId: 'partial-message-id',
         accepted: [],
-        rejected: ['recipient@example.org'],
+        rejected: ['recipient@traceit.org'],
         response: '550 5.1.1 mailbox unavailable',
       }),
     } as never);
     const provider = new GmailSmtpProvider();
 
-    await expect(provider.send({ to: [{ email: 'recipient@example.org' }], subject: 'Test', text: 'Body' }))
+    await expect(provider.send({ to: [{ email: 'recipient@traceit.org' }], subject: 'Test', text: 'Body' }))
       .resolves.toEqual({
         ok: false,
         error: 'Gmail SMTP did not confirm acceptance of every recipient',
@@ -537,13 +649,13 @@ describe('Gmail SMTP provider', () => {
     process.env.EMAIL_FROM = 'sender@example.org';
     jest.spyOn(nodemailer, 'createTransport').mockReturnValue({
       sendMail: jest.fn().mockRejectedValue(Object.assign(
-        new Error('SMTP timeout for recipient@example.org; response contained secret text'),
+        new Error('SMTP timeout for recipient@traceit.org; response contained secret text'),
         {
           code: 'ETIMEDOUT',
           originalCode: 'ECONNRESET',
           responseCode: 421,
           timeoutType: 'SOCKET_TIMEOUT',
-          command: 'DATA <recipient@example.org>',
+          command: 'DATA <recipient@traceit.org>',
           response: 'private SMTP response',
         },
       )),
@@ -551,7 +663,7 @@ describe('Gmail SMTP provider', () => {
     const provider = new GmailSmtpProvider();
 
     await expect(provider.send({
-      to: [{ email: 'recipient@example.org' }],
+      to: [{ email: 'recipient@traceit.org' }],
       subject: 'Test notification',
       text: 'Test body',
     })).resolves.toEqual({
@@ -570,7 +682,7 @@ describe('Gmail SMTP provider', () => {
       .mockRejectedValueOnce(Object.assign(new Error('Message rejected'), { code: 'EMESSAGE', responseCode: 550 }));
     jest.spyOn(nodemailer, 'createTransport').mockReturnValue({ sendMail } as never);
     const provider = new GmailSmtpProvider();
-    const request = { to: [{ email: 'recipient@example.org' }], subject: 'Test', text: 'Body' };
+    const request = { to: [{ email: 'recipient@traceit.org' }], subject: 'Test', text: 'Body' };
 
     await expect(provider.send(request)).resolves.toEqual({
       ok: false,
@@ -593,12 +705,54 @@ describe('Gmail SMTP provider', () => {
     } as never);
     const provider = new GmailSmtpProvider();
 
-    await expect(provider.send({ to: [{ email: 'recipient@example.org' }], subject: 'Test', text: 'Body' }))
+    await expect(provider.send({ to: [{ email: 'recipient@traceit.org' }], subject: 'Test', text: 'Body' }))
       .resolves.toEqual({
         ok: false,
         error: 'Gmail SMTP delivery failed (code=ETIMEDOUT)',
         retryable: true,
       });
+  });
+
+  it('does not retry a timeout after DATA because the provider outcome is ambiguous', async () => {
+    process.env.GMAIL_USER = 'sender@example.org';
+    process.env.GMAIL_APP_PASSWORD = 'test-app-password';
+    process.env.EMAIL_FROM = 'sender@example.org';
+    jest.spyOn(nodemailer, 'createTransport').mockReturnValue({
+      sendMail: jest.fn().mockRejectedValue(Object.assign(
+        new Error('Connection timed out after sending message data'),
+        { code: 'ETIMEDOUT', timeoutType: 'SOCKET_TIMEOUT', command: 'DATA' },
+      )),
+    } as never);
+    const provider = new GmailSmtpProvider();
+
+    await expect(provider.send({
+      to: [{ email: 'recipient@traceit.org' }],
+      subject: 'Test notification',
+      text: 'Test body',
+    })).resolves.toEqual({
+      ok: false,
+      error: 'Gmail SMTP delivery failed (code=ETIMEDOUT timeoutType=SOCKET_TIMEOUT command=DATA submission=ambiguous)',
+      retryable: false,
+    });
+  });
+
+  it('rejects placeholder recipients before creating an SMTP transport', async () => {
+    process.env.GMAIL_USER = 'sender@example.org';
+    process.env.GMAIL_APP_PASSWORD = 'test-app-password';
+    process.env.EMAIL_FROM = 'sender@example.org';
+    const createTransport = jest.spyOn(nodemailer, 'createTransport');
+    const provider = new GmailSmtpProvider();
+
+    await expect(provider.send({
+      to: [{ email: 'donor@example.org' }],
+      subject: 'Test notification',
+      text: 'Test body',
+    })).resolves.toEqual({
+      ok: false,
+      error: 'Placeholder recipient address; delivery was not attempted',
+      retryable: false,
+    });
+    expect(createTransport).not.toHaveBeenCalled();
   });
 });
 
