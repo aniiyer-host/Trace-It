@@ -33,7 +33,7 @@ describe("phase 5 release controls", () => {
     const reviewedIdlHash = sha256(path.join(root, "idl/traceit_anchor.json"));
     if (manifest.pendingUpgrade) {
       expect(manifest.pendingUpgrade.status).to.equal(
-        "BUILT_AWAITING_REVIEW_AND_APPROVAL",
+        "OPTIONAL_UNDEPLOYED_CANDIDATE",
       );
       expect(manifest.pendingUpgrade.binarySha256).to.equal(reviewedBinaryHash);
       expect(manifest.pendingUpgrade.binaryBytes).to.equal(
