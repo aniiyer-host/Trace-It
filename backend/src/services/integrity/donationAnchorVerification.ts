@@ -35,6 +35,19 @@ export type DonationAnchorVerification = {
   attestationSignature: IntegrityCheck;
 };
 
+export function verifiedAnchorExplorerUrl(
+  signature: string | null | undefined,
+  verification: DonationAnchorVerification | undefined,
+  buildUrl: (signature: string) => string,
+): string | null {
+  if (!signature || !verification ||
+    verification.provenance.status !== "PASSED" ||
+    verification.batchRoot.status !== "PASSED" ||
+    verification.onChainRecord.status !== "PASSED" ||
+    verification.transaction.status !== "PASSED") return null;
+  return buildUrl(signature);
+}
+
 export function checkBatchRoot(batch: BatchRow, events: readonly Pick<EventRow, "id" | "payloadHash">[]): IntegrityCheck {
   if (events.length === 0) return { status: "FAILED", reason: "No provenance events are linked to this anchor batch." };
   const ordered = [...events].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);

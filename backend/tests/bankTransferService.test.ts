@@ -329,6 +329,8 @@ describe('NGO transfer submission validation', () => {
       const valid = makeDatabase(null);
       const result = await submitBankTransfer(input, valid.database);
       expect(result.status).toBe(BankTransferStatus.SUBMITTED);
+      expect(valid.tx.$queryRaw.mock.calls[0][0].join(''))
+        .toContain('pg_advisory_xact_lock(hashtextextended');
       expect(valid.tx.document.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({

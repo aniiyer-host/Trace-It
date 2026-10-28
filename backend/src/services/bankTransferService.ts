@@ -145,6 +145,15 @@ export async function submitBankTransfer(
   );
   try {
     return await database.$transaction(async (tx) => {
+      // The allocation row lock serializes amounts for one allocation, but a
+      // bank reference can be reused across different allocations. Serialize
+      // submissions for the same NGO/reference before checking active claims.
+      if (bankReference) {
+        const referenceLockKey = `bank-transfer:${input.ngoId}:${bankReference}`;
+        await tx.$queryRaw`
+          SELECT pg_advisory_xact_lock(hashtextextended(${referenceLockKey}, 0))
+        `;
+      }
       const locked = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT "id" FROM "donation_allocations"
         WHERE "id" = ${allocationId}

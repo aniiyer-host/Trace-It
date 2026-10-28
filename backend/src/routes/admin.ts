@@ -472,14 +472,21 @@ export const approveCampaign = async (
     if (!campaign) {
       return res.status(404).json({ error: "Campaign not found" });
     }
-    const updated = await prisma.campaign.update({
-      where: { id: campaignId },
+    if (campaign.status === CampaignStatus.COMPLETED || campaign.approvedAt) {
+      return res.status(409).json({ error: "Campaign is no longer eligible for approval" });
+    }
+    const transition = await prisma.campaign.updateMany({
+      where: { id: campaignId, status: campaign.status, approvedAt: null },
       data: {
         status: CampaignStatus.ACTIVE,
         approvedBy: adminId,
         approvedAt: new Date(),
       },
     });
+    if (transition.count !== 1) {
+      return res.status(409).json({ error: "Campaign changed concurrently; reload and retry" });
+    }
+    const updated = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } });
     await writeAuditLog({
       actorType: AuditActorType.USER,
       actorId: adminId,
@@ -512,12 +519,21 @@ export const closeCampaign = async (
     if (!campaign) {
       return res.status(404).json({ error: "Campaign not found" });
     }
-    const updated = await prisma.campaign.update({
-      where: { id: campaignId },
-      data: {
-        status: CampaignStatus.COMPLETED,
-      },
+    if (campaign.status === CampaignStatus.COMPLETED) {
+      return res.json(adminCampaignResponse(campaign));
+    }
+    const transition = await prisma.campaign.updateMany({
+      where: { id: campaignId, status: campaign.status },
+      data: { status: CampaignStatus.COMPLETED },
     });
+    if (transition.count !== 1) {
+      const current = await prisma.campaign.findUnique({ where: { id: campaignId } });
+      if (current?.status === CampaignStatus.COMPLETED) {
+        return res.json(adminCampaignResponse(current));
+      }
+      return res.status(409).json({ error: "Campaign changed concurrently; reload and retry" });
+    }
+    const updated = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } });
     await writeAuditLog({
       actorType: AuditActorType.USER,
       actorId: adminId,

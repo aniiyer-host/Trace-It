@@ -90,12 +90,15 @@ export class StorageService {
    * @param ttlSeconds - Time to live for the signed URL in seconds.
    * @returns Promise<string> - The signed URL.
    */
-  async getSignedUrl(path: string, ttlSeconds: number): Promise<string> {
+  async getSignedUrl(path: string, ttlSeconds: number, downloadFilename?: string): Promise<string> {
     if (process.env.NODE_ENV === "test") return `https://mock.s3.test/${path}`;
 
     const command = new GetObjectCommand({
       Bucket: this.bucketName,
       Key: path,
+      ...(downloadFilename ? {
+        ResponseContentDisposition: `attachment; filename="${downloadFilename.replace(/[^A-Za-z0-9._-]/g, "_")}"`,
+      } : {}),
     });
 
     try {

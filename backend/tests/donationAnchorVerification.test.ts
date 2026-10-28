@@ -1,7 +1,7 @@
 import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import { deriveAnchorBatch } from "../src/services/anchor/anchorProtocol.js";
 import { deriveAnchorPda, deriveConfigPda, encodeRecordAnchorInstruction } from "../src/services/anchor/anchorCodec.js";
-import { checkBatchRoot, verifyPersistedAnchor } from "../src/services/integrity/donationAnchorVerification.js";
+import { checkBatchRoot, verifyPersistedAnchor, verifiedAnchorExplorerUrl } from "../src/services/integrity/donationAnchorVerification.js";
 
 const payloadHashes = ["1".repeat(128), "2".repeat(128)];
 const batchValues = deriveAnchorBatch(12n, payloadHashes);
@@ -44,6 +44,34 @@ function encodeBase58(input: Buffer): string {
 }
 
 describe("persisted anchor batch root verification", () => {
+  it("builds an Explorer URL only after every relevant integrity check passes", () => {
+    const verification = {
+      provenance: { status: "PASSED" },
+      batchRoot: { status: "PASSED" },
+      anchorStatus: "CONFIRMED",
+      onChainRecord: { status: "PASSED" },
+      transaction: { status: "PASSED" },
+      attestationSignature: { status: "UNAVAILABLE" },
+    } as const;
+    expect(verifiedAnchorExplorerUrl(TEST_SIGNATURE, verification, (signature) => `https://explorer.solana.com/tx/${signature}?cluster=devnet`))
+      .toBe(`https://explorer.solana.com/tx/${TEST_SIGNATURE}?cluster=devnet`);
+    expect(verifiedAnchorExplorerUrl(null, verification, () => "fake")).toBeNull();
+  });
+
+  it("does not build Explorer links for pending or unavailable verification", () => {
+    const verification = {
+      provenance: { status: "PASSED" },
+      batchRoot: { status: "PASSED" },
+      anchorStatus: "PENDING",
+      onChainRecord: { status: "PENDING" },
+      transaction: { status: "UNAVAILABLE" },
+      attestationSignature: { status: "UNAVAILABLE" },
+    } as const;
+    const buildUrl = jest.fn(() => "fake");
+    expect(verifiedAnchorExplorerUrl(TEST_SIGNATURE, verification, buildUrl)).toBeNull();
+    expect(buildUrl).not.toHaveBeenCalled();
+  });
+
   it("recomputes the root and batch key from the linked ordered event hashes", () => {
     expect(checkBatchRoot(batch, events)).toEqual({ status: "PASSED" });
   });

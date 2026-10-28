@@ -1,26 +1,34 @@
 /**
  * receiptService.ts
- * 80G Tax Receipt generation service.
+ * Donation receipt generation service.
  *
  * Flow:
  *   1. Fetch donation + donor + NGO data from DB
  *   2. Generate an HTML receipt string
- *   3. Convert to Buffer and upload to the "tax-receipts" B2 bucket via StorageService
- *   4. Store the signed URL in donations.tax_receipt_url
- *   5. Mark tax_receipt_emailed = true (stub — real SendGrid call goes here)
+ *   3. Convert to Buffer and upload to the receipts bucket via StorageService
+ *   4. Store the object path in donations.tax_receipt_url
  *
  * The receipt HTML is kept deliberately minimal so it can be replaced with a
  * PDF renderer (pdfkit / puppeteer) in Phase 5 without changing the public API.
  */
 
-import crypto from 'crypto';
 import { prisma } from '../db/prisma.js';
 import { StorageService } from './storageService.js';
+import { verifyProvenanceEvents } from './provenanceChainService.js';
+import {
+  createReadOnlyAnchorVerifier,
+  verifyPersistedAnchor,
+  verifiedAnchorExplorerUrl,
+} from './integrity/donationAnchorVerification.js';
 
-const taxReceiptStorage = new StorageService('tax-receipts');
+const receiptStorage = new StorageService('tax-receipts');
 
 // Signed URL TTL returned to the donor (15 min)
 const RECEIPT_URL_TTL_SECONDS = 15 * 60;
+
+export function isReceiptEligible(status: string): boolean {
+  return ["SUCCESS", "ALLOCATED", "DISBURSED", "DELIVERED"].includes(status);
+}
 
 // Internal TTL for the stored path (used when we generate a fresh URL on demand)
 // The file lives permanently in the bucket; we just regenerate signed URLs.
@@ -67,15 +75,19 @@ function amountToWords(amount: string): string {
 }
 
 /**
- * Generate the 80G HTML receipt string for a donation.
+ * Generate the HTML receipt string for a confirmed donation.
  */
-function buildReceiptHtml(params: {
-  publicId: string;
+export function buildReceiptHtml(params: {
   donorName: string;
   ngoName: string;
   registrationNo: string;
   amountInr: string;
+  currencyCode: string;
   paymentMethod: string;
+  paymentReference: string | null;
+  orderReference: string | null;
+  blockchainSignature: string | null;
+  blockchainExplorerUrl: string | null;
   createdAt: Date;
   receiptNo: string;
   purpose: string;
@@ -93,22 +105,44 @@ function buildReceiptHtml(params: {
       return entities[character];
     });
   const safe = {
-    publicId: escapeHtml(params.publicId),
     donorName: escapeHtml(params.donorName),
     ngoName: escapeHtml(params.ngoName),
     registrationNo: escapeHtml(params.registrationNo),
     amountInr: escapeHtml(params.amountInr),
+    currencyCode: escapeHtml(params.currencyCode),
     paymentMethod: escapeHtml(params.paymentMethod),
+    paymentReference: params.paymentReference ? escapeHtml(params.paymentReference) : '',
+    orderReference: params.orderReference ? escapeHtml(params.orderReference) : '',
+    blockchainSignature: params.blockchainSignature ? escapeHtml(params.blockchainSignature) : '',
+    blockchainExplorerUrl: params.blockchainExplorerUrl ? escapeHtml(params.blockchainExplorerUrl) : '',
     receiptNo: escapeHtml(params.receiptNo),
     purpose: escapeHtml(params.purpose),
     campaignCategory: escapeHtml(params.campaignCategory),
   };
-  const amountInWords = amountToWords(params.amountInr);
   const dateStr = params.createdAt.toLocaleDateString('en-IN', {
     day: '2-digit',
     month: 'long',
     year: 'numeric',
+    timeZone: 'Asia/Kolkata',
   });
+  const amountDisplay = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: params.currencyCode,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(params.amountInr));
+  const amountWords = params.currencyCode === 'INR'
+    ? `Rupees ${amountToWords(params.amountInr)}`
+    : `${params.currencyCode} ${safe.amountInr}`;
+  const categoryLabels: Record<string, string> = {
+    disaster: 'Disaster relief',
+    education: 'Education',
+    health: 'Health',
+    environment: 'Environment',
+  };
+  const categoryDisplay = categoryLabels[params.campaignCategory.toLowerCase()]
+    ?? params.campaignCategory.replace(/\b\w/g, (letter) => letter.toUpperCase());
+  safe.campaignCategory = escapeHtml(categoryDisplay);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -127,26 +161,23 @@ function buildReceiptHtml(params: {
     .receipt-title { margin: 32px 0 22px; text-align: center; font-size: 17px; font-weight: 700; letter-spacing: 1px; }
     .receipt-meta { display: flex; justify-content: space-between; gap: 20px; margin: 0 0 26px; font-size: 14px; }
     .acknowledgement { margin: 0 0 20px; font-size: 15px; }
-    .payment-line { margin: 0 0 22px; font-size: 14px; line-height: 2; }
+    .payment-line { margin: 0 0 14px; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
     .amount-words { margin: 0 0 22px; font-size: 14px; }
     .purpose { margin: 22px 0 10px; font-size: 14px; }
-    .category { margin: 0 0 30px; font-size: 14px; font-weight: 700; }
-    .receipt-panels { display: grid; grid-template-columns: minmax(180px, 0.85fr) minmax(280px, 1.6fr); gap: 30px; align-items: stretch; }
-    .amount, .approval { min-height: 130px; padding: 20px; border: 1px solid #202824; }
+    .category { margin: 0 0 30px; font-size: 14px; }
+    .receipt-panels { display: grid; grid-template-columns: 1fr; gap: 30px; align-items: stretch; }
+    .amount { min-height: 100px; padding: 20px; border: 1px solid #202824; }
     .amount { display: flex; align-items: center; justify-content: center; text-align: center; }
     .amount-value { font-size: 21px; font-weight: 700; }
-    .approval-title { margin: 0; font-size: 14px; font-weight: 700; }
-    .signature { display: flex; justify-content: flex-end; margin-top: 90px; }
-    .signature-block { width: 230px; min-height: 80px; padding-top: 10px; text-align: left; font-size: 13px; line-height: 1.6; }
     @media print { body { padding: 0; background: #fff; } .receipt { max-width: none; min-height: 0; padding: 0; border: 0; } }
-    @media (max-width: 600px) { body { padding: 12px; } .receipt { min-height: 0; padding: 24px 18px; } .receipt-meta { flex-direction: column; gap: 8px; } .receipt-panels { grid-template-columns: 1fr; gap: 14px; } .signature { margin-top: 50px; } }
+    @media (max-width: 600px) { body { padding: 12px; } .receipt { min-height: 0; padding: 24px 18px; } .receipt-meta { flex-direction: column; gap: 8px; } .receipt-panels { grid-template-columns: 1fr; gap: 14px; } }
   </style>
 </head>
 <body>
   <main class="receipt">
     <header class="org-header">
       ${safe.ngoName !== 'NGO' ? `<h1 class="org-name">${safe.ngoName}</h1>` : ''}
-      ${safe.registrationNo !== 'N/A' ? `<p class="org-meta">Regn. No.: ${safe.registrationNo}</p>` : ''}
+      ${safe.registrationNo !== 'N/A' ? `<p class="org-meta">Registration no.: ${safe.registrationNo}</p>` : ''}
     </header>
 
     <div class="receipt-title">RECEIPT</div>
@@ -156,40 +187,40 @@ function buildReceiptHtml(params: {
       <span><strong>Date:</strong> ${dateStr}</span>
     </div>
 
-    <p class="acknowledgement">Received with thanks from&nbsp; ${safe.donorName !== 'Donor' ? `<strong>${safe.donorName}</strong>` : ''}
+    <p class="acknowledgement">Payment confirmed for a donation from&nbsp; ${safe.donorName !== 'Donor' ? `<strong>${safe.donorName}</strong>` : 'the donor'}
     </p>
-    <p class="payment-line">by ${safe.paymentMethod} __________________ Bank ______________________</p>
-    <p class="amount-words">Rupees ${amountInWords}</p>
+    <p class="payment-line">Payment method: ${safe.paymentMethod}${safe.paymentReference ? ` · Payment reference: ${safe.paymentReference}` : ''}${safe.orderReference ? ` · Order reference: ${safe.orderReference}` : ''}</p>
+    <p class="payment-line">Currency: ${safe.currencyCode}</p>
+    <p class="amount-words">${amountWords}</p>
     ${safe.purpose !== 'General donation' ? `<p class="purpose">on account of&nbsp; <strong>${safe.purpose}</strong></p>` : ''}
-    ${safe.campaignCategory !== 'Not provided' ? `<p class="category">${safe.campaignCategory}</p>` : ''}
+    ${safe.campaignCategory !== 'Not provided' ? `<p class="category"><strong>Campaign category:</strong> ${safe.campaignCategory}</p>` : ''}
 
     <div class="receipt-panels">
       <div class="amount">
-        <span class="amount-value">Rs. ${safe.amountInr}/-</span>
-      </div>
-      <div class="approval">
-        <p class="approval-title">80G Approval Details</p>
+        <span class="amount-value">${escapeHtml(amountDisplay)}</span>
       </div>
     </div>
 
-    <div class="signature">
-      <div class="signature-block">
-        <strong>Authorised Signatory</strong>
-      </div>
-    </div>
+    <p class="payment-line"><strong>Blockchain reference:</strong> ${safe.blockchainSignature && safe.blockchainExplorerUrl
+      ? `<a href="${safe.blockchainExplorerUrl}" target="_blank" rel="noopener noreferrer">${safe.blockchainSignature}</a>`
+      : 'Blockchain reference unavailable'}</p>
+
   </main>
 </body>
 </html>`;
 }
 
 /**
- * Generate and store an 80G receipt for the given donation.
+ * Generate and store a receipt for the given confirmed donation.
  * Called after a payment SUCCESS (triggered from webhook or on-demand).
  *
  * @param donationId - The internal UUID of the donation row.
  * @returns The signed URL for the generated receipt (15-min TTL), or null on failure.
  */
-export const generateAndStoreReceipt = async (donationId: string): Promise<string | null> => {
+export const generateAndStoreReceipt = async (
+  donationId: string,
+  options: { download?: boolean } = {},
+): Promise<string | null> => {
   try {
     // 1. Fetch donation with related donor and NGO data
     const donation = await prisma.donation.findUnique({
@@ -198,7 +229,11 @@ export const generateAndStoreReceipt = async (donationId: string): Promise<strin
         id: true,
         publicId: true,
         amount: true,
+        currencyCode: true,
         paymentMethod: true,
+        razorpayPaymentId: true,
+        razorpayOrderId: true,
+        status: true,
         taxReceiptUrl: true,
         createdAt: true,
         donor: {
@@ -226,19 +261,94 @@ export const generateAndStoreReceipt = async (donationId: string): Promise<strin
       return null;
     }
 
-    // 2. Generate a unique receipt number
-    const receiptNo = `TI-${donation.publicId.toUpperCase().slice(0, 8)}-${Date.now()}`;
+    if (!isReceiptEligible(donation.status)) {
+      return null;
+    }
+
+    // Stable donor-safe receipt reference; never expose the internal donation UUID.
+    const receiptNo = `TI-${donation.publicId.toUpperCase()}`;
     const storagePath = `receipts/${donation.id}/${receiptNo}.html`;
+    const confirmedEvent = await prisma.provenanceEvent.findFirst({
+      where: { entityType: "Donation", entityId: donation.id, eventType: "DONATION_SUCCESS" },
+      orderBy: { occurredAt: "asc" },
+      select: { occurredAt: true },
+    });
+
+    // A batch signature is shown only when the exact donation success event,
+    // its batch record, and its finalized Solana transaction all verify.
+    const [successEvent, allEvents] = await Promise.all([
+      prisma.provenanceEvent.findFirst({
+        where: { entityType: 'Donation', entityId: donation.id, eventType: 'DONATION_SUCCESS' },
+        orderBy: { id: 'asc' },
+        select: {
+          id: true, eventType: true, entityType: true, entityId: true, amountInr: true,
+          ngoId: true, campaignId: true, occurredAt: true, canonicalPayload: true,
+          payloadHash: true, previous_hash: true, chainHash: true, anchorBatchId: true,
+          anchorBatch: {
+            select: {
+              id: true, batchKey: true, auditRoot: true, startSequence: true,
+              endSequence: true, eventCount: true, status: true,
+              solanaTxSignature: true, anchorPda: true,
+            },
+          },
+        },
+      }),
+      prisma.provenanceEvent.findMany({
+        orderBy: { id: 'asc' },
+        select: {
+          id: true, eventType: true, entityType: true, entityId: true, amountInr: true,
+          ngoId: true, campaignId: true, occurredAt: true, canonicalPayload: true,
+          payloadHash: true, previous_hash: true, chainHash: true, anchorBatchId: true,
+        },
+      }),
+    ]);
+    let blockchainSignature: string | null = null;
+    let blockchainExplorerUrl: string | null = null;
+    if (successEvent?.anchorBatch && successEvent.anchorBatchId) {
+      const readOnlyChain = createReadOnlyAnchorVerifier();
+      const localBatchEvents = allEvents.filter((event) => event.anchorBatchId === successEvent.anchorBatchId);
+      const batchVerification = await verifyPersistedAnchor(
+        successEvent.anchorBatch,
+        localBatchEvents as never,
+        readOnlyChain,
+      );
+      const localVerification = verifyProvenanceEvents(allEvents);
+      const provenance = successEvent.chainHash === null
+        ? { status: 'UNAVAILABLE' as const }
+        : localVerification.valid
+          ? { status: 'PASSED' as const }
+          : { status: 'FAILED' as const };
+      const verification = {
+        provenance,
+        ...batchVerification,
+        anchorStatus: successEvent.anchorBatch.status,
+        attestationSignature: { status: 'UNAVAILABLE' as const },
+      };
+      const signature = successEvent.anchorBatch.solanaTxSignature;
+      const explorerUrl = verifiedAnchorExplorerUrl(
+        signature,
+        verification,
+        (value) => readOnlyChain?.service.getAnchorExplorerUrl(value) ?? '',
+      );
+      if (explorerUrl) {
+        blockchainSignature = signature;
+        blockchainExplorerUrl = explorerUrl;
+      }
+    }
 
     // 3. Build HTML receipt
     const html = buildReceiptHtml({
-      publicId: donation.publicId,
       donorName: donation.donor?.fullName ?? 'Donor',
       ngoName: donation.ngo?.organisationName ?? 'NGO',
       registrationNo: donation.ngo?.registrationNo ?? 'N/A',
-      amountInr: Number(donation.amount).toFixed(2),
+      amountInr: donation.amount.toFixed(2),
+      currencyCode: donation.currencyCode,
       paymentMethod: donation.paymentMethod,
-      createdAt: donation.createdAt,
+      paymentReference: donation.razorpayPaymentId,
+      orderReference: donation.razorpayOrderId,
+      blockchainSignature,
+      blockchainExplorerUrl,
+      createdAt: confirmedEvent?.occurredAt ?? donation.createdAt,
       receiptNo,
       purpose: donation.project?.title ?? 'General donation',
       campaignCategory: donation.project?.category ?? 'Not provided',
@@ -247,17 +357,17 @@ export const generateAndStoreReceipt = async (donationId: string): Promise<strin
     const buffer = Buffer.from(html, 'utf-8');
 
     // 4. Upload to B2 tax-receipts bucket
-    await taxReceiptStorage.uploadFile(buffer, storagePath, 'text/html; charset=utf-8');
+    await receiptStorage.uploadFile(buffer, storagePath, 'text/html; charset=utf-8');
 
     // 5. Get a signed URL (15-min TTL for immediate return; we store the path not the URL)
-    const signedUrl = await taxReceiptStorage.getSignedUrl(storagePath, RECEIPT_URL_TTL_SECONDS);
+    const downloadFilename = options.download ? `${receiptNo}.html` : undefined;
+    const signedUrl = await receiptStorage.getSignedUrl(storagePath, RECEIPT_URL_TTL_SECONDS, downloadFilename);
 
-    // 6. Persist storage path as the receipt URL + mark emailed (stub)
+    // 6. Persist only the stored receipt path; generation does not send email.
     await prisma.donation.update({
       where: { id: donationId },
       data: {
         taxReceiptUrl: storagePath,   // store path; fresh signed URLs are generated on demand
-        taxReceiptEmailed: true,       // TODO(Phase 5): replace stub with actual SendGrid send
       },
     });
 
@@ -279,5 +389,5 @@ export const generateAndStoreReceipt = async (donationId: string): Promise<strin
  * @returns A fresh signed URL with 15-min TTL.
  */
 export const getReceiptSignedUrl = async (storagePath: string): Promise<string> => {
-  return taxReceiptStorage.getSignedUrl(storagePath, RECEIPT_URL_TTL_SECONDS);
+  return receiptStorage.getSignedUrl(storagePath, RECEIPT_URL_TTL_SECONDS);
 };

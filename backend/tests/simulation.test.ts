@@ -299,7 +299,7 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
     const failedDonation = await prisma.donation.findUnique({
       where: { id: donateRes.body.id },
     });
-    expect(failedDonation?.status).toBe("FAILED");
+    expect(failedDonation?.status).toBe("INITIATED");
     expect(failedDonation?.razorpayPaymentId).toBeNull();
 
     const failedAuditLogs = await prisma.auditLog.findMany({
@@ -309,13 +309,13 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
         action: "PAYMENT_FAILED",
       },
     });
-    expect(failedAuditLogs).toHaveLength(1);
+    expect(failedAuditLogs).toHaveLength(0);
 
     const failedReceipt = await request(app)
       .get(`/api/donor/receipt/${donateRes.body.id}`)
       .set("Authorization", "Bearer " + donorToken);
     expect(failedReceipt.status).toBe(400);
-    expect(failedReceipt.body.status).toBe("FAILED");
+    expect(failedReceipt.body.status).toBe("INITIATED");
     expect(
       (await prisma.donation.findUnique({
         where: { id: donateRes.body.id },
@@ -391,7 +391,7 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
         action: "PAYMENT_FAILED",
       },
     });
-    expect(failureAuditLogsAfterLateFailure).toHaveLength(1);
+    expect(failureAuditLogsAfterLateFailure).toHaveLength(0);
   });
 
   it("requires KYC only above ₹10,000 and rejects before creating a donation", async () => {
@@ -479,8 +479,10 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
           razorpay_signature: signature,
         });
 
-    const firstVerification = await verificationRequest();
-    const duplicateVerification = await verificationRequest();
+    const [firstVerification, duplicateVerification] = await Promise.all([
+      verificationRequest(),
+      verificationRequest(),
+    ]);
     expect(firstVerification.status).toBe(200);
     expect(firstVerification.body.status).toBe("SUCCESS");
     expect(duplicateVerification.status).toBe(200);
@@ -532,16 +534,15 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
       .update(body)
       .digest("hex");
 
-    const firstWebhook = await request(app)
+    const deliverWebhook = () => request(app)
       .post("/api/webhooks/razorpay")
       .set("Content-Type", "application/json")
       .set("x-razorpay-signature", signature)
       .send(body);
-    const duplicateWebhook = await request(app)
-      .post("/api/webhooks/razorpay")
-      .set("Content-Type", "application/json")
-      .set("x-razorpay-signature", signature)
-      .send(body);
+    const [firstWebhook, duplicateWebhook] = await Promise.all([
+      deliverWebhook(),
+      deliverWebhook(),
+    ]);
 
     expect(firstWebhook.status).toBe(200);
     expect(duplicateWebhook.status).toBe(200);

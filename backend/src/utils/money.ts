@@ -28,6 +28,28 @@ export type ParsedInrAmount = {
   amountPaise: number;
 };
 
+/** Remaining capacity after accounting for persisted totals and reservations. */
+export function remainingCampaignAmount(
+  targetAmount: Prisma.Decimal | string | number,
+  raisedAmount: Prisma.Decimal | string | number,
+  recordedDonations: Prisma.Decimal | string | number,
+  initiatedReservations: Prisma.Decimal | string | number = 0,
+): Prisma.Decimal {
+  const target = new Prisma.Decimal(targetAmount);
+  const recordedRaised = new Prisma.Decimal(raisedAmount);
+  const recordedDonationTotal = new Prisma.Decimal(recordedDonations);
+  const initiatedTotal = new Prisma.Decimal(initiatedReservations);
+  // raisedAmount may already include successful donations. Compare those
+  // totals to avoid double counting, then add INITIATED orders, which are not
+  // yet reflected in raisedAmount but must reserve capacity.
+  const funded = recordedRaised.greaterThan(recordedDonationTotal)
+    ? recordedRaised
+    : recordedDonationTotal;
+  const committed = funded.plus(initiatedTotal);
+  const remaining = target.minus(committed);
+  return remaining.greaterThan(0) ? remaining : new Prisma.Decimal(0);
+}
+
 /** Parse an INR value without floating-point arithmetic. */
 export function parseInrAmount(value: unknown): ParsedInrAmount {
   const text =

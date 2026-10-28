@@ -811,9 +811,9 @@ describe("End-to-End Flow Tests", () => {
 
       const results = await Promise.all(promises);
 
-      // All should either succeed (201) or give predictable errors (like duplicate order: 400, KYC: 402)
+      // Requests may be rejected when concurrent reservations consume the remaining campaign capacity (409).
       results.forEach((res) => {
-        expect([201, 200, 400, 402]).toContain(res.status);
+        expect([201, 200, 400, 402, 409]).toContain(res.status);
       });
     });
   });

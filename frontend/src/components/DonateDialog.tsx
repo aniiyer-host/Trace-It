@@ -14,7 +14,6 @@ import { useAuthStore } from "@/store/authStore";
 import { useDonationStore } from "@/store/donationStore";
 import { apiService } from "@/utils/apiClient";
 import { openRazorpayCheckout } from "@/services/razorpayPayments";
-import { downloadDonationReceipt } from "@/lib/donationReceipt";
 import { formatUSD } from "@/lib/utils";
 import type { Campaign, PaymentMethod, Donation } from "@/types";
 import axios from "axios";
@@ -90,7 +89,6 @@ export function DonateDialog({
         walletAddress: "donor_wallet",
 
       };
-      donationStore.addDonation(newDonation);
       donationStore.addDonation(newDonation);
       setCreatedDonation(newDonation);
       toast({ title: `Donation initiated for ${formatUSD(finalAmount)}!` });
@@ -215,7 +213,29 @@ export function DonateDialog({
           variant: "destructive",
         });
       } else {
-        toast({ title: "Donation failed", variant: "destructive" });
+        const response = axios.isAxiosError(_error) ? _error.response : undefined;
+        const data = response?.data as { code?: string; error?: string; remainingInr?: string } | undefined;
+        if (data?.code === "AMOUNT_EXCEEDS_REMAINING" && data.remainingInr !== undefined) {
+          const remaining = Number(data.remainingInr);
+          const formatted = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(remaining);
+          toast({
+            title: "Donation amount is over the campaign requirement",
+            description: remaining > 0
+              ? `The campaign’s remaining funding requirement changed. You can donate up to ${formatted}.`
+              : "This campaign has reached its funding requirement.",
+            variant: "destructive",
+          });
+        } else if (data?.code === "CAMPAIGN_CLOSED") {
+          toast({ title: "Campaign is closed", description: "This campaign is no longer accepting donations.", variant: "destructive" });
+        } else if (response && typeof data?.error === "string" && response.status < 500) {
+          toast({ title: "Donation couldn’t be started", description: data.error, variant: "destructive" });
+        } else {
+          toast({
+            title: "We couldn’t complete the donation",
+            description: "Please check your connection and try again. Your donation is not confirmed unless the status says Payment Confirmed.",
+            variant: "destructive",
+          });
+        }
       }
     } finally {
       setLoading(false);
@@ -304,31 +324,12 @@ export function DonateDialog({
     user?.id,
   ]);
 
-  const handleDownloadReceipt = () => {
+  const handleDownloadReceipt = async () => {
     if (!createdDonation) return;
 
     try {
-      downloadDonationReceipt({
-        receiptId:
-          createdDonation.orderId ||
-          createdDonation.publicId ||
-          createdDonation.id,
-        donationId: createdDonation.publicId || createdDonation.id,
-        donorName: user?.name || "Donor",
-        ngoName: campaign?.ngoName || campaign?.ngo || "NGO",
-        campaignName: campaign?.title || createdDonation.campaignTitle || "",
-        category: campaign?.category,
-        paymentMethod: createdDonation.paymentMethod.toUpperCase(),
-        date: new Date(createdDonation.createdAt).toLocaleDateString("en-IN", {
-          day: "2-digit",
-          month: "long",
-          year: "numeric",
-        }),
-        amount: createdDonation.amount,
-      });
-      toast({
-        title: "Receipt generated successfully. Your receipt has been downloaded.",
-      });
+      const { receiptUrl } = await apiService.donations.getReceipt(createdDonation.id);
+      window.location.assign(receiptUrl);
     } catch (error) {
       console.error("Receipt download failed:", error);
       toast({
@@ -516,7 +517,7 @@ export function DonateDialog({
                     className="w-full mt-4"
                     onClick={handleDownloadReceipt}
                   >
-                    Download Receipt
+                    Open / Print Receipt
                   </Button>
                 </div>
               )}
@@ -562,8 +563,7 @@ export function DonateDialog({
                 <span className="text-sm font-medium">UPI Payment</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Powered by Razorpay. Your fiat payment will be recorded on-chain
-                via ZK attestations.
+                Powered by Razorpay. Payment confirmation and donation provenance are tracked separately.
               </p>
             </div>
 

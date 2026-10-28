@@ -8,19 +8,7 @@ interface DonationHistoryTableProps {
   donations: Donation[];
   loading: boolean;
   onRefresh: () => void;
-  onViewAttestation: (data: {
-    donationId: string;
-    attestationStatus: "pending" | "receipt_confirmed" | "delivery_confirmed";
-    donationStatus: Donation["status"];
-    amount?: number;
-    campaignTitle?: string;
-    confirmedAt?: string;
-    donationDate?: string;
-    paymentMethod?: Donation["paymentMethod"];
-    orderId?: string;
-    paymentId?: string;
-    ngoName?: string;
-  }) => void;
+  onViewAttestation: (donation: Donation) => void;
   onVerifyIntegrity: (donationId: string) => void;
 }
 
@@ -110,30 +98,6 @@ export default function DonationHistoryTable({
                 statusColor = "bg-primary";
               }
 
-              const attestationStatus = hasDeliveryConfirmed
-                ? "delivery_confirmed"
-                : hasReceiptConfirmed
-                  ? "receipt_confirmed"
-                  : "pending";
-
-              const confirmedAtt = attestations.find(
-                (a) => a.type === (hasDeliveryConfirmed ? "DELIVERY" : "RECEIPT") && a.status === "APPROVED"
-              );
-
-              const attestationData = {
-                donationId: donation.id,
-                attestationStatus: attestationStatus as "pending" | "receipt_confirmed" | "delivery_confirmed",
-                donationStatus: donation.status,
-                amount: Number(donation.amount),
-                campaignTitle: donation.campaignTitle || `Campaign ${donation.campaignId?.substring(0, 8)}`,
-                confirmedAt: confirmedAtt ? new Date(confirmedAtt.createdAt).toISOString() : undefined,
-                donationDate: donation.createdAt,
-                paymentMethod: donation.paymentMethod,
-                orderId: donation.razorpayOrderId || donation.orderId,
-                paymentId: donation.razorpayPaymentId,
-                ngoName: donation.ngoName,
-              };
-
               const allocated = Number(donation.allocatedAmount || 0);
               const total = Number(donation.amount);
 
@@ -154,7 +118,7 @@ export default function DonationHistoryTable({
                   </TableCell>
                   <TableCell className="text-center py-4">
                     <button
-                      onClick={() => onViewAttestation(attestationData)}
+                      onClick={() => onViewAttestation(donation)}
                       className="flex items-center justify-center gap-2 text-xs font-medium w-full hover:opacity-80"
                     >
                       <span className={cn("w-2 h-2 rounded-full inline-block", statusColor)} />
@@ -167,7 +131,7 @@ export default function DonationHistoryTable({
                   <TableCell className="text-center py-4">
                     <div className="flex items-center gap-3 justify-center">
                       <button
-                        onClick={() => onViewAttestation(attestationData)}
+                        onClick={() => onViewAttestation(donation)}
                         className="text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2 transition-colors bg-transparent border-none p-0 cursor-pointer"
                       >
                         Details

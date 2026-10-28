@@ -22,7 +22,6 @@ import {
 import { writeAuditLog } from "../services/auditLogService.js";
 import {
   generateAndStoreReceipt,
-  getReceiptSignedUrl,
 } from "../services/receiptService.js";
 import {
   allocateDonation,
@@ -34,11 +33,13 @@ import {
   MonetaryInputError,
   monetaryInputSchema,
   parseInrAmount,
+  remainingCampaignAmount,
 } from "../utils/money.js";
 import { verifyProvenanceEvents } from "../services/provenanceChainService.js";
 import {
   createReadOnlyAnchorVerifier,
   verifyPersistedAnchor,
+  verifiedAnchorExplorerUrl,
   type DonationAnchorVerification,
 } from "../services/integrity/donationAnchorVerification.js";
 
@@ -174,12 +175,15 @@ export const createDonation = async (
 
     // --- Validate campaign ---
     const campaign = await prisma.campaign.findFirst({
-      where: { id: campaignId, ngoId, status: "ACTIVE" },
-      select: { id: true },
+      where: { id: campaignId, ngoId },
+      select: { id: true, status: true },
     });
 
     if (!campaign) {
-      return res.status(400).json({ error: "Invalid or inactive campaign" });
+      return res.status(400).json({ error: "Invalid campaign" });
+    }
+    if (campaign.status !== "ACTIVE") {
+      return res.status(409).json({ code: "CAMPAIGN_CLOSED", error: "This campaign is no longer accepting donations." });
     }
 
     let normalizedAmount;
@@ -195,20 +199,69 @@ export const createDonation = async (
     const donationId = randomUUID();
     const razorpayOrder = await createRazorpayOrder(amount, donationId);
 
-    // --- Insert donation (INITIATED) ---
-    const donation = await prisma.donation.create({
-      data: {
-        id: donationId,
-        donorId,
-        ngoId,
-        campaignId,
-        amount: normalizedAmount.decimal,
-        currencyCode: "INR",
-        paymentMethod: paymentMethod as PaymentMethod,
-        status: "INITIATED",
-        razorpayOrderId: razorpayOrder.id,
-      },
-    });
+    // Serialize capacity checks and reservation inserts on the campaign row. The
+    // initiated reservations count toward remaining capacity until payment settles.
+    let donation;
+    try {
+      donation = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM campaigns WHERE id = ${campaignId} FOR UPDATE`;
+        const current = await tx.campaign.findFirst({
+          where: { id: campaignId, ngoId },
+          select: { status: true, targetAmount: true, raisedAmount: true },
+        });
+        if (!current || current.status !== "ACTIVE") {
+          throw Object.assign(new Error("This campaign is no longer accepting donations."), { code: "CAMPAIGN_CLOSED" });
+        }
+        const [fundedTotals, reservationTotals] = await Promise.all([
+          tx.donation.aggregate({
+            where: { campaignId, status: { in: ["SUCCESS", "ALLOCATED", "DISBURSED", "DELIVERED"] } },
+            _sum: { amount: true },
+          }),
+          tx.donation.aggregate({
+            where: { campaignId, status: "INITIATED" },
+            _sum: { amount: true },
+          }),
+        ]);
+        const remaining = remainingCampaignAmount(
+          current.targetAmount,
+          current.raisedAmount,
+          fundedTotals._sum.amount ?? 0,
+          reservationTotals._sum.amount ?? 0,
+        );
+        if (normalizedAmount.decimal.greaterThan(remaining)) {
+          throw Object.assign(new Error("Donation exceeds the campaign's remaining funding requirement."), {
+            code: "AMOUNT_EXCEEDS_REMAINING",
+            remainingInr: remaining.toFixed(2),
+          });
+        }
+        return tx.donation.create({
+          data: {
+            id: donationId,
+            donorId,
+            ngoId,
+            campaignId,
+            amount: normalizedAmount.decimal,
+            currencyCode: "INR",
+            paymentMethod: paymentMethod as PaymentMethod,
+            status: "INITIATED",
+            razorpayOrderId: razorpayOrder.id,
+          },
+        });
+      });
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "AMOUNT_EXCEEDS_REMAINING") {
+        const remainingInr = "remainingInr" in error ? error.remainingInr : "0.00";
+        return res.status(409).json({
+          code: "AMOUNT_EXCEEDS_REMAINING",
+          error: "Donation exceeds the campaign's remaining funding requirement.",
+          remainingInr,
+        });
+      }
+      if (error && typeof error === "object" && "code" in error && error.code === "CAMPAIGN_CLOSED") {
+        return res.status(409).json({ code: "CAMPAIGN_CLOSED", error: "This campaign is no longer accepting donations." });
+      }
+      throw error;
+    }
 
     // Audit log — non-blocking
     void writeAuditLog({
@@ -431,12 +484,6 @@ export const reportCheckoutPaymentFailure = async (
     const result = await failDonation(
       donation.id,
       razorpay_order_id,
-      razorpay_payment_id,
-      {
-        actorId: donorId,
-        ipAddress: req.ip,
-        actorType: AuditActorType.USER,
-      },
     );
 
     if (result === "NOT_ELIGIBLE") {
@@ -450,10 +497,15 @@ export const reportCheckoutPaymentFailure = async (
       });
     }
 
+    const currentDonation = await prisma.donation.findUnique({
+      where: { id: donation.id },
+      select: { status: true },
+    });
     return res.json({
       id: donation.id,
-      status: "FAILED",
-      idempotent: result === "ALREADY_FAILED",
+      status: currentDonation?.status ?? donation.status,
+      paymentAttemptStatus: "FAILED",
+      reservationRetained: currentDonation?.status === "INITIATED",
     });
   } catch (err) {
     next(err);
@@ -567,7 +619,7 @@ export const submitKyc = async (
 // ---------------------------------------------------------------------------
 
 /**
- * Returns a 15-min signed URL for the 80G receipt.
+ * Returns a 15-minute download URL for the donation receipt.
  * If the receipt hasn't been generated yet (e.g., webhook hasn't fired),
  * it generates one on-demand before returning.
  *
@@ -619,17 +671,9 @@ export const getDonorReceipt = async (
       });
     }
 
-    // If receipt already generated, return a fresh signed URL
-    if (donation.taxReceiptUrl) {
-      const signedUrl = await getReceiptSignedUrl(donation.taxReceiptUrl);
-      return res.json({
-        receiptUrl: signedUrl,
-        publicDonationId: donation.publicId,
-      });
-    }
-
-    // Generate receipt on-demand (handles case where webhook fired before receipt service was ready)
-    const signedUrl = await generateAndStoreReceipt(donation.id);
+    // Regenerate from the current confirmed record so a previously stored HTML
+    // receipt cannot retain stale donor, campaign, payment, or amount details.
+    const signedUrl = await generateAndStoreReceipt(donation.id, { download: true });
     if (!signedUrl) {
       return res
         .status(500)
@@ -846,6 +890,8 @@ export const getDonationAnchors = async (
     return res.json({
       anchors: events.map((event) => ({
         eventType: event.eventType,
+        network: process.env.TRACEIT_ANCHOR_CLUSTER?.trim() || null,
+        programId: process.env.TRACEIT_ANCHOR_PROGRAM_ID?.trim() || null,
         payloadHash: event.payloadHash,
         chainHash: event.chainHash,
         status: event.anchorStatus,
@@ -853,6 +899,11 @@ export const getDonationAnchors = async (
         batchStatus: event.anchorBatch?.status ?? null,
         auditRoot: event.anchorBatch?.auditRoot ?? null,
         transactionSignature: event.anchorBatch?.solanaTxSignature ?? null,
+        explorerUrl: verifiedAnchorExplorerUrl(
+          event.anchorBatch?.solanaTxSignature,
+          verificationByEvent.get(event.id.toString()),
+          (signature) => chain?.service.getAnchorExplorerUrl(signature) ?? "",
+        ) || null,
         anchorPda: event.anchorBatch?.anchorPda ?? null,
         anchoredAt: event.anchorBatch?.anchoredAt?.toISOString() ?? null,
         verification: verificationByEvent.get(event.id.toString()),

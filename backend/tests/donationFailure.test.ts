@@ -128,29 +128,29 @@ describe("Authenticated Razorpay payment failure reporting", () => {
       },
     });
 
-  it("persists a verified explicit failure and audits it once", async () => {
+  it("retains an initiated reservation when one verified payment attempt fails", async () => {
     const donation = await createDonation();
     setFailedPayment(donation.id);
 
     const response = await reportFailure(donation.id);
 
     expect(response.status).toBe(200);
-    expect(response.body.status).toBe("FAILED");
+    expect(response.body).toMatchObject({ status: "INITIATED", paymentAttemptStatus: "FAILED", reservationRetained: true });
     expect(paymentFetch).toHaveBeenCalledWith(`pay_${donation.id}`);
     expect(
       (await prisma.donation.findUnique({ where: { id: donation.id } }))
         ?.status,
-    ).toBe(DonationStatus.FAILED);
-    expect(await getFailureAuditCount(donation.id)).toBe(1);
+    ).toBe(DonationStatus.INITIATED);
+    expect(await getFailureAuditCount(donation.id)).toBe(0);
   });
 
-  it("treats duplicate failure reports idempotently", async () => {
+  it("keeps the reservation when the failed attempt is reported repeatedly", async () => {
     const donation = await createDonation();
     setFailedPayment(donation.id);
 
     expect((await reportFailure(donation.id)).status).toBe(200);
     expect((await reportFailure(donation.id)).status).toBe(200);
-    expect(await getFailureAuditCount(donation.id)).toBe(1);
+    expect(await getFailureAuditCount(donation.id)).toBe(0);
   });
 
   it("rejects another donor without changing the donation", async () => {

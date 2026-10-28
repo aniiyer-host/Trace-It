@@ -94,24 +94,7 @@ export default function DonorDashboard() {
   );
   const [selectedDonationId, setSelectedDonationId] = useState<string | null>(null);
   const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
-  // const [attestationModalData, setAttestationModalData] = useState<{
-  //   donationId: string
-  //   attestationStatus: 'pending' | 'receipt_confirmed' | 'delivery_confirmed'
-  // } | null>(null)
-
-  const [attestationModalData, setAttestationModalData] = useState<{
-    donationId: string;
-    attestationStatus: "pending" | "receipt_confirmed" | "delivery_confirmed";
-    donationStatus: Donation["status"];
-    amount?: number;
-    campaignTitle?: string;
-    confirmedAt?: string;
-    donationDate?: string;
-    paymentMethod?: Donation["paymentMethod"];
-    orderId?: string;
-    paymentId?: string;
-    ngoName?: string;
-  } | null>(null);
+  const [attestationModalData, setAttestationModalData] = useState<Donation | null>(null);
 
   useEffect(() => {
     const id = params.get("campaign");
@@ -254,20 +237,8 @@ export default function DonorDashboard() {
     };
   }, [donations, campaigns]);
 
-  const handleViewAttestation = (data: {
-    donationId: string;
-    attestationStatus: "pending" | "receipt_confirmed" | "delivery_confirmed";
-    donationStatus: Donation["status"];
-    amount?: number;
-    campaignTitle?: string;
-    confirmedAt?: string;
-    donationDate?: string;
-    paymentMethod?: Donation["paymentMethod"];
-    orderId?: string;
-    paymentId?: string;
-    ngoName?: string;
-  }) => {
-    setAttestationModalData(data);
+  const handleViewAttestation = (donation: Donation) => {
+    setAttestationModalData(donation);
   };
 
   const handleVerifyIntegrity = (donationId: string) => {
@@ -629,19 +600,9 @@ export default function DonorDashboard() {
 
       {attestationModalData && (
         <AttestationDetailsModal
-          donationId={attestationModalData.donationId}
-          attestationStatus={attestationModalData.attestationStatus}
-          donationStatus={attestationModalData.donationStatus}
-          amount={attestationModalData.amount}
-          campaignTitle={attestationModalData.campaignTitle}
-          confirmedAt={attestationModalData.confirmedAt}
-          donationDate={attestationModalData.donationDate}
-          paymentMethod={attestationModalData.paymentMethod}
-          orderId={attestationModalData.orderId}
-          paymentId={attestationModalData.paymentId}
-          donorName={user.name || "Donor"}
-          ngoName={attestationModalData.ngoName || "NGO"}
+          donation={attestationModalData}
           onClose={handleCloseAttestationModal}
+          onVerifyIntegrity={handleVerifyIntegrity}
         />
       )}
 

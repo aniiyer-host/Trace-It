@@ -154,8 +154,6 @@ export const razorpayWebhookHandler = async (
         await failDonation(
           donation.id,
           razorpayOrderId,
-          razorpayPaymentId,
-          { ipAddress: req.ip, actorType: AuditActorType.WEBHOOK },
         );
       }
 

@@ -451,6 +451,7 @@ export const apiService = {
         campaignId: d.project.id,
         campaignTitle: d.project.title,
         amount: d.amount,
+        currencyCode: d.currencyCode,
         allocatedAmount: d.allocatedAmount,
         paymentMethod: d.paymentMethod as PaymentMethod,
         status: d.status,

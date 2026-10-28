@@ -105,6 +105,7 @@ export interface Donation {
   campaignId: string;
   campaignTitle?: string;
   amount: number; // in INR
+  currencyCode?: string;
   allocatedAmount?: number | string; // amount allocated to disbursements
   paymentMethod: PaymentMethod;
   orderId?: string; // Razorpay order ID (mock) or SOL tx hash
@@ -125,6 +126,8 @@ export interface Donation {
 
 export interface DonationAnchorStatus {
   eventType: string;
+  network?: string | null;
+  programId?: string | null;
   payloadHash: string;
   chainHash: string | null;
   status: "PENDING" | "BATCHED" | "ANCHORED" | "FAILED";
@@ -132,6 +135,7 @@ export interface DonationAnchorStatus {
   batchStatus: string | null;
   auditRoot: string | null;
   transactionSignature: string | null;
+  explorerUrl?: string | null;
   anchorPda: string | null;
   anchoredAt: string | null;
   verification?: {
