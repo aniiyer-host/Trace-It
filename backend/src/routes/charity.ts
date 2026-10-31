@@ -582,7 +582,7 @@ export const createDisbursement = async (
         .json({ error: "Campaign not found or access denied" });
     }
 
-    if (campaign.status !== CampaignStatus.ACTIVE) {
+    if (campaign.status !== CampaignStatus.ACTIVE && campaign.status !== CampaignStatus.FUNDING_COMPLETE) {
       return res.status(409).json({
         error: "Disbursements can only be requested for ACTIVE campaigns",
       });
@@ -622,7 +622,7 @@ export const createDisbursement = async (
       disbursement = await prisma.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM campaigns WHERE id = ${targetCampaignId} FOR UPDATE`;
         const lockedCampaign = await tx.campaign.findFirst({
-          where: { id: targetCampaignId, ngoId: userId, status: CampaignStatus.ACTIVE },
+          where: { id: targetCampaignId, ngoId: userId, status: { in: [CampaignStatus.ACTIVE, CampaignStatus.FUNDING_COMPLETE] } },
           select: { id: true, raisedAmount: true },
         });
         if (!lockedCampaign) throw new Error("CAMPAIGN_NOT_ELIGIBLE");

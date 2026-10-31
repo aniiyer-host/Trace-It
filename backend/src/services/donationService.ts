@@ -273,7 +273,7 @@ export const completeDonationSuccess = async (
           data: {
             raisedAmount: newRaised,
             status: strictCap && newRaised.greaterThanOrEqualTo(lockedCampaign.targetAmount)
-              ? CampaignStatus.COMPLETED
+              ? CampaignStatus.FUNDING_COMPLETE
               : lockedCampaign.status,
           },
         });

@@ -5,6 +5,7 @@ import { razorpayRefundWebhookHandler } from '../src/routes/webhooks/razorpay.js
 import {
   RefundOutboxProcessor,
   createRazorpayRefundGateway,
+  resolveRefundJob,
   type GatewayRefund,
   type RefundGateway,
 } from '../src/services/refundService.js';
@@ -33,6 +34,7 @@ describe('donation settlement and refund outbox (real PostgreSQL)', () => {
   });
 
   afterAll(async () => {
+    await prisma.providerRefund.deleteMany({ where: { donationId: { in: donationIds } } });
     await prisma.emailOutbox.deleteMany({ where: { donationId: { in: donationIds } } });
     await prisma.attestation.deleteMany({ where: { donationId: { in: donationIds } } });
     await prisma.blockchainRetryQueue.deleteMany({ where: { donationId: { in: donationIds } } });
@@ -48,7 +50,7 @@ describe('donation settlement and refund outbox (real PostgreSQL)', () => {
     targetAmount: string;
     raisedAmount?: string;
     allowOverfunding?: boolean;
-    status?: 'ACTIVE' | 'PAUSED' | 'COMPLETED';
+    status?: 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'FUNDING_COMPLETE';
   }) {
     const campaign = await prisma.campaign.create({
       data: {
@@ -159,7 +161,7 @@ describe('donation settlement and refund outbox (real PostgreSQL)', () => {
 
     const currentCampaign = await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } });
     expect(currentCampaign.raisedAmount.toFixed(2)).toBe('500.00');
-    expect(currentCampaign.status).toBe('COMPLETED');
+    expect(currentCampaign.status).toBe('FUNDING_COMPLETE');
     expect(await prisma.refundOutbox.count({ where: { donationId: { in: donations.map(({ id }) => id) } } })).toBe(1);
     expect(await prisma.attestation.count({ where: { donationId: { in: donations.map(({ id }) => id) }, type: 'RECEIPT' } })).toBe(1);
     expect(await prisma.emailOutbox.count({ where: { donationId: { in: donations.map(({ id }) => id) } } })).toBe(2);
@@ -293,6 +295,43 @@ describe('donation settlement and refund outbox (real PostgreSQL)', () => {
     expect(await prisma.auditLog.count({ where: { entityId: donation.id, action: 'PAYMENT_REFUNDED' } })).toBe(1);
   });
 
+  it('reconciles dashboard partial refunds and preserves the remaining contribution', async () => {
+    const campaign = await makeCampaign({ targetAmount: '500.00' });
+    const donation = await makeDonation({ campaignId: campaign.id, amount: '100.00' });
+    await prisma.donation.update({ where: { id: donation.id }, data: { status: 'SUCCESS', razorpayPaymentId: 'pay_dashboard_partial' } });
+    await prisma.campaign.update({ where: { id: campaign.id }, data: { raisedAmount: '100.00' } });
+    const event = { event: 'refund.processed', payload: { refund: { entity: {
+      id: 'rfnd_dashboard_partial', payment_id: 'pay_dashboard_partial', amount: 2500, status: 'processed', receipt: 'dashboard-refund', notes: {},
+    } } } };
+    const rawBody = Buffer.from(JSON.stringify(event));
+    const signature = createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET!).update(rawBody).digest('hex');
+    const response = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
+    await razorpayRefundWebhookHandler({ rawBody, headers: { 'x-razorpay-signature': signature }, ip: '127.0.0.1' } as never, response as never, jest.fn());
+    const updated = await prisma.donation.findUniqueOrThrow({ where: { id: donation.id } });
+    expect(updated.refundedAmount.toFixed(2)).toBe('25.00');
+    expect(updated.status).toBe('SUCCESS');
+    expect((await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).raisedAmount.toFixed(2)).toBe('75.00');
+    expect(await prisma.providerRefund.count({ where: { donationId: donation.id, razorpayRefundId: 'rfnd_dashboard_partial' } })).toBe(1);
+  });
+
+  it('holds allocated dashboard refunds for reconciliation without decrementing campaign funds', async () => {
+    const campaign = await makeCampaign({ targetAmount: '500.00', raisedAmount: '100.00' });
+    const donation = await makeDonation({ campaignId: campaign.id, amount: '100.00', status: 'EXCESS_REFUND_PENDING' });
+    await prisma.donation.update({ where: { id: donation.id }, data: { status: 'ALLOCATED', allocatedAmount: '40.00', razorpayPaymentId: 'pay_dashboard_allocated' } });
+    const event = { event: 'refund.processed', payload: { refund: { entity: {
+      id: 'rfnd_dashboard_allocated', payment_id: 'pay_dashboard_allocated', amount: 2500, status: 'processed', receipt: 'dashboard-allocated', notes: {},
+    } } } };
+    const rawBody = Buffer.from(JSON.stringify(event));
+    const signature = createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET!).update(rawBody).digest('hex');
+    const response = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
+    await razorpayRefundWebhookHandler({ rawBody, headers: { 'x-razorpay-signature': signature }, ip: '127.0.0.1' } as never, response as never, jest.fn());
+    const updated = await prisma.donation.findUniqueOrThrow({ where: { id: donation.id } });
+    expect(updated.status).toBe('REFUND_RECONCILIATION_REQUIRED');
+    expect(updated.refundedAmount.toFixed(2)).toBe('25.00');
+    expect(updated.allocatedAmount.toFixed(2)).toBe('40.00');
+    expect((await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).raisedAmount.toFixed(2)).toBe('75.00');
+  });
+
   it('retries an ambiguous refund with the same idempotency key and exact request', async () => {
     const donation = await makeDonation({ amount: '100.00', status: 'EXCESS_REFUND_PENDING' });
     const job = await makeOutboxJob(donation.id, 'pay_ambiguous_refund', 10_000);
@@ -350,6 +389,39 @@ describe('donation settlement and refund outbox (real PostgreSQL)', () => {
     await new RefundOutboxProcessor(prisma, gateway).processSelectedJob(job.id);
     expect((await prisma.refundOutbox.findUniqueOrThrow({ where: { id: job.id } })).status).toBe('RECONCILIATION_REQUIRED');
     expect((await prisma.donation.findUniqueOrThrow({ where: { id: donation.id } })).status).toBe('EXCESS_REFUND_PENDING');
+  });
+
+  it('resolves ambiguous jobs only from definitive provider evidence or verified absence', async () => {
+    const confirmedDonation = await makeDonation({ amount: '100.00', status: 'EXCESS_REFUND_PENDING' });
+    const confirmedJob = await makeOutboxJob(confirmedDonation.id, 'pay_operator_confirm', 10_000);
+    await prisma.refundOutbox.update({ where: { id: confirmedJob.id }, data: { status: 'RECONCILIATION_REQUIRED' } });
+    const confirmedGateway: RefundGateway = {
+      fetchRefunds: async () => ({ items: [{ id: 'rfnd_operator_confirm', amount: 10_000, status: 'processed', receipt: confirmedJob.receipt, notes: { donationId: confirmedDonation.id } }] }),
+      submitRefund: async () => { throw new Error('operator resolution must not submit a refund'); },
+    };
+    expect(await resolveRefundJob(confirmedJob.id, 'CONFIRMED', prisma, confirmedGateway)).toBe(true);
+    expect((await prisma.refundOutbox.findUniqueOrThrow({ where: { id: confirmedJob.id } })).status).toBe('COMPLETED');
+    expect((await prisma.donation.findUniqueOrThrow({ where: { id: confirmedDonation.id } })).status).toBe('REFUNDED');
+
+    const retryDonation = await makeDonation({ amount: '100.00', status: 'EXCESS_REFUND_PENDING' });
+    const retryJob = await makeOutboxJob(retryDonation.id, 'pay_operator_retry', 10_000);
+    await prisma.refundOutbox.update({ where: { id: retryJob.id }, data: { status: 'RECONCILIATION_REQUIRED' } });
+    const absentGateway: RefundGateway = {
+      fetchRefunds: async () => ({ items: [] }),
+      submitRefund: async () => { throw new Error('resolution must not submit'); },
+    };
+    expect(await resolveRefundJob(retryJob.id, 'RETRYABLE', prisma, absentGateway)).toBe(true);
+    expect((await prisma.refundOutbox.findUniqueOrThrow({ where: { id: retryJob.id } })).status).toBe('PENDING');
+
+    const failedDonation = await makeDonation({ amount: '100.00', status: 'EXCESS_REFUND_PENDING' });
+    const failedJob = await makeOutboxJob(failedDonation.id, 'pay_operator_failed', 10_000);
+    await prisma.refundOutbox.update({ where: { id: failedJob.id }, data: { status: 'RECONCILIATION_REQUIRED' } });
+    const failedGateway: RefundGateway = {
+      fetchRefunds: async () => ({ items: [{ id: 'rfnd_operator_failed', amount: 10_000, status: 'failed', receipt: failedJob.receipt, notes: { donationId: failedDonation.id } }] }),
+      submitRefund: async () => { throw new Error('operator resolution must not submit a refund'); },
+    };
+    expect(await resolveRefundJob(failedJob.id, 'FAILED', prisma, failedGateway)).toBe(true);
+    expect((await prisma.refundOutbox.findUniqueOrThrow({ where: { id: failedJob.id } })).status).toBe('FAILED');
   });
 
   it('recovers an expired PROCESSING lease after a worker crash', async () => {

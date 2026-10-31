@@ -229,6 +229,7 @@ export const generateAndStoreReceipt = async (
         id: true,
         publicId: true,
         amount: true,
+        refundedAmount: true,
         currencyCode: true,
         paymentMethod: true,
         razorpayPaymentId: true,
@@ -264,6 +265,7 @@ export const generateAndStoreReceipt = async (
     if (!isReceiptEligible(donation.status)) {
       return null;
     }
+    if (donation.amount.lte(donation.refundedAmount)) return null;
 
     // Stable donor-safe receipt reference; never expose the internal donation UUID.
     const receiptNo = `TI-${donation.publicId.toUpperCase()}`;
@@ -341,7 +343,7 @@ export const generateAndStoreReceipt = async (
       donorName: donation.donor?.fullName ?? 'Donor',
       ngoName: donation.ngo?.organisationName ?? 'NGO',
       registrationNo: donation.ngo?.registrationNo ?? 'N/A',
-      amountInr: donation.amount.toFixed(2),
+      amountInr: donation.amount.minus(donation.refundedAmount).toFixed(2),
       currencyCode: donation.currencyCode,
       paymentMethod: donation.paymentMethod,
       paymentReference: donation.razorpayPaymentId,
@@ -364,12 +366,19 @@ export const generateAndStoreReceipt = async (
     const signedUrl = await receiptStorage.getSignedUrl(storagePath, RECEIPT_URL_TTL_SECONDS, downloadFilename);
 
     // 6. Persist only the stored receipt path; generation does not send email.
-    await prisma.donation.update({
-      where: { id: donationId },
-      data: {
-        taxReceiptUrl: storagePath,   // store path; fresh signed URLs are generated on demand
-      },
+    const persisted = await prisma.$transaction(async (tx) => {
+      const changed = await tx.donation.updateMany({
+        where: { id: donationId, status: donation.status, refundedAmount: donation.refundedAmount },
+        data: { taxReceiptUrl: storagePath },
+      });
+      if (changed.count !== 1) return false;
+      await tx.attestation.updateMany({
+        where: { donationId, disbursementId: null, type: 'RECEIPT', status: 'REVOKED' },
+        data: { status: 'PENDING', allocatedAmount: donation.amount.minus(donation.refundedAmount), rejectionReason: null },
+      });
+      return true;
     });
+    if (!persisted) return null;
 
     if (process.env.NODE_ENV !== "test") {
       console.log(`[ReceiptService] Receipt generated for donation ${donationId}: ${storagePath}`);

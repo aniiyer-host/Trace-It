@@ -248,10 +248,13 @@ export const razorpayRefundWebhookHandler = async (
           where: { razorpayRefundId: refundId },
           select: { donationId: true },
         });
+        const refundedDonation = refundJob ? null : await prisma.donation.findFirst({
+          where: { razorpayPaymentId }, select: { id: true },
+        });
         void writeAuditLog({
           actorType: AuditActorType.WEBHOOK,
           entityType: 'donation',
-          entityId: refundJob?.donationId,
+          entityId: refundJob?.donationId ?? refundedDonation?.id,
           action: event.event === 'refund.processed' ? 'PAYMENT_REFUNDED' : 'PAYMENT_REFUND_FAILED',
           metadata: {
             razorpayPaymentId,

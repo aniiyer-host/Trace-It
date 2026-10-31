@@ -37,7 +37,7 @@ export const getPublicCampaigns = async (
 
     const campaigns = await prisma.campaign.findMany({
       where: {
-        status: CampaignStatus.ACTIVE,
+        status: { in: [CampaignStatus.ACTIVE, CampaignStatus.FUNDING_COMPLETE] },
         ...(cursor ? { id: { gt: cursor } } : {}),
       },
       take: limit + 1,
@@ -126,7 +126,7 @@ export const getPublicCampaignById = async (
     const id = req.params['id'] as string;
 
     const campaigns = await prisma.campaign.findMany({
-      where: { id, status: CampaignStatus.ACTIVE },
+      where: { id, status: { in: [CampaignStatus.ACTIVE, CampaignStatus.FUNDING_COMPLETE] } },
       take: 1,
       select: {
         id: true,

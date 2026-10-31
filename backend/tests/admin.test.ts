@@ -72,6 +72,17 @@ describe("Admin API Integration Tests", () => {
     expect(Array.isArray(res.body)).toBe(true);
   });
 
+  it("protects refund reconciliation operations behind admin authentication", async () => {
+    const anonymous = await request(app).get("/api/admin/refunds/reconciliation");
+    expect(anonymous.status).toBe(401);
+    const admin = await request(app)
+      .get("/api/admin/refunds/reconciliation")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(admin.status).toBe(200);
+    expect(admin.body).toHaveProperty("unresolvedCount");
+    expect(admin.body).toHaveProperty("jobs");
+  });
+
   it("POST /api/admin/ngos/:id/approve - should approve NGO", async () => {
     const res = await request(app)
       .post(`/api/admin/ngos/${ngoUserId}/approve`)

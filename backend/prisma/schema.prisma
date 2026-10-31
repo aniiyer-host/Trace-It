@@ -39,6 +39,7 @@ enum CampaignStatus {
   DRAFT
   PENDING_APPROVAL
   ACTIVE
+  FUNDING_COMPLETE
   PAUSED
   COMPLETED
   REJECTED
@@ -54,6 +55,7 @@ enum DonationStatus {
   ALLOCATED
   DISBURSED
   DELIVERED
+  REFUND_RECONCILIATION_REQUIRED
 }
 
 enum DocumentType {
@@ -121,6 +123,7 @@ enum AttestationStatus {
   NGO_SIGNED
   APPROVED
   REJECTED
+  REVOKED
 }
 
 enum ProvenanceEventType {
@@ -280,6 +283,7 @@ model Donation {
   campaignId         String?
   amount             Decimal   @db.Decimal(14, 2)
   allocatedAmount    Decimal   @default(0) @db.Decimal(14, 2)
+  refundedAmount     Decimal   @default(0) @db.Decimal(14, 2)
   currencyCode       String    @default("INR")
   paymentMethod      PaymentMethod
   status             DonationStatus @default(INITIATED)
@@ -291,6 +295,7 @@ model Donation {
   donorIdHash        String?
   solanaTxHash       String?
   refundOutbox       RefundOutbox?
+  providerRefunds    ProviderRefund[]
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   attestations Attestation[]
@@ -308,6 +313,23 @@ model Donation {
   @@index([status])
   @@index([razorpayOrderId])
   @@map("donations")
+}
+
+model ProviderRefund {
+  id                String   @id @default(uuid())
+  razorpayRefundId  String   @unique
+  donationId        String
+  amountPaise       Int
+  status            String
+  source            String
+  providerCreatedAt DateTime?
+  processedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  donation          Donation @relation(fields: [donationId], references: [id])
+
+  @@index([donationId, status])
+  @@map("provider_refunds")
 }
 
 model RefundOutbox {

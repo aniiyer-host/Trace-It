@@ -13,6 +13,8 @@ import {
   computeChainHash,
   hashProvenanceEvent,
 } from "../src/utils/provenance.js";
+import { completeDonationSuccess } from "../src/services/donationService.js";
+import { settleDueDisbursements } from "../src/services/disbursementSettlementWorker.js";
 
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "access_secret";
 
@@ -31,6 +33,8 @@ describe("Disbursement API Integration Tests", () => {
   let campaignId: string;
   let cohortId: string;
   let disbursementId: string;
+  let lifecycleCampaignId: string;
+  let lifecycleDonationId: string;
 
   beforeAll(async () => {
     // 1. Create a mock admin
@@ -121,16 +125,47 @@ describe("Disbursement API Integration Tests", () => {
 
   afterAll(async () => {
     // Clean up
+    if (lifecycleCampaignId) {
+      await prisma.donationAllocation.deleteMany({ where: { disbursement: { campaignId: lifecycleCampaignId } } });
+      await prisma.attestation.deleteMany({ where: { donation: { campaignId: lifecycleCampaignId } } });
+      await prisma.disbursement.deleteMany({ where: { campaignId: lifecycleCampaignId } });
+      await prisma.attestation.deleteMany({ where: { donationId: lifecycleDonationId } });
+    }
     await prisma.donationAllocation.deleteMany({ where: { disbursement: { campaignId } } });
     await prisma.attestation.deleteMany({ where: { donation: { campaignId } } });
     await prisma.disbursement.deleteMany({ where: { campaignId } });
     await prisma.donation.deleteMany({ where: { campaignId } });
+    await prisma.donation.deleteMany({ where: { id: lifecycleDonationId } });
     await prisma.beneficiaryCohort.deleteMany({ where: { campaignId } });
     await prisma.campaign.deleteMany({ where: { id: campaignId } });
+    if (lifecycleCampaignId) await prisma.campaign.deleteMany({ where: { id: lifecycleCampaignId } });
 
     await prisma.profile.delete({ where: { id: adminUserId } });
     await prisma.profile.delete({ where: { id: donorUserId } });
     await prisma.profile.delete({ where: { id: ngoUserId } });
+  });
+
+  test("funding target closes intake while keeping public visibility and disbursement eligibility", async () => {
+    const campaign = await prisma.campaign.create({ data: {
+      ngoId: ngoUserId, title: "Lifecycle regression", description: "Strict funding lifecycle",
+      targetAmount: 100, raisedAmount: 0, status: CampaignStatus.ACTIVE, sdgTags: [],
+    } });
+    lifecycleCampaignId = campaign.id;
+    const donation = await prisma.donation.create({ data: {
+      donorId: donorUserId, ngoId: ngoUserId, campaignId: campaign.id, amount: 100,
+      paymentMethod: "UPI", status: "INITIATED", razorpayOrderId: `lifecycle-${crypto.randomUUID()}`,
+    } });
+    lifecycleDonationId = donation.id;
+    await completeDonationSuccess(donation.id, { source: "simulation" });
+    expect((await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).status).toBe(CampaignStatus.FUNDING_COMPLETE);
+    const publicList = await request(app).get("/api/public/campaigns");
+    expect(publicList.body.data.some((row: { id: string }) => row.id === campaign.id)).toBe(true);
+    await prisma.profile.update({ where: { id: donorUserId }, data: { kycStatus: "APPROVED" } });
+    const donationAttempt = await request(app).post("/api/donor/donate").set("Authorization", `Bearer ${donorToken}`).send({ ngoId: ngoUserId, campaignId: campaign.id, amount: 10, paymentMethod: "UPI" });
+    expect(donationAttempt.status).toBe(400);
+    expect(donationAttempt.body.code).toBe("CAMPAIGN_CLOSED");
+    const disbursement = await request(app).post("/api/charity/disburse").set("Authorization", `Bearer ${ngoToken}`).send({ campaignId: campaign.id, amountInr: 100 });
+    expect(disbursement.status).toBe(201);
   });
 
   test("POST /api/charity/disburse - create a disbursement", async () => {
@@ -479,8 +514,12 @@ describe("Disbursement API Integration Tests", () => {
     expect(res.status).toBe(200);
     expect(res.body.isFinalDisbursement).toBe(true);
 
-    // Verify Campaign is closed
-    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+    // Completion follows final disbursement settlement, not approval alone.
+    let campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
+    expect(campaign?.status).toBe(CampaignStatus.ACTIVE);
+    await prisma.disbursement.update({ where: { id: finalDisbursementId }, data: { status: DisbursementStatus.SENT, settlementDueAt: new Date(Date.now() - 1_000) } });
+    expect(await settleDueDisbursements(prisma, new Date())).toBe(1);
+    campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
     expect(campaign?.status).toBe(CampaignStatus.COMPLETED);
   });
 

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { PrismaClient } from '../../generated/prisma/client.js';
+import { Prisma, type PrismaClient } from '../../generated/prisma/client.js';
 import {
   DonationStatus,
   ProvenanceEventType,
@@ -33,14 +33,53 @@ export interface RefundGateway {
   ): Promise<GatewayRefund>;
 }
 
+export const inspectProviderRefunds = (paymentId: string, gateway: RefundGateway = razorpayGateway) => gateway.fetchRefunds(paymentId);
+
+export async function resolveRefundJob(
+  jobId: string,
+  resolution: 'RETRYABLE' | 'FAILED' | 'CONFIRMED',
+  database: PrismaClient = prisma,
+  gateway: RefundGateway = razorpayGateway,
+): Promise<boolean> {
+  const job = await database.refundOutbox.findUnique({ where: { id: jobId } });
+  if (!job || job.status !== RefundOutboxStatus.RECONCILIATION_REQUIRED) return false;
+  const refunds = await gateway.fetchRefunds(job.razorpayPaymentId);
+  const matching = refunds.items.find((refund) =>
+    refund.receipt === job.receipt || refund.notes?.donationId === job.donationId);
+  if (resolution === 'RETRYABLE' && matching) throw new Error('Matching provider refund exists; retry is unsafe');
+  if (resolution === 'FAILED' && matching?.status !== 'failed') throw new Error('Provider has not confirmed this refund failed');
+  if (resolution === 'CONFIRMED' && matching?.status !== 'processed') throw new Error('Provider has not confirmed this refund processed');
+  if (matching && matching.amount !== job.amountPaise) throw new Error('Provider refund amount differs from the outbox request; manual financial review is required');
+  if (resolution === 'RETRYABLE' && !matching) {
+    const updated = await database.refundOutbox.updateMany({
+      where: { id: job.id, status: RefundOutboxStatus.RECONCILIATION_REQUIRED },
+      data: { status: RefundOutboxStatus.PENDING, retryCount: 0, nextAttemptAt: new Date(), lastError: 'Operator verified no matching provider refund' },
+    });
+    return updated.count === 1;
+  }
+  if (!matching) return false;
+  const evidence = { paymentId: job.razorpayPaymentId, refundId: matching.id,
+    amountPaise: matching.amount, receipt: matching.receipt, notes: matching.notes };
+  if (resolution === 'CONFIRMED') return recordProviderRefund({ ...evidence, status: 'processed', source: 'OPERATOR_RECONCILIATION' }, database);
+  return failRefundFromGateway(evidence, database);
+}
+
 export function createRazorpayRefundGateway(
   client: ReturnType<typeof getRazorpayClient>,
 ): RefundGateway {
   return {
     async fetchRefunds(paymentId) {
       (client.api as unknown as { rq: { defaults: { timeout: number } } }).rq.defaults.timeout = 30_000;
-      const result = await client.payments.fetchMultipleRefund(paymentId, { count: 100 });
-      return { items: (result.items ?? []) as GatewayRefund[] };
+      const items: GatewayRefund[] = [];
+      let skip = 0;
+      while (true) {
+        const result = await client.payments.fetchMultipleRefund(paymentId, { count: 100, skip });
+        const page = (result.items ?? []) as GatewayRefund[];
+        items.push(...page);
+        if (page.length < 100) break;
+        skip += page.length;
+      }
+      return { items };
     },
     async submitRefund(paymentId, body, idempotencyKey) {
       // The installed Razorpay SDK only permits a small allowlist of global
@@ -95,8 +134,24 @@ export async function confirmRefund(
   database: PrismaClient = prisma,
 ): Promise<boolean> {
   if (evidence.status !== 'processed') return false;
+  const outboxMatch = await database.refundOutbox.findFirst({
+    where: { razorpayPaymentId: evidence.paymentId, amountPaise: evidence.amountPaise,
+      OR: [{ receipt: evidence.receipt ?? '__no_receipt__' },
+        ...(evidence.notes?.donationId ? [{ donationId: evidence.notes.donationId }] : []),
+        { razorpayRefundId: evidence.refundId }] },
+    select: { donationId: true },
+  });
+  return recordProviderRefund({ ...evidence, source: outboxMatch ? 'APPLICATION' : 'RAZORPAY_DASHBOARD' }, database);
+}
 
+export async function recordProviderRefund(
+  evidence: RefundWebhookEvidence & { source: string },
+  database: PrismaClient = prisma,
+): Promise<boolean> {
   return database.$transaction(async (tx) => {
+    const existing = await tx.providerRefund.findUnique({ where: { razorpayRefundId: evidence.refundId } });
+    if (existing) return false;
+    const donationIdFromEvidence = evidence.notes?.donationId;
     const job = await tx.refundOutbox.findFirst({
       where: {
         razorpayPaymentId: evidence.paymentId,
@@ -111,45 +166,68 @@ export async function confirmRefund(
       },
       include: { donation: true },
     });
-    if (!job) return false;
-    if (job.status === RefundOutboxStatus.COMPLETED) {
-      return false;
-    }
-
+    const donation = job?.donation ?? await tx.donation.findFirst({ where: {
+      razorpayPaymentId: evidence.paymentId,
+      ...(donationIdFromEvidence ? { id: donationIdFromEvidence } : {}),
+    }, include: { ngo: true } });
+    if (!donation) return false;
     const occurredAt = new Date();
-    const updated = await tx.refundOutbox.updateMany({
-      where: {
-        id: job.id,
-        status: { not: RefundOutboxStatus.COMPLETED },
-        OR: [{ razorpayRefundId: null }, { razorpayRefundId: evidence.refundId }],
-      },
+    const rows = donation.campaignId ? await tx.$queryRaw<Array<{id:string}>>`SELECT "id" FROM "campaigns" WHERE "id"=${donation.campaignId} FOR UPDATE` : [];
+    if (donation.campaignId && !rows.length) throw new Error('Refund campaign missing');
+    const lockedDonation = await tx.donation.findUniqueOrThrow({ where: { id: donation.id } });
+    const refundInr = new Prisma.Decimal(evidence.amountPaise).div(100);
+    const newRefunded = lockedDonation.refundedAmount.plus(refundInr);
+    const exceedsContribution = newRefunded.greaterThan(lockedDonation.amount);
+    const hasAllocation = lockedDonation.allocatedAmount.greaterThan(0);
+    const status = hasAllocation || exceedsContribution
+      ? DonationStatus.REFUND_RECONCILIATION_REQUIRED
+      : newRefunded.greaterThanOrEqualTo(lockedDonation.amount)
+        ? DonationStatus.REFUNDED
+        : DonationStatus.SUCCESS;
+    await tx.providerRefund.create({ data: {
+      razorpayRefundId: evidence.refundId, donationId: donation.id,
+      amountPaise: evidence.amountPaise, status: 'processed', source: evidence.source,
+      processedAt: occurredAt,
+    } });
+    await tx.donation.update({ where: { id: donation.id }, data: { refundedAmount: newRefunded, status } });
+    if (job && job.status !== RefundOutboxStatus.COMPLETED) {
+      await tx.refundOutbox.update({ where: { id: job.id }, data: {
+        status: RefundOutboxStatus.COMPLETED, razorpayRefundId: evidence.refundId,
+        gatewayStatus: 'processed', confirmedAt: occurredAt, lockedAt: null, lockedBy: null, lastError: null,
+      } });
+    }
+    // Only reduce campaign funds by the part of this refund that was still
+    // unallocated. Any refunded value that overlaps existing allocations stays
+    // in explicit reconciliation; it cannot be silently clawed back here.
+    const remainingUnallocated = Prisma.Decimal.max(
+      lockedDonation.amount.minus(lockedDonation.allocatedAmount).minus(lockedDonation.refundedAmount), 0,
+    );
+    const wasCountedInCampaign = ([
+      DonationStatus.SUCCESS, DonationStatus.ALLOCATED, DonationStatus.DISBURSED,
+      DonationStatus.DELIVERED, DonationStatus.REFUND_RECONCILIATION_REQUIRED,
+    ] as DonationStatus[]).includes(lockedDonation.status);
+    const campaignAdjustment = wasCountedInCampaign
+      ? Prisma.Decimal.min(refundInr, remainingUnallocated)
+      : new Prisma.Decimal(0);
+    if (campaignAdjustment.greaterThan(0) && donation.campaignId) {
+      await tx.campaign.update({ where: { id: donation.campaignId }, data: { raisedAmount: { decrement: campaignAdjustment } } });
+    }
+    await tx.attestation.updateMany({
+      where: { donationId: donation.id, disbursementId: null, type: 'RECEIPT', status: { not: 'REVOKED' } },
       data: {
-        status: RefundOutboxStatus.COMPLETED,
-        razorpayRefundId: evidence.refundId,
-        gatewayStatus: evidence.status,
-        confirmedAt: occurredAt,
-        lockedAt: null,
-        lockedBy: null,
-        lastError: null,
+        status: 'REVOKED',
+        allocatedAmount: Prisma.Decimal.max(lockedDonation.amount.minus(newRefunded), 0),
+        rejectionReason: 'Refund recorded; original contribution receipt superseded',
       },
     });
-    if (updated.count !== 1) return false;
-
-    const donationUpdate = await tx.donation.updateMany({
-      where: {
-        id: job.donationId,
-        status: { in: [DonationStatus.EXCESS_REFUND_PENDING, DonationStatus.EXCESS_REFUND_FAILED] },
-      },
-      data: { status: DonationStatus.REFUNDED },
-    });
-    if (donationUpdate.count !== 1) throw new Error('Refund job and donation state do not match');
+    await tx.donation.update({ where: { id: donation.id }, data: { taxReceiptUrl: null, taxReceiptEmailed: false } });
     await appendProvenanceEvent(tx, {
       eventType: ProvenanceEventType.DONATION_REFUND_PROCESSED,
       entityType: 'Donation',
-      entityId: job.donationId,
-      amountInr: job.donation.amount.toFixed(2),
-      ngoId: job.donation.ngoId,
-      campaignId: job.donation.campaignId,
+      entityId: donation.id,
+      amountInr: refundInr.toFixed(2),
+      ngoId: donation.ngoId,
+      campaignId: donation.campaignId,
       occurredAt,
     }, evidence.refundId);
     return true;
@@ -225,11 +303,17 @@ export async function processRefundJob(
   try {
     const existing = await gateway.fetchRefunds(job.razorpayPaymentId);
     const matching = existing.items.find((refund) =>
-      refund.amount === job.amountPaise &&
-      (refund.receipt === job.receipt || refund.notes?.donationId === job.donationId),
+      refund.receipt === job.receipt || refund.notes?.donationId === job.donationId,
     );
 
     if (matching) {
+      if (matching.amount !== job.amountPaise) {
+        await database.refundOutbox.updateMany({
+          where: { id: job.id, status: RefundOutboxStatus.PROCESSING, lockedBy: workerId },
+          data: { status: RefundOutboxStatus.RECONCILIATION_REQUIRED, lastError: 'Provider refund exists with an amount different from the outbox request', lockedAt: null, lockedBy: null },
+        });
+        return;
+      }
       if (matching.status === 'processed') {
         await confirmRefund({
           paymentId: job.razorpayPaymentId,

@@ -18,6 +18,7 @@ import { writeAuditLog } from "../services/auditLogService.js";
 import { allocateDonation } from "../services/statusService.js";
 import { appendProvenanceEvent } from "../services/provenanceChainService.js";
 import { HashService } from "../services/hashService.js";
+import { inspectProviderRefunds, resolveRefundJob } from "../services/refundService.js";
 
 import { StorageService } from "../services/storageService.js";
 import {
@@ -28,6 +29,52 @@ import {
 } from "./bankTransfers.js";
 
 const adminRouter = Router();
+
+
+const listRefundReconciliation = async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [jobs, allocatedCases] = await Promise.all([
+      prisma.refundOutbox.findMany({
+        where: { status: "RECONCILIATION_REQUIRED" },
+        include: { donation: { select: { id: true, amount: true, refundedAmount: true, status: true, allocatedAmount: true, razorpayPaymentId: true } } },
+        orderBy: { updatedAt: "asc" },
+      }),
+      prisma.donation.findMany({ where: { status: "REFUND_RECONCILIATION_REQUIRED" }, include: { providerRefunds: true, donationAllocations: true }, orderBy: { updatedAt: "asc" } }),
+    ]);
+    const unresolvedDonationIds = new Set([...jobs.map((job) => job.donationId), ...allocatedCases.map((donation) => donation.id)]);
+    res.json({ unresolvedCount: unresolvedDonationIds.size, unresolvedOutboxCount: jobs.length, allocatedCaseCount: allocatedCases.length, jobs, allocatedCases });
+  } catch (error) { next(error); }
+};
+
+const inspectRefundReconciliation = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const job = await prisma.refundOutbox.findUnique({ where: { id: req.params.id as string }, include: { donation: true } });
+    if (!job) {
+      const donation = await prisma.donation.findUnique({ where: { id: req.params.id as string }, include: { providerRefunds: true, donationAllocations: { include: { disbursement: true } } } });
+      if (donation?.status === "REFUND_RECONCILIATION_REQUIRED") return res.json({ donation, providerRefunds: donation.providerRefunds, allocations: donation.donationAllocations, resolution: "Manual financial review required; automated balance changes are disabled for allocated donations." });
+      return res.status(404).json({ error: "Refund job or financial exception not found" });
+    }
+    const provider = await inspectProviderRefunds(job.razorpayPaymentId);
+    return res.json({ job, providerRefunds: provider.items });
+  } catch (error) { next(error); }
+};
+
+const resolveRefundReconciliation = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const adminId = req.user?.id;
+    const resolution = req.body?.resolution;
+    if (!adminId) return res.status(401).json({ error: "User not authenticated" });
+    if (!["CONFIRMED", "FAILED", "RETRYABLE"].includes(resolution)) {
+      return res.status(400).json({ error: "resolution must be CONFIRMED, FAILED, or RETRYABLE" });
+    }
+    const changed = await resolveRefundJob(req.params.id as string, resolution);
+    if (!changed) return res.status(409).json({ error: "Refund job was not resolved; refresh provider evidence" });
+    await writeAuditLog({ actorType: AuditActorType.USER, actorId: adminId, entityType: "refund_outbox",
+      entityId: req.params.id as string, action: "REFUND_RECONCILIATION_RESOLVED",
+      metadata: { resolution }, ipAddress: req.ip });
+    return res.json({ resolved: true, resolution });
+  } catch (error) { next(error); }
+};
 
 const adminCampaignResponse = (campaign: any) => {
   if (!campaign) return campaign;
@@ -137,13 +184,6 @@ export const approveDisbursement = async (
         data: { isFinalDisbursement },
       });
 
-      if (isFinalDisbursement) {
-        await tx.campaign.update({
-          where: { id: approvedDisbursement.campaignId },
-          data: { status: "COMPLETED" },
-        });
-      }
-
       const donations = await tx.donation.findMany({
         where: {
           campaignId: approvedDisbursement.campaignId,
@@ -157,9 +197,9 @@ export const approveDisbursement = async (
       for (const donation of donations) {
         if (remainingToAllocate.lessThanOrEqualTo(0)) break;
 
-        const availableInDonation = donation.amount.minus(
-          donation.allocatedAmount,
-        );
+        const availableInDonation = donation.amount
+          .minus(donation.allocatedAmount)
+          .minus(donation.refundedAmount);
         if (availableInDonation.lessThanOrEqualTo(0)) continue;
 
         const amountToAllocate = availableInDonation.lessThan(
@@ -1324,6 +1364,9 @@ export const getDisbursementProofUrl = async (
 // ---------------------------------------------------------------------------
 
 // NGOs
+adminRouter.get("/refunds/reconciliation", requireAuth, requireRole(UserRole.ADMIN), listRefundReconciliation);
+adminRouter.get("/refunds/reconciliation/:id", requireAuth, requireRole(UserRole.ADMIN), inspectRefundReconciliation);
+adminRouter.post("/refunds/reconciliation/:id/resolve", requireAuth, requireRole(UserRole.ADMIN), resolveRefundReconciliation);
 adminRouter.get("/ngos", requireAuth, requireRole(UserRole.ADMIN), getNgos);
 adminRouter.post(
   "/ngos/:id/approve",

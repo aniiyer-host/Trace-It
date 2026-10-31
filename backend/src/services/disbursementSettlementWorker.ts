@@ -15,13 +15,14 @@ export async function settleDueDisbursements(
         status: DisbursementStatus.SENT,
         settlementDueAt: { lte: now },
       },
-      select: { id: true },
+      select: { id: true, campaignId: true, isFinalDisbursement: true },
       orderBy: { settlementDueAt: 'asc' },
       take: BATCH_SIZE,
     });
 
     let settled = 0;
-    for (const { id } of due) {
+    for (const item of due) {
+      const { id } = item;
       const transition = await tx.disbursement.updateMany({
         where: {
           id,
@@ -34,6 +35,10 @@ export async function settleDueDisbursements(
         },
       });
       if (transition.count !== 1) continue;
+
+      if (item.isFinalDisbursement) {
+        await tx.campaign.update({ where: { id: item.campaignId }, data: { status: 'COMPLETED' } });
+      }
 
       await tx.auditLog.create({
         data: {
