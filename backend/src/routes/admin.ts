@@ -21,6 +21,7 @@ import { HashService } from "../services/hashService.js";
 import { inspectProviderRefunds, resolveRefundJob } from "../services/refundService.js";
 
 import { StorageService } from "../services/storageService.js";
+import logger from "../utils/logger.js";
 import {
   approveBankTransfer,
   downloadAdminBankTransferEvidence,
@@ -603,25 +604,109 @@ export const updateCampaignOverfundingPolicy = async (
       return res.status(400).json({ error: "allowOverfunding must be a boolean" });
     }
 
-    const campaign = await prisma.campaign.update({
-      where: { id: campaignId },
-      data: { allowOverfunding },
-    }).catch((error: unknown) => {
-      if (error && typeof error === "object" && "code" in error && error.code === "P2025") return null;
-      throw error;
-    });
-    if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Acquire campaign row lock first (preserves Campaign Row Lock -> Provenance Chain Lock order)
+      await tx.$queryRaw`SELECT id FROM campaigns WHERE id = ${campaignId} FOR UPDATE`;
+      const campaign = await tx.campaign.findUnique({
+        where: { id: campaignId },
+      });
+      if (!campaign) {
+        return { status: 404, body: { error: "Campaign not found" }, noOp: true };
+      }
 
-    await writeAuditLog({
-      actorType: AuditActorType.USER,
-      actorId: adminId,
-      entityType: "campaign",
-      entityId: campaignId,
-      action: "CAMPAIGN_OVERFUNDING_POLICY_UPDATED",
-      metadata: { allowOverfunding },
-      ipAddress: req.ip,
+      // 2. No-op gate: do not mutate, audit, or create provenance events on no-op
+      if (campaign.allowOverfunding === allowOverfunding) {
+        return {
+          status: 200,
+          body: adminCampaignResponse(campaign),
+          noOp: true,
+        };
+      }
+
+      const previousValue = campaign.allowOverfunding;
+      const newValue = allowOverfunding;
+      const occurredAt = new Date();
+
+      // 3. Update campaign setting
+      const updatedCampaign = await tx.campaign.update({
+        where: { id: campaignId },
+        data: { allowOverfunding: newValue },
+      });
+
+      // 4. Transactional audit log creation
+      const auditMetadata = {
+        field: "allowOverfunding",
+        previousValue,
+        newValue,
+        allowOverfunding: newValue,
+        occurredAt: occurredAt.toISOString(),
+      };
+      await tx.auditLog.create({
+        data: {
+          actorType: AuditActorType.USER,
+          actorId: adminId,
+          entityType: "campaign",
+          entityId: campaignId,
+          action: "CAMPAIGN_OVERFUNDING_POLICY_UPDATED",
+          metadata: auditMetadata,
+          ipAddress: req.ip ?? null,
+        },
+      });
+
+      // 5. Append provenance event inside transaction
+      // Constraint 4: ngoId remains campaign.ngoId (does not create misleading admin/NGO identity mapping).
+      // Constraint 5: Deterministic entityType represents the policy transition; entityId and campaignId both refer to the campaign.
+      const deterministicEntityType = `CampaignPolicy:allowOverfunding:${String(previousValue)}->${String(newValue)}`;
+      const transitionKey = `policy:allowOverfunding:${String(previousValue)}->${String(newValue)}:${occurredAt.toISOString()}`;
+
+      await appendProvenanceEvent(
+        tx,
+        {
+          eventType: ProvenanceEventType.CAMPAIGN_POLICY_UPDATED,
+          entityType: deterministicEntityType,
+          entityId: campaignId,
+          amountInr: "0.00",
+          ngoId: campaign.ngoId,
+          campaignId: campaignId,
+          occurredAt,
+        },
+        transitionKey,
+      );
+
+      return {
+        status: 200,
+        body: adminCampaignResponse(updatedCampaign),
+        noOp: false,
+        auditEvent: {
+          action: "CAMPAIGN_OVERFUNDING_POLICY_UPDATED",
+          actorType: AuditActorType.USER,
+          actorId: adminId,
+          entityType: "campaign",
+          entityId: campaignId,
+          ipAddress: req.ip ?? null,
+          metadata: auditMetadata,
+        },
+      };
     });
-    return res.json(adminCampaignResponse(campaign));
+
+    // 6. Post-commit best-effort SIEM forwarding (Constraint 7)
+    if (result.status === 200 && !result.noOp && result.auditEvent) {
+      try {
+        logger.info("Security Event", {
+          eventType: result.auditEvent.action,
+          actorType: result.auditEvent.actorType,
+          actorId: result.auditEvent.actorId ?? null,
+          entityType: result.auditEvent.entityType,
+          entityId: result.auditEvent.entityId ?? null,
+          ip: result.auditEvent.ipAddress ?? "",
+          metadata: result.auditEvent.metadata ?? {},
+        });
+      } catch (siemErr) {
+        logger.warn("[SIEM] Post-commit SIEM delivery failed", { err: siemErr });
+      }
+    }
+
+    return res.status(result.status).json(result.body);
   } catch (err) {
     next(err);
   }

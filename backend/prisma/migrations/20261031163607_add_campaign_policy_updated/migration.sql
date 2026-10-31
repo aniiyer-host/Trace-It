@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "ProvenanceEventType" ADD VALUE 'CAMPAIGN_POLICY_UPDATED';
