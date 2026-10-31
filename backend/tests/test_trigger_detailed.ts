@@ -50,64 +50,23 @@ async function main() {
   }
   console.log("");
 
-  // Test 2: sync_campaign_raised trigger (on donations table)
-  console.log("2. Testing sync_campaign_raised trigger (donations table)...");
+  // Campaign accounting is now performed by completeDonationSuccess inside
+  // its transaction; the old trigger must stay absent to prevent double credit.
+  console.log("2. Verifying sync_campaign_raised has been removed...");
   try {
-    // Find a campaign to test with
-    const campaign = await prisma.campaign.findFirst({
-      where: { slug: "education-for-all" },
-    });
-    if (!campaign) {
-      console.log("  ❌ Education for All campaign not found");
-      return;
-    }
-
-    const originalRaisedAmount = Number(campaign.raisedAmount);
-    console.log(`  Campaign: ${campaign.title}`);
-    console.log(`  Original raised amount: ${originalRaisedAmount}`);
-
-    // Create a new donation with status INITIATED (trigger won't fire on create)
-    const newDonation = await prisma.donation.create({
-      data: {
-        id: `test-${Date.now()}`,
-        publicId: `TEST${Date.now()}`,
-        donorId: "33333333-3333-3333-3333-333333333333", // seeded donor account
-        ngoId: "22222222-2222-2222-2222-222222222222", // seeded NGO account
-        campaignId: campaign.id,
-        amount: 1000,
-        currencyCode: "INR",
-        paymentMethod: "UPI",
-        status: "INITIATED",
-      },
-    });
-    console.log(`  Created test donation with status: INITIATED`);
-
-    // Update the donation to SUCCESS (should trigger sync_campaign_raised)
-    await prisma.donation.update({
-      where: { id: newDonation.id },
-      data: { status: "SUCCESS" },
-    });
-    console.log(`  Updated donation status to: SUCCESS`);
-
-    // Check if campaign's raised amount increased
-    const updatedCampaign = await prisma.campaign.findUnique({
-      where: { id: campaign.id },
-    });
-    const newRaisedAmount = Number(updatedCampaign?.raisedAmount || 0);
-    const expectedIncrease = 1000; // donation amount
-
-    console.log(`  New raised amount: ${newRaisedAmount}`);
-    console.log(`  Expected increase: ${expectedIncrease}`);
-    console.log(`  Actual increase: ${newRaisedAmount - originalRaisedAmount}`);
-    console.log(
-      `  Trigger working: ${newRaisedAmount === originalRaisedAmount + expectedIncrease ? "✅ YES" : "❌ NO"}`,
-    );
-
-    // Clean up: delete the test donation
-    await prisma.donation.delete({ where: { id: newDonation.id } });
+    const trigger = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1 FROM pg_trigger t
+        JOIN pg_class c ON c.oid = t.tgrelid
+        WHERE c.relname = 'donations'
+          AND t.tgname = 'trg_sync_campaign_raised'
+          AND NOT t.tgisinternal
+      ) AS exists
+    `;
+    console.log(`  Trigger absent: ${trigger[0]?.exists === false ? "✅ YES" : "❌ NO"}`);
   } catch (error) {
     console.log(
-      `  ❌ Error testing sync_campaign_raised trigger: ${getErrorMessage(error)}`,
+      `  ❌ Error checking removed trigger: ${getErrorMessage(error)}`,
     );
   }
   console.log("");

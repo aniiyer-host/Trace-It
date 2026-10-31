@@ -5,8 +5,10 @@ import {
   AttestationStatus,
   AttestationType,
   AuditActorType,
+  CampaignStatus,
   DonationStatus,
   ProvenanceEventType,
+  RefundOutboxStatus,
 } from '../../generated/prisma/enums.js';
 import Razorpay from 'razorpay';
 import { Prisma } from '../../generated/prisma/client.js';
@@ -15,7 +17,10 @@ import { generateAndStoreReceipt } from './receiptService.js';
 import { notifyAdmin } from './emailService.js';
 import { appendProvenanceEvent } from './provenanceChainService.js';
 import { MonetaryInputError, parseInrAmount } from '../utils/money.js';
-import { enqueueDonationSuccessEmail } from './email/notificationService.js';
+import {
+  enqueueDonationExcessRefundEmail,
+  enqueueDonationSuccessEmail,
+} from './email/notificationService.js';
 
 
 
@@ -158,6 +163,45 @@ export const completeDonationSuccess = async (
   try {
     transition = await prisma.$transaction(async (tx) => {
       const occurredAt = new Date();
+      let lockedCampaign: {
+        id: string;
+        targetAmount: Prisma.Decimal;
+        raisedAmount: Prisma.Decimal;
+        allowOverfunding: boolean;
+        status: CampaignStatus;
+      } | undefined;
+
+      // Always acquire locks in campaign -> donation order. This serializes
+      // capacity decisions and avoids a donation/campaign lock inversion.
+      if (donation.campaignId) {
+        const rows = await tx.$queryRaw<Array<{
+          id: string;
+          targetAmount: Prisma.Decimal;
+          raisedAmount: Prisma.Decimal;
+          allowOverfunding: boolean;
+          status: CampaignStatus;
+        }>>`
+          SELECT "id", "targetAmount", "raisedAmount", "allowOverfunding", "status"
+          FROM "campaigns"
+          WHERE "id" = ${donation.campaignId}
+          FOR UPDATE
+        `;
+        lockedCampaign = rows[0];
+        if (!lockedCampaign) throw new Error(`Associated campaign ${donation.campaignId} not found`);
+      }
+
+      const strictCap = lockedCampaign ? !lockedCampaign.allowOverfunding : false;
+      const inactive = lockedCampaign ? lockedCampaign.status !== CampaignStatus.ACTIVE : false;
+      const capacityExceeded = lockedCampaign && strictCap
+        ? new Prisma.Decimal(lockedCampaign.targetAmount)
+          .minus(lockedCampaign.raisedAmount)
+          .lessThan(donation.amount)
+        : false;
+      // Inactive campaigns reject captured payments even when overfunding is on.
+      const isOverflow = Boolean(inactive || capacityExceeded);
+      const nextStatus = isOverflow
+        ? DonationStatus.EXCESS_REFUND_PENDING
+        : DonationStatus.SUCCESS;
       const claimed = await tx.donation.updateMany({
         where: {
           id: donation.id,
@@ -167,10 +211,7 @@ export const completeDonationSuccess = async (
           status: { in: [DonationStatus.INITIATED, DonationStatus.FAILED] },
           razorpayPaymentId: null,
         },
-        data: {
-          status: DonationStatus.SUCCESS,
-          razorpayPaymentId: paymentId,
-        },
+        data: { status: nextStatus, razorpayPaymentId: paymentId },
       });
 
       const currentDonation = await tx.donation.findUnique({
@@ -189,7 +230,7 @@ export const completeDonationSuccess = async (
           currentDonation.status !== DonationStatus.INITIATED &&
           currentDonation.status !== DonationStatus.FAILED
         ) {
-          return { donation: currentDonation, transitioned: false };
+          return { donation: currentDonation, transitioned: false, outcome: 'IDEMPOTENT' as const };
         }
 
         throw new DonationPaymentError(
@@ -198,7 +239,47 @@ export const completeDonationSuccess = async (
         );
       }
 
-      const provenanceInput = {
+      if (isOverflow) {
+        const reason = inactive ? 'CAMPAIGN_INACTIVE' : 'CAMPAIGN_TARGET_EXCEEDED';
+        const compactId = donation.id.replace(/-/g, '');
+        await tx.refundOutbox.create({
+          data: {
+            donationId: donation.id,
+            razorpayPaymentId: paymentId,
+            amountPaise: expectedAmountPaise,
+            reason,
+            receipt: `rfnd_${compactId}`,
+            idempotencyKey: compactId,
+            status: RefundOutboxStatus.PENDING,
+          },
+        });
+        await appendProvenanceEvent(tx, {
+          eventType: ProvenanceEventType.DONATION_OVERFLOW_REJECTED,
+          entityType: 'Donation',
+          entityId: currentDonation.id,
+          amountInr: currentDonation.amount.toFixed(2),
+          ngoId: currentDonation.ngoId,
+          campaignId: currentDonation.campaignId,
+          occurredAt,
+        }, paymentId);
+        await enqueueDonationExcessRefundEmail(tx, currentDonation, occurredAt);
+        return { donation: currentDonation, transitioned: true, outcome: 'REFUND_QUEUED' as const };
+      }
+
+      if (lockedCampaign) {
+        const newRaised = new Prisma.Decimal(lockedCampaign.raisedAmount).plus(donation.amount);
+        await tx.campaign.update({
+          where: { id: lockedCampaign.id },
+          data: {
+            raisedAmount: newRaised,
+            status: strictCap && newRaised.greaterThanOrEqualTo(lockedCampaign.targetAmount)
+              ? CampaignStatus.COMPLETED
+              : lockedCampaign.status,
+          },
+        });
+      }
+
+      await appendProvenanceEvent(tx, {
         eventType: ProvenanceEventType.DONATION_SUCCESS,
         entityType: 'Donation',
         entityId: currentDonation.id,
@@ -206,8 +287,7 @@ export const completeDonationSuccess = async (
         ngoId: currentDonation.ngoId,
         campaignId: currentDonation.campaignId,
         occurredAt,
-      };
-      await appendProvenanceEvent(tx, provenanceInput, paymentId);
+      }, paymentId);
 
       const existingReceiptAttestation = await tx.attestation.findFirst({
         where: {
@@ -234,14 +314,14 @@ export const completeDonationSuccess = async (
           donationId: currentDonation.id,
           operationType: 'RECORD_DONATION',
           retryCount: 0,
-          lastAttempt: new Date(0), // Immediate eligibility
-          error: 'Enqueued from payment success'
+          lastAttempt: new Date(0),
+          error: 'Enqueued from payment success',
         },
       });
 
       await enqueueDonationSuccessEmail(tx, currentDonation, occurredAt);
 
-      return { donation: currentDonation, transitioned: true };
+      return { donation: currentDonation, transitioned: true, outcome: 'SUCCESS' as const };
     });
   } catch (error) {
     if (
@@ -264,7 +344,7 @@ export const completeDonationSuccess = async (
 
   const updatedDonation = transition.donation;
 
-  // 2. AML flag check: if amount > 100,000 INR
+  // Captured excess payments still go through AML monitoring.
   if (updatedDonation.amount.greaterThan(new Prisma.Decimal('100000'))) {
     void writeAuditLog({
       actorType: AuditActorType.SYSTEM,
@@ -274,6 +354,7 @@ export const completeDonationSuccess = async (
       metadata: {
         amount: updatedDonation.amount,
         threshold: 100000,
+        ...(transition.outcome === 'REFUND_QUEUED' ? { outcome: 'REFUND_PENDING' } : {}),
       },
       ipAddress: options?.ipAddress,
     });
@@ -284,7 +365,23 @@ export const completeDonationSuccess = async (
     );
   }
 
-  // 3. Audit log for payment success
+  if (transition.outcome === 'REFUND_QUEUED') {
+    void writeAuditLog({
+      actorType: options?.actorType ?? (evidence.source === 'webhook' ? AuditActorType.WEBHOOK : AuditActorType.SYSTEM),
+      entityType: 'donation',
+      entityId: updatedDonation.id,
+      action: 'DONATION_OVERFLOW_REJECTED',
+      metadata: {
+        razorpayOrderId: orderId,
+        razorpayPaymentId: paymentId,
+        amount: updatedDonation.amount,
+      },
+      ipAddress: options?.ipAddress,
+    });
+    return updatedDonation;
+  }
+
+  // Payment success side effects apply only to accepted contributions.
   void writeAuditLog({
     actorType:
       options?.actorType ??

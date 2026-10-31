@@ -6,7 +6,6 @@ async function main() {
   // Check for existence of functions
   const functionsToCheck = [
     "set_updated_at",
-    "sync_campaign_raised",
     "mark_tokens_redeemed",
     "handle_legal_hold",
   ];
@@ -35,7 +34,6 @@ async function main() {
     { table: "profiles", trigger: "trg_profiles_updated_at" },
     { table: "campaigns", trigger: "trg_campaigns_updated_at" },
     { table: "donations", trigger: "trg_donations_updated_at" },
-    { table: "donations", trigger: "trg_sync_campaign_raised" },
     { table: "donations", trigger: "trg_mark_tokens_redeemed" },
     {
       table: "beneficiary_cohorts",

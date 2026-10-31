@@ -14,6 +14,7 @@ import crypto from "crypto";
 
 // Mock storage service to avoid AWS/B2 calls in tests
 import { StorageService } from "../src/services/storageService";
+import { completeDonationSuccess } from "../src/services/donationService";
 jest.spyOn(StorageService.prototype, "uploadFile").mockResolvedValue(undefined);
 
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "access_secret";
@@ -330,11 +331,9 @@ describe("End-to-End Flow Tests", () => {
       });
       const donationUuid = donationRecord!.id;
 
-      // Update donation status to SUCCESS (simulating webhook)
-      await prisma.donation.update({
-        where: { publicId: donationId },
-        data: { status: DonationStatus.SUCCESS },
-      });
+      // Settle through the canonical path so campaign accounting and provenance
+      // stay consistent with the trigger-free schema.
+      await completeDonationSuccess(donationUuid, { source: "simulation" });
 
       // Now check the timeline
       const statusRes = await request(app)
@@ -435,12 +434,9 @@ describe("End-to-End Flow Tests", () => {
     });
 
     it("should allow NGO to create disbursement", async () => {
-      // Mark the initial donor's donation as SUCCESS first
-      // (simulating that the Razorpay webhook has already processed the payment)
-      await prisma.donation.updateMany({
-        where: { campaignId, status: "INITIATED" },
-        data: { status: "SUCCESS" },
-      });
+      // Settle through the canonical path. Directly changing status bypasses
+      // the campaign balance update now that the database trigger is removed.
+      await completeDonationSuccess(donationId, { source: "simulation" });
 
       const disburseRes = await request(app)
         .post("/api/charity/disburse")
@@ -559,11 +555,8 @@ describe("End-to-End Flow Tests", () => {
       expect(donationRes.status).toBe(201);
       const donationId = donationRes.body.publicId;
 
-      // Update donation status to SUCCESS (simulating webhook)
-      await prisma.donation.update({
-        where: { publicId: donationId },
-        data: { status: DonationStatus.SUCCESS },
-      });
+      const reportDonation = await prisma.donation.findUniqueOrThrow({ where: { publicId: donationId } });
+      await completeDonationSuccess(reportDonation.id, { source: "simulation" });
 
       // Now request the FCRA report
       const fcraRes = await request(app)
@@ -633,11 +626,8 @@ describe("End-to-End Flow Tests", () => {
       expect(donationRes.status).toBe(201);
       const donationId = donationRes.body.publicId;
 
-      // Update donation status to SUCCESS (simulating webhook)
-      await prisma.donation.update({
-        where: { publicId: donationId },
-        data: { status: DonationStatus.SUCCESS },
-      });
+      const reportDonation = await prisma.donation.findUniqueOrThrow({ where: { publicId: donationId } });
+      await completeDonationSuccess(reportDonation.id, { source: "simulation" });
 
       // Now request the 80G report
       const eightyGRes = await request(app)

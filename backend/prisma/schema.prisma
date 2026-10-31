@@ -49,6 +49,8 @@ enum DonationStatus {
   SUCCESS
   FAILED
   REFUNDED
+  EXCESS_REFUND_PENDING
+  EXCESS_REFUND_FAILED
   ALLOCATED
   DISBURSED
   DELIVERED
@@ -124,6 +126,8 @@ enum AttestationStatus {
 enum ProvenanceEventType {
   DONATION_SUCCESS
   DONATION_FAILED
+  DONATION_OVERFLOW_REJECTED
+  DONATION_REFUND_PROCESSED
   DONATION_ALLOCATED
   DONATION_DISBURSED
   DONATION_DELIVERED
@@ -145,6 +149,7 @@ enum AnchorStatus {
 
 enum EmailMilestone {
   DONATION_SUCCESS
+  DONATION_EXCESS_REFUND
   FUNDS_ALLOCATED
   BENEFICIARY_TRANSFER_REVIEWED
 }
@@ -154,6 +159,14 @@ enum EmailOutboxStatus {
   PROCESSING
   SENT
   FAILED
+}
+
+enum RefundOutboxStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  RECONCILIATION_REQUIRED
 }
 // MODELS
 
@@ -225,6 +238,7 @@ model Campaign {
   category           String?
   targetAmount       Decimal   @db.Decimal(14, 2)
   raisedAmount       Decimal   @default(0) @db.Decimal(14, 2)
+  allowOverfunding   Boolean   @default(false)
   currencyCode       String    @default("INR")
   status             CampaignStatus @default(DRAFT)
   approvedBy         String?   // references profiles.id
@@ -276,6 +290,7 @@ model Donation {
   taxReceiptEmailed  Boolean   @default(false)
   donorIdHash        String?
   solanaTxHash       String?
+  refundOutbox       RefundOutbox?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   attestations Attestation[]
@@ -293,6 +308,34 @@ model Donation {
   @@index([status])
   @@index([razorpayOrderId])
   @@map("donations")
+}
+
+model RefundOutbox {
+  id                       String            @id @default(uuid())
+  donationId               String            @unique
+  razorpayPaymentId        String
+  razorpayRefundId         String?           @unique
+  amountPaise              Int
+  reason                   String
+  receipt                  String            @unique
+  idempotencyKey           String            @unique
+  status                   RefundOutboxStatus @default(PENDING)
+  retryCount               Int               @default(0)
+  lastError                String?
+  nextAttemptAt            DateTime          @default(now())
+  lockedAt                 DateTime?
+  lockedBy                 String?
+  requestStartedAt         DateTime?
+  gatewayStatus            String?
+  confirmedAt              DateTime?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+
+  donation Donation @relation(fields: [donationId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([lockedAt])
+  @@map("refund_outbox")
 }
 
 // Donation Allocations

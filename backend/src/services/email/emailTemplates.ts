@@ -57,6 +57,45 @@ export const buildDonationSuccessEmail = ({
   return { subject, text, html };
 };
 
+export const buildDonationExcessRefundEmail = ({
+  donationRef,
+  amount,
+  currency,
+  occurredAt,
+  donationLink,
+}: {
+  donationRef: string;
+  amount: number | string;
+  currency: string;
+  occurredAt: Date | string;
+  donationLink?: string;
+}) => {
+  const safeAmount = typeof amount === 'number' ? amount.toFixed(2) : String(amount);
+  const safeDate = new Date(occurredAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+  const safeLink = donationLink ?? '';
+  const subject = `Refund in progress — ${escapeHtml(donationRef)}`;
+  const text = [
+    'Your donation could not be applied to the campaign because it is no longer accepting this contribution.',
+    `Donation reference: ${donationRef}`,
+    `Amount: ${safeAmount} ${currency}`,
+    `Payment confirmation time: ${safeDate}`,
+    'A full refund has been requested. The refund status will be updated after the payment provider confirms it.',
+    safeLink ? `View your donations: ${safeLink}` : undefined,
+  ].filter(Boolean).join('\n');
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height:1.6; color:#0f172a;">
+      <h2 style="margin-bottom:12px;">Refund in progress</h2>
+      <p>Your donation could not be applied to the campaign because it is no longer accepting this contribution.</p>
+      <p><strong>Donation reference:</strong> ${escapeHtml(donationRef)}</p>
+      <p><strong>Amount:</strong> ${escapeHtml(safeAmount)} ${escapeHtml(currency)}</p>
+      <p>A full refund has been requested. We will update the refund status after the payment provider confirms it.</p>
+      <p><strong>Payment confirmation time:</strong> ${escapeHtml(safeDate)}</p>
+      ${safeLink ? `<p><a href="${escapeHtml(safeLink)}">View your donations</a></p>` : ''}
+    </div>
+  `;
+  return { subject, text, html };
+};
+
 export const buildFundsAllocatedEmail = ({
   donationRef,
   disbursementRef,

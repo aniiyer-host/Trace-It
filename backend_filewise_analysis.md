@@ -79,7 +79,7 @@ This document provides a detailed, file-by-file explanation of the backend codeb
 - **Purpose**: Store SQL migration scripts for evolving the database schema.
 - **Content**: Three migration directories observed:
   1. `20260815122959_init/migration.sql`: Initial schema creation (tables for all models).
-  2. `20260815123000_add_triggers_and_functions/migration.sql`: Custom PostgreSQL triggers and functions (e.g., `set_updated_at`, `sync_campaign_raised`, `mark_tokens_redeemed`, `handle_legal_hold`).
+  2. `20260815123000_add_triggers_and_functions/migration.sql`: Historical PostgreSQL triggers and functions (`set_updated_at`, `mark_tokens_redeemed`, `handle_legal_hold` remain; `sync_campaign_raised` is removed by `20261031120000_concurrent_donation_refunds`).
   3. `20260818000001_create_blockchain_retry_queue/migration.sql`: Creates the `BlockchainRetryQueue` table for handling failed blockchain transactions.
 - **Role**: Migration history; applied in order via `prisma migrate deploy`. The triggers file is critical for automatic timestamp updates and business logic enforcement at the database level.
 
@@ -185,11 +185,11 @@ This document provides a detailed, file-by-file explanation of the backend codeb
 - **Content**: Checks if triggers exist and fire on insert/update.
 
 ### tests/test_trigger_detailed.ts
-- **Purpose**: Detailed testing of trigger logic (e.g., verifying `sync_campaign_raised` updates totals correctly).
+- **Purpose**: Detailed testing of remaining trigger logic and verifying the campaign raised-total trigger stays absent.
 - **Content**: Inserts test data and asserts trigger effects.
 
 ### tests/test_triggers_exist.ts
-- **Purpose**: Simple existence check for all defined triggers.
+- **Purpose**: Simple existence check for the remaining database triggers.
 - **Content**: Queries `pg_triggers` and asserts each trigger is present.
 
 ### tests/test_seed.ts (duplicate? but listed once)

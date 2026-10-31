@@ -116,27 +116,23 @@ describe('concurrent donation capacity reservations (disposable database)', () =
     return { campaignId, responses };
   }
 
-  it('serializes two donors competing for the last ₹25,000', async () => {
+  it('allows pre-order checks to race; confirmation is the authoritative capacity guard', async () => {
     const { campaignId, responses } = await race(20000);
-    expect(responses.map((response) => response.status).sort()).toEqual([201, 409]);
-    expect(responses.find((response) => response.status === 409)?.body).toMatchObject({
-      code: 'AMOUNT_EXCEEDS_REMAINING',
-      remainingInr: '5000.00',
-    });
+    expect(responses.map((response) => response.status).sort()).toEqual([201, 201]);
     const reservations = await prisma.donation.aggregate({
       where: { campaignId, status: { in: ['SUCCESS', 'ALLOCATED', 'DISBURSED', 'DELIVERED', 'INITIATED'] } },
       _sum: { amount: true },
     });
-    expect(reservations._sum.amount?.toFixed(2)).toBe('20000.00');
+    expect(reservations._sum.amount?.toFixed(2)).toBe('40000.00');
   }, 30000);
 
-  it('allows only one of two simultaneous requests for the full remaining amount', async () => {
+  it('lets both in-flight orders pass a stale optimistic check for the same remaining capacity', async () => {
     const { campaignId, responses } = await race(25000);
-    expect(responses.map((response) => response.status).sort()).toEqual([201, 409]);
+    expect(responses.map((response) => response.status).sort()).toEqual([201, 201]);
     const reservations = await prisma.donation.aggregate({
       where: { campaignId, status: { in: ['SUCCESS', 'ALLOCATED', 'DISBURSED', 'DELIVERED', 'INITIATED'] } },
       _sum: { amount: true },
     });
-    expect(reservations._sum.amount?.toFixed(2)).toBe('25000.00');
+    expect(reservations._sum.amount?.toFixed(2)).toBe('50000.00');
   }, 30000);
 });

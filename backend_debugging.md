@@ -371,7 +371,7 @@
 | **Razorpay Webhook** | Verifies HMAC-SHA256 signature, updates donation to SUCCESS, logs AML flag if >100k. | Supertest `POST /api/webhooks/razorpay` with raw payload. | **UNVERIFIED (BROKEN in code)** | 2026-08-21 (Static audit confirmed BUG-002) |
 | **Blockchain Recording** | Derives PDA `[b"donation", cleanId]`, records donation on Solana devnet, sets `solanaTxHash`. | `tests/blockchainService.test.ts` & integration tests. | **VERIFIED (Unit pass, BUG-006 identified)** | 2026-08-21 |
 | **Blockchain Retry Queue** | Exponential backoff for failed transactions, retry processor updates record & queue. | Unit/Integration tests with mocked service. | **UNVERIFIED (BUG-010 identified)** | 2026-08-21 |
-| **PostgreSQL Triggers** | `set_updated_at`, `sync_campaign_raised`, `mark_tokens_redeemed`, `handle_legal_hold` fire. | `npx tsx tests/test_trigger_detailed.ts`. | **UNVERIFIED (Requires local DB)** | 2026-08-21 |
+| **PostgreSQL Triggers** | `set_updated_at`, `mark_tokens_redeemed`, `handle_legal_hold` fire; campaign balances are updated by the payment-confirmation transaction and `sync_campaign_raised` is removed by the new migration. | `npx tsx tests/test_trigger_detailed.ts`. | **PARTIALLY VERIFIED (migration applied only to disposable E2E DB)** | 2026-10-31 |
 | **Security Controls** | Rate limiting (100 req/15m global, 10 req/15m auth), IDOR guards on receipts/timelines. | Supertest rate limit & IDOR assertion tests. | **VERIFIED (Static Logic Correct)** | 2026-08-21 |
 
 ---
@@ -542,13 +542,13 @@ Ensure database schema, custom PostgreSQL triggers, and Prisma 7 client configur
 ### Existing Findings
 - **Claim**: `GovernmentRequest.status` is a `String` rather than enum.
   - **Classification**: **CONFIRMED**. Model explicitly uses `String @default("OPEN")`. This matches database design.
-- **Claim**: Migrations contain triggers for `updatedAt`, `sync_campaign_raised`, `mark_tokens_redeemed`, `handle_legal_hold`.
-  - **Classification**: **CONFIRMED**. Verified in `20260815123000_add_triggers_and_functions/migration.sql`.
+- **Claim**: The original migration created triggers for `updatedAt`, campaign raised totals, token redemption, and legal hold.
+  - **Classification**: **CONFIRMED HISTORICAL**. `20261031120000_concurrent_donation_refunds` removes the campaign raised-total trigger; deployed databases must apply that migration before deploying explicit application-side balance updates.
 
 ### Debugging Tasks
 - [ ] (P0) Verify connection string loading in `prisma.config.ts` and `src/db/prisma.ts`.
 - [ ] (P1) Run `npx tsx tests/test_triggers_exist.ts` against a live PostgreSQL instance to confirm trigger installation.
-- [ ] (P1) Run `npx tsx tests/test_trigger_detailed.ts` to validate trigger execution logic (`sync_campaign_raised` and `handle_legal_hold`).
+- [ ] (P1) Run `npx tsx tests/test_trigger_detailed.ts` to validate remaining trigger logic (`handle_legal_hold`); the removed raised-total trigger must remain absent.
 - [ ] (P2) Run `npx tsx tests/test_seed.ts` to verify seed data integrity.
 
 ### Implementation Tasks

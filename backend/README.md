@@ -40,7 +40,7 @@ This is the backend for the Trace-It donation tracking platform.
    npx prisma migrate deploy
    ```
 
-   This applies all committed migrations, including table creation and the custom Postgres triggers (`set_updated_at`, `sync_campaign_raised`, `mark_tokens_redeemed`, `handle_legal_hold`).
+   This applies all committed migrations, including table creation and the custom Postgres triggers (`set_updated_at`, `mark_tokens_redeemed`, `handle_legal_hold`). Campaign raised amounts are updated explicitly by the atomic donation-confirmation transaction.
 
    > **Note:** `npx prisma migrate dev` may fail on a fresh Supabase project because the default connection doesn't have shadow-database create permissions. Use `migrate deploy` to apply existing migrations — it doesn't need a shadow database. Only use `migrate dev` locally if you're authoring _new_ migrations and have shadow DB access set up.
 
@@ -92,6 +92,12 @@ The API process starts the PostgreSQL-backed email outbox dispatcher only when `
 Before deploying this code, apply the `add_email_outbox` migration using the normal release migration step (`npx prisma migrate deploy`), then start or restart the backend with `npm start`. No separate worker process is required. Failed sends retry with exponential backoff up to eight attempts, after which the row is retained with status `FAILED` and its last error for operator review. Placeholder or malformed recipients are rejected before enqueueing and again before delivery. Inspect `email_outbox` for `PENDING`, `PROCESSING`, and `FAILED` rows when monitoring delivery. A network failure during SMTP `DATA` without a final server response is marked failed and not retried automatically because acceptance by the provider is uncertain.
 
 SMTP delivery cannot provide exactly-once guarantees: if Gmail accepts a message but the worker loses its connection before receiving the final response, delivery is uncertain and the job is retained as `FAILED` for operator review rather than retried automatically.
+
+## Donation capacity and refund reconciliation
+
+Payment confirmation locks the campaign row, claims the donation, updates `raisedAmount` for accepted contributions, and appends provenance in one transaction. Captured payments for inactive campaigns are always rejected for a full refund, including when `allowOverfunding` is enabled. Strict-cap campaigns also refund a donation that does not fit in full. Admins set the policy with `PATCH /api/admin/campaigns/:id/overfunding` and `{ "allowOverfunding": true|false }`. The campaign raised-total trigger is removed by `20261031120000_concurrent_donation_refunds`. For deployment, quiesce old payment-confirmation writers, apply the migration, deploy the new backend, then resume payment/webhook handling; old binaries depend on the trigger and must not confirm payments after it is dropped.
+
+Refund processing is enabled with `TRACEIT_REFUND_WORKER_ENABLED=true`. The worker uses a two-minute lease and retries the same request with the stored `X-Refund-Idempotency` key and payload. A refund is marked `REFUNDED` only after Razorpay reports `processed`. Exhausted ambiguous jobs enter `RECONCILIATION_REQUIRED` and need operator reconciliation; they are not treated as completed refunds.
 
 ### NGO-reported beneficiary transfers
 

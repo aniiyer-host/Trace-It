@@ -548,6 +548,45 @@ export const closeCampaign = async (
   }
 };
 
+// PATCH /api/admin/campaigns/:id/overfunding
+export const updateCampaignOverfundingPolicy = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const adminId = req.user?.id;
+    const campaignId = req.params.id as string;
+    const { allowOverfunding } = req.body ?? {};
+    if (!adminId) return res.status(401).json({ error: "User not authenticated" });
+    if (typeof allowOverfunding !== "boolean") {
+      return res.status(400).json({ error: "allowOverfunding must be a boolean" });
+    }
+
+    const campaign = await prisma.campaign.update({
+      where: { id: campaignId },
+      data: { allowOverfunding },
+    }).catch((error: unknown) => {
+      if (error && typeof error === "object" && "code" in error && error.code === "P2025") return null;
+      throw error;
+    });
+    if (!campaign) return res.status(404).json({ error: "Campaign not found" });
+
+    await writeAuditLog({
+      actorType: AuditActorType.USER,
+      actorId: adminId,
+      entityType: "campaign",
+      entityId: campaignId,
+      action: "CAMPAIGN_OVERFUNDING_POLICY_UPDATED",
+      metadata: { allowOverfunding },
+      ipAddress: req.ip,
+    });
+    return res.json(adminCampaignResponse(campaign));
+  } catch (err) {
+    next(err);
+  }
+};
+
 // GET /api/admin/users — paginated user list with role + kyc_status filters
 export const getUsers = async (
   req: Request,
@@ -1317,6 +1356,12 @@ adminRouter.post(
   requireAuth,
   requireRole(UserRole.ADMIN),
   closeCampaign,
+);
+adminRouter.patch(
+  "/campaigns/:id/overfunding",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  updateCampaignOverfundingPolicy,
 );
 
 // Users

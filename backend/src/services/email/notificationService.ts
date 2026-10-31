@@ -10,6 +10,7 @@ import {
 import type { EmailRecipient } from './emailProvider.js';
 import {
   buildDonationSuccessEmail,
+  buildDonationExcessRefundEmail,
   buildFundsAllocatedEmail,
   buildBeneficiaryTransferReviewedEmail,
 } from './emailTemplates.js';
@@ -108,6 +109,26 @@ export const enqueueDonationSuccessEmail = async (
   await enqueue(tx, {
     eventKey: `DONATION_SUCCESS:${donation.id}`,
     milestone: 'DONATION_SUCCESS',
+    donationId: donation.id,
+    payload: { to: getRecipients(donation), ...content },
+  });
+};
+
+export const enqueueDonationExcessRefundEmail = async (
+  tx: Prisma.TransactionClient,
+  donation: DonationEmailContext,
+  capturedAt: Date,
+): Promise<void> => {
+  const content = buildDonationExcessRefundEmail({
+    donationRef: donation.publicId,
+    amount: donation.amount.toString(),
+    currency: donation.currencyCode,
+    occurredAt: capturedAt,
+    donationLink: donationLink(),
+  });
+  await enqueue(tx, {
+    eventKey: `DONATION_EXCESS_REFUND:${donation.id}`,
+    milestone: 'DONATION_EXCESS_REFUND',
     donationId: donation.id,
     payload: { to: getRecipients(donation), ...content },
   });

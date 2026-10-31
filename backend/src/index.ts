@@ -18,6 +18,7 @@ import { notFound } from "./middleware/notFound.js";
 import { createAnchorRuntimeFromEnvironment } from "./services/anchor/anchorWorkerBootstrap.js";
 import { EmailOutboxProcessor } from "./services/email/emailOutboxProcessor.js";
 import { DisbursementSettlementWorker } from "./services/disbursementSettlementWorker.js";
+import { RefundOutboxProcessor } from "./services/refundService.js";
 
 import { validateEnvironment } from "./utils/envValidator.js";
 
@@ -111,6 +112,12 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
   let shuttingDown = false;
   const emailOutboxProcessor = new EmailOutboxProcessor();
   const disbursementSettlementWorker = new DisbursementSettlementWorker();
+  const refundOutboxProcessor = new RefundOutboxProcessor();
+  if (process.env.TRACEIT_REFUND_WORKER_ENABLED === "true") {
+    refundOutboxProcessor.start();
+  } else {
+    console.info("[RefundOutboxProcessor] Disabled: set TRACEIT_REFUND_WORKER_ENABLED=true to opt in.");
+  }
   if (process.env.TRACEIT_DISBURSEMENT_SETTLEMENT_WORKER_ENABLED === "true") {
     disbursementSettlementWorker.start();
   } else {
@@ -151,6 +158,7 @@ if (process.env.NODE_ENV !== "test" && !process.env.JEST_WORKER_ID) {
     await anchorRuntimePromise.then((runtime) => runtime?.stop());
     emailOutboxProcessor.stop();
     disbursementSettlementWorker.stop();
+    refundOutboxProcessor.stop();
 
     server.close(() => {
       process.exit(0);

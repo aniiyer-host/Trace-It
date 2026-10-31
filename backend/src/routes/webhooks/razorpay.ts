@@ -9,6 +9,7 @@ import {
   DonationPaymentError,
   failDonation,
 } from '../../services/donationService.js';
+import { confirmRefund, failRefundFromGateway } from '../../services/refundService.js';
 import { verifyHexSignature } from '../../utils/webhookSignature.js';
 
 interface RawRequest extends Request {
@@ -224,38 +225,39 @@ export const razorpayRefundWebhookHandler = async (
 
     const event = JSON.parse(rawBody.toString());
 
-    // Handle refund.processed event
-    if (event.event === 'refund.processed') {
+    // A refund is final only after the gateway confirms it and it matches the
+    // durable outbox job for this payment and amount.
+    if (event.event === 'refund.processed' || event.event === 'refund.failed') {
       const refundEntity = event.payload.refund.entity;
       const razorpayPaymentId = refundEntity.payment_id;
       const refundId = refundEntity.id;
       const amount = refundEntity.amount; // Amount in paise
+      const evidence = {
+        paymentId: razorpayPaymentId,
+        refundId,
+        amountPaise: amount,
+        receipt: refundEntity.receipt,
+        notes: refundEntity.notes,
+      };
+      const transitioned = event.event === 'refund.processed'
+        ? await confirmRefund({ ...evidence, status: 'processed' })
+        : await failRefundFromGateway(evidence);
 
-      // Find donation by razorpayPaymentId
-      const donation = await prisma.donation.findFirst({
-        where: { razorpayPaymentId },
-      });
-
-      if (donation) {
-        // Update donation status to REFUNDED
-        await prisma.donation.update({
-          where: { id: donation.id },
-          data: {
-            status: 'REFUNDED',
-          },
+      if (transitioned) {
+        const refundJob = await prisma.refundOutbox.findUnique({
+          where: { razorpayRefundId: refundId },
+          select: { donationId: true },
         });
-
-        // Audit log for refund
         void writeAuditLog({
           actorType: AuditActorType.WEBHOOK,
           entityType: 'donation',
-          entityId: donation.id,
-          action: 'PAYMENT_REFUNDED',
+          entityId: refundJob?.donationId,
+          action: event.event === 'refund.processed' ? 'PAYMENT_REFUNDED' : 'PAYMENT_REFUND_FAILED',
           metadata: {
             razorpayPaymentId,
             refundId,
             amountRefunded: amount / 100, // Convert paise to INR
-            originalAmount: donation.amount,
+            gatewayStatus: event.event === 'refund.processed' ? 'processed' : 'failed',
           },
           ipAddress: req.ip,
         });

@@ -33,7 +33,6 @@ import {
   MonetaryInputError,
   monetaryInputSchema,
   parseInrAmount,
-  remainingCampaignAmount,
 } from "../utils/money.js";
 import { verifyProvenanceEvents } from "../services/provenanceChainService.js";
 import {
@@ -176,14 +175,20 @@ export const createDonation = async (
     // --- Validate campaign ---
     const campaign = await prisma.campaign.findFirst({
       where: { id: campaignId, ngoId },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        targetAmount: true,
+        raisedAmount: true,
+        allowOverfunding: true,
+      },
     });
 
     if (!campaign) {
       return res.status(400).json({ error: "Invalid campaign" });
     }
     if (campaign.status !== "ACTIVE") {
-      return res.status(409).json({ code: "CAMPAIGN_CLOSED", error: "This campaign is no longer accepting donations." });
+      return res.status(400).json({ code: "CAMPAIGN_CLOSED", error: "Campaign is not currently accepting donations" });
     }
 
     let normalizedAmount;
@@ -196,72 +201,34 @@ export const createDonation = async (
       throw error;
     }
 
+    // Optimistic pre-order gate. Payment confirmation repeats the capacity and
+    // lifecycle check while holding the campaign row lock.
+    if (!campaign.allowOverfunding && campaign.raisedAmount.greaterThanOrEqualTo(campaign.targetAmount)) {
+      return res.status(400).json({ error: "Campaign target has already been achieved" });
+    }
+    if (
+      !campaign.allowOverfunding &&
+      campaign.targetAmount.minus(campaign.raisedAmount).lessThan(normalizedAmount.decimal)
+    ) {
+      return res.status(400).json({ error: "Donation exceeds remaining campaign capacity" });
+    }
+
     const donationId = randomUUID();
     const razorpayOrder = await createRazorpayOrder(amount, donationId);
 
-    // Serialize capacity checks and reservation inserts on the campaign row. The
-    // initiated reservations count toward remaining capacity until payment settles.
-    let donation;
-    try {
-      donation = await prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM campaigns WHERE id = ${campaignId} FOR UPDATE`;
-        const current = await tx.campaign.findFirst({
-          where: { id: campaignId, ngoId },
-          select: { status: true, targetAmount: true, raisedAmount: true },
-        });
-        if (!current || current.status !== "ACTIVE") {
-          throw Object.assign(new Error("This campaign is no longer accepting donations."), { code: "CAMPAIGN_CLOSED" });
-        }
-        const [fundedTotals, reservationTotals] = await Promise.all([
-          tx.donation.aggregate({
-            where: { campaignId, status: { in: ["SUCCESS", "ALLOCATED", "DISBURSED", "DELIVERED"] } },
-            _sum: { amount: true },
-          }),
-          tx.donation.aggregate({
-            where: { campaignId, status: "INITIATED" },
-            _sum: { amount: true },
-          }),
-        ]);
-        const remaining = remainingCampaignAmount(
-          current.targetAmount,
-          current.raisedAmount,
-          fundedTotals._sum.amount ?? 0,
-          reservationTotals._sum.amount ?? 0,
-        );
-        if (normalizedAmount.decimal.greaterThan(remaining)) {
-          throw Object.assign(new Error("Donation exceeds the campaign's remaining funding requirement."), {
-            code: "AMOUNT_EXCEEDS_REMAINING",
-            remainingInr: remaining.toFixed(2),
-          });
-        }
-        return tx.donation.create({
-          data: {
-            id: donationId,
-            donorId,
-            ngoId,
-            campaignId,
-            amount: normalizedAmount.decimal,
-            currencyCode: "INR",
-            paymentMethod: paymentMethod as PaymentMethod,
-            status: "INITIATED",
-            razorpayOrderId: razorpayOrder.id,
-          },
-        });
-      });
-    } catch (error) {
-      if (error && typeof error === "object" && "code" in error && error.code === "AMOUNT_EXCEEDS_REMAINING") {
-        const remainingInr = "remainingInr" in error ? error.remainingInr : "0.00";
-        return res.status(409).json({
-          code: "AMOUNT_EXCEEDS_REMAINING",
-          error: "Donation exceeds the campaign's remaining funding requirement.",
-          remainingInr,
-        });
-      }
-      if (error && typeof error === "object" && "code" in error && error.code === "CAMPAIGN_CLOSED") {
-        return res.status(409).json({ code: "CAMPAIGN_CLOSED", error: "This campaign is no longer accepting donations." });
-      }
-      throw error;
-    }
+    const donation = await prisma.donation.create({
+      data: {
+        id: donationId,
+        donorId,
+        ngoId,
+        campaignId,
+        amount: normalizedAmount.decimal,
+        currencyCode: "INR",
+        paymentMethod: paymentMethod as PaymentMethod,
+        status: "INITIATED",
+        razorpayOrderId: razorpayOrder.id,
+      },
+    });
 
     // Audit log — non-blocking
     void writeAuditLog({
