@@ -8,6 +8,7 @@ import { NavBar } from '@/components/NavBar'
 const Home = lazy(() => import('@/pages/Home'))
 const Campaigns = lazy(() => import('@/pages/Campaigns'))
 const DonorDashboard = lazy(() => import('@/pages/DonorDashboard'))
+const DonorVerify = lazy(() => import('@/pages/DonorVerify'))
 const NGODashboard = lazy(() => import('@/pages/NGODashboard'))
 const AdminPanel = lazy(() => import('@/pages/AdminPanel'))
 const Login = lazy(() => import('@/pages/Login'))
@@ -32,6 +33,7 @@ export default function App() {
                     <Route path="/" element={<Home />} />
                     <Route path="/campaigns" element={<Campaigns />} />
                     <Route path="/donor" element={<DonorDashboard />} />
+                    <Route path="/verify" element={<DonorVerify />} />
                     <Route path="/ngo" element={<NGODashboard />} />
                     <Route path="/ngos" element={<NgoDirectory />} />
                     <Route path="/admin" element={<AdminPanel />} />
