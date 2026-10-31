@@ -69,6 +69,11 @@ describe("getDonationAnchors", () => {
         },
       }),
     );
+    expect(provenanceLookup).toHaveBeenCalledTimes(2);
+    expect(provenanceLookup).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { id: { lte: 1n } },
+      orderBy: { id: "asc" },
+    }));
     expect(res.json).toHaveBeenCalledWith({
       anchors: [
         expect.objectContaining({
@@ -89,6 +94,59 @@ describe("getDonationAnchors", () => {
         }),
       ],
     });
+  });
+
+  it("does not fetch or consider later unrelated events when checking an earlier donation", async () => {
+    const occurredAt = new Date("2026-10-15T00:00:00.000Z");
+    const eventInput = {
+      eventType: "DONATION_SUCCESS", entityType: "Donation", entityId: "02468100-6f1a-44a1-b3b1-87ba538a00b8",
+      amountInr: "250.00", ngoId: "12468100-6f1a-44a1-b3b1-87ba538a00b8", campaignId: null, occurredAt,
+    };
+    const payloadHash = hashProvenanceEvent(eventInput);
+    const event = {
+      id: 2n, ...eventInput, canonicalPayload: serializeProvenanceEvent(eventInput), payloadHash,
+      previous_hash: null, chainHash: computeChainHashFromPayloadHash(payloadHash, null),
+      anchorStatus: "PENDING", anchorBatchId: null, anchorBatch: null,
+    };
+    jest.spyOn(prisma.donation, "findFirst").mockResolvedValue({ id: "donation-1" } as never);
+    const provenanceLookup = jest.spyOn(prisma.provenanceEvent, "findMany").mockResolvedValue([event] as never);
+    const res = response();
+
+    await getDonationAnchors({ params: { id: "donation-1" }, user: { id: "donor-1" } } as unknown as Request,
+      res as unknown as Response, jest.fn() as NextFunction);
+
+    expect(provenanceLookup).toHaveBeenLastCalledWith(expect.objectContaining({ where: { id: { lte: 2n } } }));
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ anchors: [expect.objectContaining({
+      verification: expect.objectContaining({ provenance: { status: "PASSED" } }),
+    })] }));
+  });
+
+  it("reports a missing assigned anchor batch as unavailable evidence", async () => {
+    const occurredAt = new Date("2026-10-15T00:00:00.000Z");
+    const eventInput = {
+      eventType: "DONATION_SUCCESS", entityType: "Donation", entityId: "02468100-6f1a-44a1-b3b1-87ba538a00b8",
+      amountInr: "250.00", ngoId: "12468100-6f1a-44a1-b3b1-87ba538a00b8", campaignId: null, occurredAt,
+    };
+    const payloadHash = hashProvenanceEvent(eventInput);
+    const event = {
+      id: 1n, ...eventInput, canonicalPayload: serializeProvenanceEvent(eventInput), payloadHash,
+      previous_hash: null, chainHash: computeChainHashFromPayloadHash(payloadHash, null),
+      anchorStatus: "BATCHED", anchorBatchId: "missing-batch", anchorBatch: null,
+    };
+    jest.spyOn(prisma.donation, "findFirst").mockResolvedValue({ id: "donation-1" } as never);
+    jest.spyOn(prisma.provenanceEvent, "findMany").mockResolvedValue([event] as never);
+    const res = response();
+
+    await getDonationAnchors({ params: { id: "donation-1" }, user: { id: "donor-1" } } as unknown as Request,
+      res as unknown as Response, jest.fn() as NextFunction);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ anchors: [expect.objectContaining({
+      verification: expect.objectContaining({
+        batchRoot: { status: "UNAVAILABLE", reason: expect.any(String) },
+        onChainRecord: { status: "UNAVAILABLE", reason: expect.any(String) },
+        transaction: { status: "UNAVAILABLE", reason: expect.any(String) },
+      }),
+    })] }));
   });
 
   it("does not reveal anchor records for another donor's donation", async () => {

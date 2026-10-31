@@ -756,7 +756,7 @@ export const getDonationAnchors = async (
     });
     if (!donation) return res.status(404).json({ error: "Donation not found" });
 
-    const [events, allEvents] = await Promise.all([prisma.provenanceEvent.findMany({
+    const events = await prisma.provenanceEvent.findMany({
       where: {
         entityType: "Donation",
         entityId: donationId,
@@ -792,7 +792,19 @@ export const getDonationAnchors = async (
           },
         },
       },
-    }), prisma.provenanceEvent.findMany({
+    });
+
+    // Provenance events form one global chain. Verify the complete required
+    // prefix through this donation's latest event (and any containing batch),
+    // rather than allowing later, unrelated events to invalidate this result.
+    // This remains proportional to the donation's position in chain history;
+    // a fixed-size bound requires a separately trusted checkpoint design.
+    const lastRequiredSequence = events.reduce((last, event) => {
+      const batchEnd = event.anchorBatch?.endSequence ?? event.id;
+      return batchEnd > last ? batchEnd : last;
+    }, events.at(-1)?.id ?? 0n);
+    const allEvents = lastRequiredSequence === 0n ? [] : await prisma.provenanceEvent.findMany({
+      where: { id: { lte: lastRequiredSequence } },
       orderBy: { id: "asc" },
       select: {
         id: true,
@@ -809,7 +821,7 @@ export const getDonationAnchors = async (
         chainHash: true,
         anchorBatchId: true,
       },
-    })]);
+    });
 
     const localVerification = verifyProvenanceEvents(allEvents);
     const chain = createReadOnlyAnchorVerifier();
@@ -824,18 +836,31 @@ export const getDonationAnchors = async (
 
     const verificationByEvent = new Map<string, DonationAnchorVerification>();
     await Promise.all(events.map(async (event) => {
+      const eventId = event.id.toString();
+      const hasInvalidPredecessor = localVerification.errors.some((error) => BigInt(error.eventId) <= event.id);
       const provenance: DonationAnchorVerification["provenance"] = event.chainHash === null
         ? { status: "UNAVAILABLE", reason: "This legacy event has no provenance chain hash." }
-        : localVerification.valid
+        : !hasInvalidPredecessor
           ? { status: "PASSED" }
-          : { status: "FAILED", reason: "At least one stored event failed the local provenance-chain integrity check." };
+          : { status: "FAILED", reason: "This event or one of its global chain predecessors failed the provenance integrity check." };
       const attestationSignature: DonationAnchorVerification["attestationSignature"] = {
         status: "UNAVAILABLE",
         reason: "Attestation records do not have a cryptographic signature field or verifier in this application.",
       };
       const batch = event.anchorBatch;
-      if (!batch || !event.anchorBatchId) {
-        verificationByEvent.set(event.id.toString(), {
+      if (event.anchorBatchId && !batch) {
+        verificationByEvent.set(eventId, {
+          provenance,
+          batchRoot: { status: "UNAVAILABLE", reason: "The assigned anchor batch record could not be retrieved." },
+          anchorStatus: event.anchorStatus,
+          onChainRecord: { status: "UNAVAILABLE", reason: "The assigned anchor batch record could not be retrieved." },
+          transaction: { status: "UNAVAILABLE", reason: "The assigned anchor batch record could not be retrieved." },
+          attestationSignature,
+        });
+        return;
+      }
+      if (!event.anchorBatchId) {
+        verificationByEvent.set(eventId, {
           provenance,
           batchRoot: { status: "NOT_APPLICABLE", reason: "This event has not been assigned to an anchor batch." },
           anchorStatus: event.anchorStatus,
@@ -846,10 +871,10 @@ export const getDonationAnchors = async (
         return;
       }
       const batchResult = await batchVerification.get(event.anchorBatchId)!;
-      verificationByEvent.set(event.id.toString(), {
+      verificationByEvent.set(eventId, {
         provenance,
         ...batchResult,
-        anchorStatus: batch.status,
+        anchorStatus: batch!.status,
         attestationSignature,
       });
     }));
