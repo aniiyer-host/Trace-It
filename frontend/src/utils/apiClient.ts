@@ -448,8 +448,8 @@ export const apiService = {
       return (data.donations || []).map((d) => ({
         id: d.id,
         publicId: d.publicId,
-        campaignId: d.project.id,
-        campaignTitle: d.project.title,
+        campaignId: d.project?.id ?? null,
+        campaignTitle: d.project?.title ?? null,
         amount: d.amount,
         currencyCode: d.currencyCode,
         allocatedAmount: d.allocatedAmount,

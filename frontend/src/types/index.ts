@@ -102,8 +102,8 @@ export interface Milestone {
 export interface Donation {
   id: string;
   publicId?: string;
-  campaignId: string;
-  campaignTitle?: string;
+  campaignId: string | null;
+  campaignTitle?: string | null;
   amount: number; // in INR
   currencyCode?: string;
   allocatedAmount?: number | string; // amount allocated to disbursements
@@ -206,7 +206,7 @@ export interface DonorDashboardDonation {
   project: {
     id: string;
     title: string;
-  };
+  } | null;
   ngo: {
     id: string;
     organisationName: string;

@@ -8,6 +8,15 @@ import type { Donation, DonationAnchorStatus } from "@/types";
 
 type VerifyData = { anchors: DonationAnchorStatus[] };
 
+function checkDescription(check: string, status: string) {
+  if (status === "NOT_APPLICABLE") return "Blockchain verification is not applicable yet because this event has not been assigned to an anchor batch.";
+  if (status === "PENDING") return `The ${check} check is awaiting completion.`;
+  if (status === "UNAVAILABLE") return `Evidence for the ${check} check could not be retrieved or checked.`;
+  if (status === "FAILED") return `The ${check} check failed.`;
+  if (status === "PASSED") return `The ${check} check passed.`;
+  return `The ${check} check has status ${status}.`;
+}
+
 function labelStatus(status: string) {
   const labels: Record<string, string> = {
     INITIATED: "Payment being processed", SUCCESS: "Payment recorded", FAILED: "Payment failed",
@@ -36,9 +45,9 @@ function Evidence({ evidence }: { evidence: VerifyData }) {
       <h3 className="text-sm font-semibold">{labelStatus(anchor.eventType)}</h3>
       {checks && <div className="grid gap-2 md:grid-cols-2">
         <CheckLine title="Record history" status={checks.provenance.status} text={checks.provenance.reason ?? "The recorded history links correctly to the preceding records."} />
-        <CheckLine title="Blockchain anchor" status={checks.batchRoot.status} text={checks.batchRoot.reason ?? `Anchor status: ${labelStatus(checks.anchorStatus)}.`} />
-        <CheckLine title="On-chain record" status={checks.onChainRecord.status} text={checks.onChainRecord.reason ?? "The backend checked the public blockchain record."} />
-        <CheckLine title="Transaction" status={checks.transaction.status} text={checks.transaction.reason ?? "The backend checked the transaction confirmation."} />
+        <CheckLine title="Batch integrity" status={checks.batchRoot.status} text={checks.batchRoot.reason ?? "The stored events match the locally recorded batch root."} />
+        <CheckLine title="On-chain record" status={checks.onChainRecord.status} text={checks.onChainRecord.reason ?? checkDescription("on-chain record", checks.onChainRecord.status)} />
+        <CheckLine title="Transaction" status={checks.transaction.status} text={checks.transaction.reason ?? checkDescription("transaction", checks.transaction.status)} />
       </div>}
       {anchor.explorerUrl && <a href={anchor.explorerUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-primary underline">View confirmed transaction <ExternalLink className="h-3.5 w-3.5" /></a>}
       <details className="text-sm"><summary className="cursor-pointer font-medium">Technical details</summary>
