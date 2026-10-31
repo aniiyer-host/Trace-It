@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { prisma } from '../src/db/prisma.js';
 import { completeDonationSuccess } from '../src/services/donationService.js';
 import { razorpayRefundWebhookHandler } from '../src/routes/webhooks/razorpay.js';
+import { isReceiptEligible } from '../src/services/receiptService.js';
 import {
   RefundOutboxProcessor,
   createRazorpayRefundGateway,
@@ -71,7 +72,7 @@ describe('donation settlement and refund outbox (real PostgreSQL)', () => {
   async function makeDonation(input: {
     campaignId?: string | null;
     amount: string;
-    status?: 'INITIATED' | 'EXCESS_REFUND_PENDING';
+    status?: 'INITIATED' | 'EXCESS_REFUND_PENDING' | 'EXCESS_REFUND_FAILED';
   }) {
     const id = randomUUID();
     const donation = await prisma.donation.create({
@@ -148,6 +149,19 @@ describe('donation settlement and refund outbox (real PostgreSQL)', () => {
         idempotencyKey: compactId,
       },
     });
+  }
+
+  async function postProcessedRefund(input: { refundId: string; paymentId: string; amountPaise: number; receipt: string }) {
+    const rawBody = Buffer.from(JSON.stringify({ event: 'refund.processed', payload: { refund: { entity: {
+      id: input.refundId, payment_id: input.paymentId, amount: input.amountPaise,
+      status: 'processed', receipt: input.receipt, notes: {},
+    } } } }));
+    const signature = createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET!).update(rawBody).digest('hex');
+    const response = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
+    const next = jest.fn();
+    await razorpayRefundWebhookHandler({ rawBody, headers: { 'x-razorpay-signature': signature }, ip: '127.0.0.1' } as never, response as never, next);
+    expect(next).not.toHaveBeenCalled();
+    expect(response.status).toHaveBeenCalledWith(200);
   }
 
   it('atomically accepts one concurrent ₹500 payment and queues the other for full refund', async () => {
@@ -332,6 +346,31 @@ describe('donation settlement and refund outbox (real PostgreSQL)', () => {
     expect((await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).raisedAmount.toFixed(2)).toBe('75.00');
   });
 
+  it.each([
+    ['EXCESS_REFUND_PENDING', 2_500, 'EXCESS_REFUND_PENDING'],
+    ['EXCESS_REFUND_FAILED', 2_500, 'EXCESS_REFUND_FAILED'],
+    ['EXCESS_REFUND_PENDING', 10_000, 'REFUNDED'],
+    ['EXCESS_REFUND_FAILED', 10_000, 'REFUNDED'],
+  ] as const)('preserves overflow-rejected status for %s after %s paise refund', async (initialStatus, refundPaise, expectedStatus) => {
+    const campaign = await makeCampaign({ targetAmount: '500.00' });
+    const donation = await makeDonation({ campaignId: campaign.id, amount: '100.00', status: initialStatus });
+    const paymentId = `pay_overflow_${randomUUID()}`;
+    const refundId = `rfnd_overflow_${randomUUID()}`;
+    await prisma.donation.update({ where: { id: donation.id }, data: { razorpayPaymentId: paymentId } });
+    await postProcessedRefund({
+      refundId,
+      paymentId,
+      amountPaise: refundPaise,
+      receipt: `dashboard_${randomUUID()}`,
+    });
+    const updated = await prisma.donation.findUniqueOrThrow({ where: { id: donation.id } });
+    expect(updated.status).toBe(expectedStatus);
+    expect(updated.refundedAmount.toFixed(2)).toBe((refundPaise / 100).toFixed(2));
+    expect(await prisma.providerRefund.count({ where: { donationId: donation.id, razorpayRefundId: refundId } })).toBe(1);
+    expect(isReceiptEligible(updated.status)).toBe(false);
+    expect((await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).raisedAmount.toFixed(2)).toBe('0.00');
+  });
+
   it('retries an ambiguous refund with the same idempotency key and exact request', async () => {
     const donation = await makeDonation({ amount: '100.00', status: 'EXCESS_REFUND_PENDING' });
     const job = await makeOutboxJob(donation.id, 'pay_ambiguous_refund', 10_000);
@@ -357,25 +396,36 @@ describe('donation settlement and refund outbox (real PostgreSQL)', () => {
     expect((await prisma.refundOutbox.findUniqueOrThrow({ where: { id: job.id } })).status).toBe('COMPLETED');
   });
 
-  it('sends Razorpay refund requests with the persisted per-job idempotency header', async () => {
+  it('sends refund inspection and submission with request-scoped timeouts and the documented header', async () => {
     const post = jest.fn(async () => ({
       data: { id: 'rfnd_header', amount: 10_000, status: 'processed' },
     }));
+    const get = jest.fn(async () => ({ data: { items: [{ id: 'rfnd_existing', amount: 10_000, status: 'processed' }] } }));
     const defaults = { timeout: 0 };
-    const client = {
-      api: { rq: { defaults, post } },
-      payments: { fetchMultipleRefund: jest.fn() },
-    } as never;
-    const gateway = createRazorpayRefundGateway(client);
+    const mockClient = {
+      api: { rq: { defaults, get, post } },
+      orders: { create: jest.fn(async () => defaults.timeout) },
+      payments: { fetch: jest.fn(async (_paymentId: string) => defaults.timeout), fetchMultipleRefund: jest.fn() },
+    };
+    const gateway = createRazorpayRefundGateway(mockClient as never);
     const body = { amount: 10_000, receipt: 'rfnd_1234567890', notes: { donationId: 'donation-1', reason: 'CAPACITY' } };
+    await expect(gateway.fetchRefunds('pay_header_test')).resolves.toEqual({ items: [{ id: 'rfnd_existing', amount: 10_000, status: 'processed' }] });
     const response = await gateway.submitRefund('pay_header_test', body, '1234567890abcdef1234567890abcdef');
     expect(response.id).toBe('rfnd_header');
+    expect(get).toHaveBeenCalledWith('/v1/payments/pay_header_test/refunds', {
+      params: { count: 100, skip: 0 }, timeout: 30_000,
+    });
     expect(post).toHaveBeenCalledWith(
       '/v1/payments/pay_header_test/refund',
       body,
-      { headers: { 'X-Refund-Idempotency': '1234567890abcdef1234567890abcdef' } },
+      { headers: { 'X-Refund-Idempotency': '1234567890abcdef1234567890abcdef' }, timeout: 30_000 },
     );
-    expect(defaults.timeout).toBe(30_000);
+    expect(defaults.timeout).toBe(0);
+    await expect(mockClient.orders.create()).resolves.toBe(0);
+    await expect(mockClient.payments.fetch('pay_unrelated')).resolves.toBe(0);
+    expect(mockClient.orders.create).toHaveBeenCalledTimes(1);
+    expect(mockClient.payments.fetch).toHaveBeenCalledTimes(1);
+    expect(mockClient.payments.fetchMultipleRefund).not.toHaveBeenCalled();
   });
 
   it('moves exhausted ambiguous refunds to reconciliation without marking them refunded', async () => {

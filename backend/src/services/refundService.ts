@@ -69,12 +69,17 @@ export function createRazorpayRefundGateway(
 ): RefundGateway {
   return {
     async fetchRefunds(paymentId) {
-      (client.api as unknown as { rq: { defaults: { timeout: number } } }).rq.defaults.timeout = 30_000;
+      const api = client.api as unknown as {
+        rq: { get<T>(url: string, config: { params: Record<string, number>; timeout: number }): Promise<{ data: T }> };
+      };
       const items: GatewayRefund[] = [];
       let skip = 0;
       while (true) {
-        const result = await client.payments.fetchMultipleRefund(paymentId, { count: 100, skip });
-        const page = (result.items ?? []) as GatewayRefund[];
+        const response = await api.rq.get<{ items?: GatewayRefund[] }>(
+          `/v1/payments/${encodeURIComponent(paymentId)}/refunds`,
+          { params: { count: 100, skip }, timeout: 30_000 },
+        );
+        const page = response.data.items ?? [];
         items.push(...page);
         if (page.length < 100) break;
         skip += page.length;
@@ -82,20 +87,17 @@ export function createRazorpayRefundGateway(
       return { items };
     },
     async submitRefund(paymentId, body, idempotencyKey) {
-      // The installed Razorpay SDK only permits a small allowlist of global
-      // headers and its refund helper cannot set per-request headers. Its
-      // underlying Axios client is configured with the SDK's auth/base URL.
+      // Use the SDK's configured Axios instance so auth/base URL are preserved,
+      // with refund-only timeout and the documented per-request idempotency header.
       const api = client.api as unknown as {
         rq: {
-          defaults: { timeout: number };
-          post<T>(url: string, data: unknown, config: { headers: Record<string, string> }): Promise<{ data: T }>;
+          post<T>(url: string, data: unknown, config: { headers: Record<string, string>; timeout: number }): Promise<{ data: T }>;
         };
       };
-      api.rq.defaults.timeout = 30_000;
       const response = await api.rq.post<GatewayRefund>(
         `/v1/payments/${encodeURIComponent(paymentId)}/refund`,
         body,
-        { headers: { 'X-Refund-Idempotency': idempotencyKey } },
+        { headers: { 'X-Refund-Idempotency': idempotencyKey }, timeout: 30_000 },
       );
       return response.data;
     },
@@ -179,11 +181,15 @@ export async function recordProviderRefund(
     const newRefunded = lockedDonation.refundedAmount.plus(refundInr);
     const exceedsContribution = newRefunded.greaterThan(lockedDonation.amount);
     const hasAllocation = lockedDonation.allocatedAmount.greaterThan(0);
+    const wasOverflowRejected = lockedDonation.status === DonationStatus.EXCESS_REFUND_PENDING ||
+      lockedDonation.status === DonationStatus.EXCESS_REFUND_FAILED;
     const status = hasAllocation || exceedsContribution
       ? DonationStatus.REFUND_RECONCILIATION_REQUIRED
       : newRefunded.greaterThanOrEqualTo(lockedDonation.amount)
         ? DonationStatus.REFUNDED
-        : DonationStatus.SUCCESS;
+        : wasOverflowRejected
+          ? lockedDonation.status
+          : DonationStatus.SUCCESS;
     await tx.providerRefund.create({ data: {
       razorpayRefundId: evidence.refundId, donationId: donation.id,
       amountPaise: evidence.amountPaise, status: 'processed', source: evidence.source,

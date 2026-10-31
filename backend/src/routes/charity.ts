@@ -584,7 +584,7 @@ export const createDisbursement = async (
 
     if (campaign.status !== CampaignStatus.ACTIVE && campaign.status !== CampaignStatus.FUNDING_COMPLETE) {
       return res.status(409).json({
-        error: "Disbursements can only be requested for ACTIVE campaigns",
+        error: "Disbursements can only be requested for ACTIVE or FUNDING_COMPLETE campaigns",
       });
     }
 
@@ -669,7 +669,7 @@ export const createDisbursement = async (
         return res.status(400).json({ error: "amountInr exceeds the campaign's eligible remaining funds" });
       }
       if (error instanceof Error && error.message === "CAMPAIGN_NOT_ELIGIBLE") {
-        return res.status(409).json({ error: "Disbursements can only be requested for ACTIVE campaigns" });
+        return res.status(409).json({ error: "Disbursements can only be requested for ACTIVE or FUNDING_COMPLETE campaigns" });
       }
       throw error;
     }
