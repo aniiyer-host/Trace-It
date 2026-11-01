@@ -482,22 +482,107 @@
 
 
 import bcrypt from "bcryptjs";
-import { prisma } from "../src/db/prisma";
+import { Prisma } from "../generated/prisma/client.js";
+import { prisma } from "../src/db/prisma.js";
+import { verifyProvenanceChain } from "../src/services/provenanceChainService.js";
+import { getEmailAddressIssue } from "../src/services/email/recipientValidation.js";
 
 const TEST_NGO_EMAIL = process.env.TRACEIT_TEST_NGO_EMAIL?.trim() || "ngo@traceit.dev";
 const TEST_DONOR_EMAIL = process.env.TRACEIT_TEST_DONOR_EMAIL?.trim() || "donor@traceit.dev";
 const TEST_ADMIN_EMAIL = process.env.TRACEIT_TEST_ADMIN_EMAIL?.trim() || "admin@traceit.dev";
+const DEMO_DATABASE_NAME = "traceit_demo";
+const DEMO_DONATION_ID = "44444444-4444-4444-8444-444444444444";
+const DEMO_ORDER_ID = "order_demo_traceit_flood_relief_v1";
+const DEMO_DONATION_AMOUNT = new Prisma.Decimal("500.00");
 
-function requireValidSeedEmail(name: string, email: string): void {
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error(`${name} must contain a valid email address`);
+class DemoSeedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DemoSeedError";
+  }
+}
+
+function requireDemoDatabaseUrl(name: "DATABASE_URL" | "DIRECT_DATABASE_URL"): void {
+  const value = process.env[name];
+  if (!value) {
+    if (name === "DIRECT_DATABASE_URL") return;
+    throw new DemoSeedError(`${name} must target ${DEMO_DATABASE_NAME}`);
+  }
+
+  let databaseName: string;
+  try {
+    databaseName = decodeURIComponent(new URL(value).pathname.replace(/^\/+/, ""));
+  } catch {
+    throw new DemoSeedError(`${name} must be a valid PostgreSQL URL for ${DEMO_DATABASE_NAME}`);
+  }
+  if (databaseName !== DEMO_DATABASE_NAME) {
+    throw new DemoSeedError(`Refusing to seed ${databaseName || "an unspecified database"}; expected ${DEMO_DATABASE_NAME}`);
+  }
+}
+
+function validateSeedConfiguration(): void {
+  requireDemoDatabaseUrl("DATABASE_URL");
+  requireDemoDatabaseUrl("DIRECT_DATABASE_URL");
+
+  for (const worker of [
+    "TRACEIT_ANCHOR_WORKER_ENABLED",
+    "TRACEIT_EMAIL_WORKER_ENABLED",
+    "TRACEIT_REFUND_WORKER_ENABLED",
+  ]) {
+    if (process.env[worker] === "true") {
+      throw new DemoSeedError(`${worker} must be disabled while seeding the demo database`);
+    }
+  }
+
+  const emails = [
+    ["TRACEIT_TEST_NGO_EMAIL", TEST_NGO_EMAIL],
+    ["TRACEIT_TEST_DONOR_EMAIL", TEST_DONOR_EMAIL],
+    ["TRACEIT_TEST_ADMIN_EMAIL", TEST_ADMIN_EMAIL],
+  ] as const;
+  for (const [name, email] of emails) {
+    if (getEmailAddressIssue(email) !== "placeholder") {
+      throw new DemoSeedError(`${name} must be a valid non-deliverable demo email address`);
+    }
+  }
+  if (new Set(emails.map(([, email]) => email.toLowerCase())).size !== emails.length) {
+    throw new DemoSeedError("Demo profile email addresses must be distinct");
+  }
+}
+
+async function assertConnectedToDemoDatabase(): Promise<void> {
+  const rows = await prisma.$queryRaw<Array<{ databaseName: string }>>`
+    SELECT current_database() AS "databaseName"
+  `;
+  if (rows[0]?.databaseName !== DEMO_DATABASE_NAME) {
+    throw new DemoSeedError(`Connected database is not ${DEMO_DATABASE_NAME}`);
+  }
+}
+
+async function assertNoPriorSuccessArtifacts(donationId: string): Promise<void> {
+  const [successEvents, receiptAttestations, retryQueueItem, emailOutboxEntries] =
+    await Promise.all([
+      prisma.provenanceEvent.count({
+        where: { entityId: donationId, eventType: "DONATION_SUCCESS" },
+      }),
+      prisma.attestation.count({
+        where: {
+          donationId,
+          disbursementId: null,
+          type: "RECEIPT",
+        },
+      }),
+      prisma.blockchainRetryQueue.findUnique({ where: { donationId } }),
+      prisma.emailOutbox.count({ where: { donationId } }),
+    ]);
+
+  if (successEvents || receiptAttestations || retryQueueItem || emailOutboxEntries) {
+    throw new DemoSeedError("An INITIATED demo donation has success artifacts; refusing to repair inconsistent history");
   }
 }
 
 async function main(): Promise<void> {
-  requireValidSeedEmail("TRACEIT_TEST_NGO_EMAIL", TEST_NGO_EMAIL);
-  requireValidSeedEmail("TRACEIT_TEST_DONOR_EMAIL", TEST_DONOR_EMAIL);
-  requireValidSeedEmail("TRACEIT_TEST_ADMIN_EMAIL", TEST_ADMIN_EMAIL);
+  validateSeedConfiguration();
+  await assertConnectedToDemoDatabase();
 
   const [adminPasswordHash, ngoPasswordHash, donorPasswordHash] =
     await Promise.all([
@@ -581,7 +666,6 @@ async function main(): Promise<void> {
       description: "Emergency support for flood affected families.",
       category: "Relief",
       targetAmount: 500000.0,
-      raisedAmount: 0,
       currencyCode: "INR",
       status: "ACTIVE",
       sdgTags: ["SDG1", "SDG11"],
@@ -601,17 +685,176 @@ async function main(): Promise<void> {
     },
   });
 
-  console.log("Seeded login profiles and campaign only; credentials are not printed.");
-  console.log(`Campaign ready: ${campaign.title}`);
-  // Keep the references explicit so this seed's scope is clear without logging emails.
-  void admin;
-  void donor;
+  const existingOrder = await prisma.donation.findUnique({
+    where: { razorpayOrderId: DEMO_ORDER_ID },
+    select: { id: true },
+  });
+  if (existingOrder && existingOrder.id !== DEMO_DONATION_ID) {
+    throw new DemoSeedError("The demo Razorpay order ID is already assigned to another donation");
+  }
+
+  let donation = await prisma.donation.findUnique({
+    where: { id: DEMO_DONATION_ID },
+  });
+  if (!donation) {
+    await assertNoPriorSuccessArtifacts(DEMO_DONATION_ID);
+    donation = await prisma.donation.create({
+      data: {
+        id: DEMO_DONATION_ID,
+        donorId: donor.id,
+        ngoId: ngo.id,
+        campaignId: campaign.id,
+        amount: DEMO_DONATION_AMOUNT,
+        currencyCode: "INR",
+        paymentMethod: "UPI",
+        status: "INITIATED",
+        razorpayOrderId: DEMO_ORDER_ID,
+      },
+    });
+  }
+
+  if (
+    donation.donorId !== donor.id ||
+    donation.ngoId !== ngo.id ||
+    donation.campaignId !== campaign.id ||
+    !donation.amount.equals(DEMO_DONATION_AMOUNT) ||
+    donation.currencyCode !== "INR" ||
+    donation.paymentMethod !== "UPI" ||
+    donation.razorpayOrderId !== DEMO_ORDER_ID
+  ) {
+    throw new DemoSeedError("The stable demo donation ID exists with unexpected fields");
+  }
+  if (donation.solanaTxHash !== null) {
+    throw new DemoSeedError("The demo donation has a Solana transaction hash; refusing to treat it as a simulation");
+  }
+
+  let raisedAmountBeforeCompletion: Prisma.Decimal | undefined;
+  if (donation.status === "INITIATED") {
+    if (donation.razorpayPaymentId !== null) {
+      throw new DemoSeedError("An INITIATED demo donation already has a payment ID");
+    }
+    await assertNoPriorSuccessArtifacts(donation.id);
+
+    const campaignBefore = await prisma.campaign.findUnique({
+      where: { id: campaign.id },
+      select: {
+        status: true,
+        targetAmount: true,
+        raisedAmount: true,
+        allowOverfunding: true,
+      },
+    });
+    if (!campaignBefore || campaignBefore.status !== "ACTIVE") {
+      throw new DemoSeedError("The demo campaign must be active before completing its donation");
+    }
+    if (
+      !campaignBefore.allowOverfunding &&
+      campaignBefore.targetAmount.minus(campaignBefore.raisedAmount).lessThan(DEMO_DONATION_AMOUNT)
+    ) {
+      throw new DemoSeedError("The demo campaign does not have capacity for its intended donation");
+    }
+    raisedAmountBeforeCompletion = campaignBefore.raisedAmount;
+
+    delete process.env.ELASTICSEARCH_URL;
+    const { completeDonationSuccess } = await import("../src/services/donationService.js");
+    await completeDonationSuccess(
+      donation.id,
+      { source: "simulation" },
+      { skipPostCommitEffects: true },
+    );
+    donation = await prisma.donation.findUniqueOrThrow({
+      where: { id: DEMO_DONATION_ID },
+    });
+  } else if (donation.status !== "SUCCESS") {
+    throw new DemoSeedError(`The stable demo donation is ${donation.status}; refusing another transition`);
+  }
+
+  const expectedPaymentId = `pay_sim_${DEMO_DONATION_ID.replace(/-/g, "")}`;
+  if (donation.status !== "SUCCESS" || donation.razorpayPaymentId !== expectedPaymentId) {
+    throw new DemoSeedError("The demo donation did not reach its expected simulated SUCCESS state");
+  }
+
+  const [successEvents, receiptAttestations, retryQueueItem, emailOutboxEntries, finalCampaign] =
+    await Promise.all([
+      prisma.provenanceEvent.findMany({
+        where: { entityId: donation.id, eventType: "DONATION_SUCCESS" },
+        orderBy: { id: "asc" },
+      }),
+      prisma.attestation.count({
+        where: {
+          donationId: donation.id,
+          disbursementId: null,
+          type: "RECEIPT",
+        },
+      }),
+      prisma.blockchainRetryQueue.findUnique({ where: { donationId: donation.id } }),
+      prisma.emailOutbox.count({ where: { donationId: donation.id } }),
+      prisma.campaign.findUnique({
+        where: { id: campaign.id },
+        select: { raisedAmount: true },
+      }),
+    ]);
+
+  if (
+    successEvents.length !== 1 ||
+    successEvents[0].transitionKey !== expectedPaymentId ||
+    successEvents[0].entityType !== "Donation" ||
+    successEvents[0].amountInr !== DEMO_DONATION_AMOUNT.toFixed(2) ||
+    successEvents[0].ngoId !== ngo.id ||
+    successEvents[0].campaignId !== campaign.id
+  ) {
+    throw new DemoSeedError("The demo donation must have exactly one matching DONATION_SUCCESS event");
+  }
+  if (receiptAttestations !== 1) {
+    throw new DemoSeedError("The demo donation must have exactly one receipt attestation");
+  }
+  if (
+    !retryQueueItem ||
+    retryQueueItem.operationType !== "RECORD_DONATION" ||
+    emailOutboxEntries !== 0
+  ) {
+    throw new DemoSeedError("The demo donation has inconsistent or unexpected queued side effects");
+  }
+  if (!finalCampaign || finalCampaign.raisedAmount.lessThan(DEMO_DONATION_AMOUNT)) {
+    throw new DemoSeedError("The campaign raised amount does not include the demo donation");
+  }
+  if (
+    raisedAmountBeforeCompletion &&
+    finalCampaign.raisedAmount.lessThan(raisedAmountBeforeCompletion.plus(DEMO_DONATION_AMOUNT))
+  ) {
+    throw new DemoSeedError("The successful transition did not add the demo donation to campaign accounting");
+  }
+
+  const provenanceVerification = await verifyProvenanceChain();
+  if (!provenanceVerification.valid) {
+    throw new DemoSeedError(
+      `Provenance chain verification found ${provenanceVerification.errors.length} integrity error(s)`,
+    );
+  }
+
+  console.log("Demo seed profiles and active campaign are ready; credentials are not printed.");
+  console.log(`Demo donation: ${donation.status}, INR ${donation.amount.toFixed(2)}`);
+  console.log(`Campaign raised amount: INR ${finalCampaign.raisedAmount.toFixed(2)}`);
+  console.log(
+    `Provenance chain verified: ${provenanceVerification.checkedEvents} chained events, 0 integrity errors.`,
+  );
 }
 
 main()
   .catch((error: unknown) => {
-    const errorName = error instanceof Error ? error.name : "UnknownError";
-    console.error(`Seed failed (${errorName}); details omitted to avoid exposing account data.`);
+    if (error instanceof DemoSeedError) {
+      console.error(`Seed failed: ${error.message}`);
+    } else {
+      const errorName = error instanceof Error ? error.name : "UnknownError";
+      const errorCode =
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        typeof error.code === "string"
+          ? `/${error.code}`
+          : "";
+      console.error(`Seed failed (${errorName}${errorCode}); details omitted to avoid exposing account data.`);
+    }
     process.exitCode = 1;
   })
   .finally(async () => {

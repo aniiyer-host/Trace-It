@@ -44,15 +44,17 @@ This is the backend for the Trace-It donation tracking platform.
 
    > **Note:** `npx prisma migrate dev` may fail on a fresh Supabase project because the default connection doesn't have shadow-database create permissions. Use `migrate deploy` to apply existing migrations — it doesn't need a shadow database. Only use `migrate dev` locally if you're authoring _new_ migrations and have shadow DB access set up.
 
-5. **Seed the database (recommended for development)**:
+5. **Seed the isolated demo database**:
 
    ```bash
    npx prisma db seed
-   # or
-   npm run seed
    ```
 
-   This populates the database with initial data (admin, NGO, donors, campaigns, etc.).
+   The seed refuses to run unless `DATABASE_URL` (and `DIRECT_DATABASE_URL`, when set) targets the `traceit_demo` database. Configure those URLs without changing the original database settings. Keep `TRACEIT_ANCHOR_WORKER_ENABLED`, `TRACEIT_EMAIL_WORKER_ENABLED`, and `TRACEIT_REFUND_WORKER_ENABLED` disabled, and use only non-deliverable placeholder values for `TRACEIT_TEST_ADMIN_EMAIL`, `TRACEIT_TEST_NGO_EMAIL`, and `TRACEIT_TEST_DONOR_EMAIL`.
+
+   The seed creates or updates the demo profiles and campaign, creates one `INITIATED` donation with a synthetic order ID, then completes it through the donation service's simulation evidence path. It does not create a Razorpay order or payment. The service creates the success provenance event and its normal transactional queue/attestation records; post-commit audit/SIEM and receipt-storage work is suppressed for this controlled demo flow. Placeholder donor email prevents a deliverable email from being enqueued. The legacy blockchain retry processor is a separate standalone process and must not be started against the demo database; the durable Solana anchor worker must remain disabled unless separately approved.
+
+   Re-running the seed preserves campaign raised amounts and verifies the existing donation and provenance chain instead of repeating the successful transition.
 
 6. **Verify triggers are active** (optional sanity check):
    ```bash

@@ -27,6 +27,8 @@ import {
 export interface CompleteDonationOptions {
   ipAddress?: string;
   actorType?: AuditActorType;
+  /** Skip best-effort audit/SIEM and receipt-storage work for controlled demo flows. */
+  skipPostCommitEffects?: boolean;
 }
 
 export type DonationFailureResult = "ATTEMPT_FAILED" | "ALREADY_FAILED" | "NOT_ELIGIBLE";
@@ -338,7 +340,7 @@ export const completeDonationSuccess = async (
     throw error;
   }
 
-  if (!transition.transitioned) {
+  if (!transition.transitioned || options?.skipPostCommitEffects) {
     return transition.donation;
   }
 

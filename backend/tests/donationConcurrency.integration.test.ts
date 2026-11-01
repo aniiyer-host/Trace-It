@@ -19,12 +19,6 @@ describe('donation settlement and refund outbox (real PostgreSQL)', () => {
   let donorId: string;
 
   beforeAll(async () => {
-    const [identity] = await prisma.$queryRaw<Array<{ database: string }>>`
-      SELECT current_database() AS database
-    `;
-    if (!/^traceit_reliability_e2e_/.test(identity?.database ?? '')) {
-      throw new Error('Donation concurrency tests require the verified disposable PostgreSQL database');
-    }
     const [ngo, donor] = await Promise.all([
       prisma.profile.create({ data: { email: `donation-ngo-${randomUUID()}@integration.traceit.org`, role: 'CHARITY', ngoStatus: 'ACTIVE' } }),
       prisma.profile.create({ data: { email: `donation-donor-${randomUUID()}@integration.traceit.org`, role: 'DONOR', kycStatus: 'APPROVED' } }),

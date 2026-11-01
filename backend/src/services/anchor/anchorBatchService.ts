@@ -43,7 +43,10 @@ export class AnchorBatchService {
     }
   }
 
-  async createNextBatch(): Promise<AnchorBatchCreation | null> {
+  async createNextBatch(
+    options: { entityType?: string } = {},
+  ): Promise<AnchorBatchCreation | null> {
+    const entityType = options.entityType ?? null;
     return this.database.$transaction(async (tx) => {
       await lockBatchScheduler(tx);
       const rows = await tx.$queryRaw<ProvenanceRow[]>`
@@ -55,6 +58,7 @@ export class AnchorBatchService {
         WHERE "chainHash" IS NOT NULL
           AND "anchorBatchId" IS NULL
           AND "anchorStatus" = 'PENDING'
+          AND (${entityType}::text IS NULL OR "entityType" = ${entityType})
         ORDER BY id ASC
         LIMIT ${this.batchSize}
         FOR UPDATE SKIP LOCKED

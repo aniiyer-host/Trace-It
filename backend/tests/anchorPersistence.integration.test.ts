@@ -82,9 +82,10 @@ anchorPersistenceSuite("durable anchor persistence (PostgreSQL)", () => {
     const events = await createEvents(3);
     const service = new AnchorBatchService(db, 2);
 
-    const first = await service.createNextBatch();
-    const second = await service.createNextBatch();
-    const third = await service.createNextBatch();
+    const options = { entityType: "AnchorIntegrationTest" };
+    const first = await service.createNextBatch(options);
+    const second = await service.createNextBatch(options);
+    const third = await service.createNextBatch(options);
 
     if (first) fixtureBatchIds.push(first.id);
     if (second) fixtureBatchIds.push(second.id);
@@ -130,9 +131,10 @@ anchorPersistenceSuite("durable anchor persistence (PostgreSQL)", () => {
     const events = await createEvents(3);
     const builder = new AnchorBatchService(db, 2);
 
+    const options = { entityType: "AnchorIntegrationTest" };
     const [first, second] = await Promise.all([
-      builder.createNextBatch(),
-      builder.createNextBatch(),
+      builder.createNextBatch(options),
+      builder.createNextBatch(options),
     ]);
 
     if (!first || !second) {
@@ -171,7 +173,9 @@ anchorPersistenceSuite("durable anchor persistence (PostgreSQL)", () => {
 
     await createEvents(1);
 
-    const batch = await new AnchorBatchService(db, 1).createNextBatch();
+    const batch = await new AnchorBatchService(db, 1).createNextBatch({
+      entityType: "AnchorIntegrationTest",
+    });
 
     if (!batch) throw new Error("Expected an anchor batch");
 
@@ -287,7 +291,9 @@ anchorPersistenceSuite("durable anchor persistence (PostgreSQL)", () => {
     `;
 
     try {
-      await expect(builder.createNextBatch()).rejects.toThrow();
+      await expect(
+        builder.createNextBatch({ entityType: "AnchorIntegrationTest" }),
+      ).rejects.toThrow();
     } finally {
       await db.$executeRaw`
         ALTER TABLE "provenance_events"

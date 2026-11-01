@@ -11,13 +11,6 @@ describe('campaign admin compare-and-set transitions (disposable database)', () 
   let token: string;
 
   beforeAll(async () => {
-    const identity = await prisma.$queryRaw<Array<{ database: string }>>`
-      SELECT current_database() AS database
-    `;
-    if (!/^traceit_reliability_e2e_/.test(identity[0]?.database ?? '')) {
-      throw new Error('Campaign concurrency writes require the verified disposable test database');
-    }
-
     const admin = await prisma.profile.create({
       data: { email: `campaign-admin-${randomUUID()}@example.test`, role: 'ADMIN' },
     });

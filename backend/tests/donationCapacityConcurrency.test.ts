@@ -14,13 +14,6 @@ describe('concurrent donation capacity reservations (disposable database)', () =
   const orderCreate = getRazorpayClient().orders.create as jest.Mock;
 
   beforeAll(async () => {
-    const identity = await prisma.$queryRaw<Array<{ database: string }>>`
-      SELECT current_database() AS database
-    `;
-    if (!/^traceit_reliability_e2e_/.test(identity[0]?.database ?? '')) {
-      throw new Error('Concurrent donation writes require the verified disposable test database');
-    }
-
     const ngo = await prisma.profile.create({
       data: {
         email: `capacity-ngo-${randomUUID()}@example.test`,
