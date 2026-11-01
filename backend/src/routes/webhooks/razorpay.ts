@@ -3,14 +3,17 @@ import { Request, Response, NextFunction, Router } from 'express';
 import { prisma } from '../../db/prisma.js';
 import crypto from 'crypto';
 import { writeAuditLog } from '../../services/auditLogService.js';
-import { AuditActorType } from '../../../generated/prisma/enums.js';
+import { AuditActorType, DonationStatus, UserRole } from '../../../generated/prisma/enums.js';
 import {
   completeDonationSuccess,
+  completeDonationSuccessWithResult,
   DonationPaymentError,
   failDonation,
 } from '../../services/donationService.js';
 import { confirmRefund, failRefundFromGateway } from '../../services/refundService.js';
 import { verifyHexSignature } from '../../utils/webhookSignature.js';
+import { requireAuth } from '../../middleware/requireAuth.js';
+import { requireRole } from '../../middleware/requireRole.js';
 
 interface RawRequest extends Request {
   rawBody: Buffer;
@@ -309,15 +312,28 @@ async function addToBlockchainRetryQueue(data: {
   }
 }
 
-// Dev-only synthetic payment routed through the canonical donation success service.
+const isPaymentSimulationEnabled = () =>
+  process.env.TRACEIT_ENABLE_PAYMENT_SIMULATION === 'true' &&
+  process.env.NODE_ENV !== 'production';
+
+const requirePaymentSimulationEnabled = (
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  if (!isPaymentSimulationEnabled()) return res.status(404).json({ error: 'Not found' });
+  next();
+};
+
+// Controlled demo-only synthetic payment routed through the canonical donation service.
 export const simulateSuccessHandler = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(403).json({ error: 'Simulation is disabled in production' });
+    if (!isPaymentSimulationEnabled()) {
+      return res.status(404).json({ error: 'Not found' });
     }
 
     let donationId: string | undefined;
@@ -336,24 +352,38 @@ export const simulateSuccessHandler = async (
       return res.status(400).json({ error: 'donationId is required' });
     }
 
-    const donation = await completeDonationSuccess(
+    const result = await completeDonationSuccessWithResult(
       donationId,
       { source: 'simulation' },
       { ipAddress: req.ip, actorType: AuditActorType.SYSTEM },
     );
+    const { donation } = result;
 
-    return res.status(200).json({
-      success: true,
-      message: 'Donation transitioned to SUCCESS',
-      donation: {
-        id: donation.id,
-        status: donation.status,
-        razorpayPaymentId: donation.razorpayPaymentId,
-      },
+    if (donation.status === DonationStatus.SUCCESS) {
+      return res.status(200).json({
+        success: true,
+        outcome: result.transitioned ? 'SUCCESS' : 'IDEMPOTENT',
+        transitioned: result.transitioned,
+        message: result.transitioned
+          ? 'Simulation recorded a SUCCESS state; this is not evidence of provider settlement.'
+          : 'Donation was already SUCCESS; simulation is not evidence of provider settlement.',
+        donation: { id: donation.id, status: donation.status, razorpayPaymentId: donation.razorpayPaymentId },
+      });
+    }
+
+    const refundPending = donation.status === DonationStatus.EXCESS_REFUND_PENDING;
+    return res.status(refundPending ? 202 : 409).json({
+      success: false,
+      outcome: result.outcome,
+      transitioned: result.transitioned,
+      message: refundPending
+        ? 'Simulation was recorded, but the donation is not successful and a refund is pending.'
+        : `Simulation did not result in a successful donation; current status is ${donation.status}.`,
+      donation: { id: donation.id, status: donation.status, razorpayPaymentId: donation.razorpayPaymentId },
     });
   } catch (err) {
     if (err instanceof DonationPaymentError) {
-      return res.status(err.statusCode).json({ error: err.message });
+      return res.status(err.statusCode).json({ success: false, outcome: 'FAILED', transitioned: false, error: err.message });
     }
     next(err);
   }
@@ -368,6 +398,6 @@ const razorpayRouter = Router();
 
 razorpayRouter.post('/', razorpayWebhookHandler);
 razorpayRouter.post('/refund', razorpayRefundWebhookHandler);
-razorpayRouter.post('/simulate-success', simulateSuccessHandler);
+razorpayRouter.post('/simulate-success', requirePaymentSimulationEnabled, requireAuth, requireRole(UserRole.ADMIN), simulateSuccessHandler);
 
 export default razorpayRouter;

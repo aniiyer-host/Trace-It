@@ -3,14 +3,18 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import app from '../src/index.js';
 import { prisma } from '../src/db/prisma.js';
+import { requireDisposableIntegrationDatabase } from './support/requireDisposableIntegrationDatabase.js';
 
 describe('campaign admin compare-and-set transitions (disposable database)', () => {
   const campaignIds: string[] = [];
   const ngoIds: string[] = [];
+  let databaseVerified = false;
   let adminId: string;
   let token: string;
 
   beforeAll(async () => {
+    await requireDisposableIntegrationDatabase();
+    databaseVerified = true;
     const admin = await prisma.profile.create({
       data: { email: `campaign-admin-${randomUUID()}@example.test`, role: 'ADMIN' },
     });
@@ -23,6 +27,7 @@ describe('campaign admin compare-and-set transitions (disposable database)', () 
   });
 
   afterAll(async () => {
+    if (!databaseVerified) return;
     await prisma.auditLog.deleteMany({ where: { entityId: { in: campaignIds } } });
     await prisma.campaign.deleteMany({ where: { id: { in: campaignIds } } });
     await prisma.profile.deleteMany({ where: { id: { in: ngoIds } } });

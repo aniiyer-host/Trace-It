@@ -98,7 +98,7 @@ export const failDonation = async (
  * Shared service function to finalize a successful donation.
  * Only the request that conditionally transitions an eligible donation runs success side effects.
  */
-export const completeDonationSuccess = async (
+export const completeDonationSuccessWithResult = async (
   donationId: string,
   evidence: DonationPaymentEvidence,
   options?: CompleteDonationOptions
@@ -158,7 +158,7 @@ export const completeDonationSuccess = async (
     donation.status !== DonationStatus.INITIATED &&
     donation.status !== DonationStatus.FAILED
   ) {
-    return donation;
+    return { donation, transitioned: false, outcome: 'IDEMPOTENT' as const };
   }
 
   let transition;
@@ -340,9 +340,7 @@ export const completeDonationSuccess = async (
     throw error;
   }
 
-  if (!transition.transitioned || options?.skipPostCommitEffects) {
-    return transition.donation;
-  }
+  if (!transition.transitioned || options?.skipPostCommitEffects) return transition;
 
   const updatedDonation = transition.donation;
 
@@ -380,7 +378,7 @@ export const completeDonationSuccess = async (
       },
       ipAddress: options?.ipAddress,
     });
-    return updatedDonation;
+    return transition;
   }
 
   // Payment success side effects apply only to accepted contributions.
@@ -430,8 +428,14 @@ export const completeDonationSuccess = async (
       });
     });
 
-  return updatedDonation;
+  return transition;
 };
+
+export const completeDonationSuccess = async (
+  donationId: string,
+  evidence: DonationPaymentEvidence,
+  options?: CompleteDonationOptions
+) => (await completeDonationSuccessWithResult(donationId, evidence, options)).donation;
 
 /**
  * Create a Razorpay order for the given amount in INR.

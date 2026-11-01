@@ -11,6 +11,7 @@ import {
   KycStatus,
   ProvenanceEventType,
 } from "../generated/prisma/enums.js";
+import { requireDisposableIntegrationDatabase } from "./support/requireDisposableIntegrationDatabase.js";
 import crypto from "crypto";
 import {
   computeChainHash,
@@ -25,8 +26,15 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
   let ngoToken: string;
   let ngoUserId: string;
   let campaignId: string;
+  let adminToken: string;
+  let adminUserId: string;
+  let databaseVerified = false;
+  const previousSimulationOptIn = process.env.TRACEIT_ENABLE_PAYMENT_SIMULATION;
 
   beforeAll(async () => {
+    await requireDisposableIntegrationDatabase();
+    databaseVerified = true;
+    process.env.TRACEIT_ENABLE_PAYMENT_SIMULATION = "true";
     const donor = await prisma.profile.create({
       data: {
         email: `donor-sim-${crypto.randomUUID()}@example.com`,
@@ -38,6 +46,12 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
     donorToken = jwt.sign({ userId: donorUserId }, JWT_ACCESS_SECRET, {
       expiresIn: "1h",
     });
+
+    const admin = await prisma.profile.create({
+      data: { email: `admin-sim-${crypto.randomUUID()}@example.com`, role: UserRole.ADMIN },
+    });
+    adminUserId = admin.id;
+    adminToken = jwt.sign({ userId: adminUserId }, JWT_ACCESS_SECRET, { expiresIn: "1h" });
 
     const ngo = await prisma.profile.create({
       data: {
@@ -62,6 +76,20 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
       },
     });
     campaignId = campaign.id;
+  });
+
+  afterAll(async () => {
+    if (previousSimulationOptIn === undefined) delete process.env.TRACEIT_ENABLE_PAYMENT_SIMULATION;
+    else process.env.TRACEIT_ENABLE_PAYMENT_SIMULATION = previousSimulationOptIn;
+    if (databaseVerified && adminUserId) await prisma.profile.delete({ where: { id: adminUserId } });
+  });
+
+  it("disables simulation by default and requires an authenticated admin", async () => {
+    delete process.env.TRACEIT_ENABLE_PAYMENT_SIMULATION;
+    await request(app).post("/api/webhooks/simulate-success").send({ donationId: "unknown" }).expect(404);
+    process.env.TRACEIT_ENABLE_PAYMENT_SIMULATION = "true";
+    await request(app).post("/api/webhooks/simulate-success").send({ donationId: "unknown" }).expect(401);
+    await request(app).post("/api/webhooks/simulate-success").set("Authorization", `Bearer ${donorToken}`).send({ donationId: "unknown" }).expect(403);
   });
 
   it("POST /api/donor/donate should return id, orderId, and publicDonationId", async () => {
@@ -105,10 +133,14 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
     // 2. Call simulation endpoint
     const simRes = await request(app)
       .post("/api/webhooks/simulate-success")
+      .set("Authorization", `Bearer ${adminToken}`)
       .send({ donationId });
 
     expect(simRes.status).toBe(200);
     expect(simRes.body.success).toBe(true);
+    expect(simRes.body.outcome).toBe("SUCCESS");
+    expect(simRes.body.transitioned).toBe(true);
+    expect(simRes.body.message).toContain("not evidence of provider settlement");
 
     // 3. Verify donation status is SUCCESS
     const updated = await prisma.donation.findUnique({
@@ -227,8 +259,11 @@ describe("Donation Webhook Simulation & Auto-Attestation Tests", () => {
 
     const duplicateRes = await request(app)
       .post("/api/webhooks/simulate-success")
+      .set("Authorization", `Bearer ${adminToken}`)
       .send({ donationId });
     expect(duplicateRes.status).toBe(200);
+    expect(duplicateRes.body.outcome).toBe("IDEMPOTENT");
+    expect(duplicateRes.body.transitioned).toBe(false);
     expect(
       await prisma.provenanceEvent.count({
         where: {

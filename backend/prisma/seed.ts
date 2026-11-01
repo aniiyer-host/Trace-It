@@ -509,14 +509,22 @@ function requireDemoDatabaseUrl(name: "DATABASE_URL" | "DIRECT_DATABASE_URL"): v
     throw new DemoSeedError(`${name} must target ${DEMO_DATABASE_NAME}`);
   }
 
+  let target: URL;
   let databaseName: string;
   try {
-    databaseName = decodeURIComponent(new URL(value).pathname.replace(/^\/+/, ""));
+    target = new URL(value);
+    databaseName = decodeURIComponent(target.pathname.replace(/^\/+/, ""));
   } catch {
     throw new DemoSeedError(`${name} must be a valid PostgreSQL URL for ${DEMO_DATABASE_NAME}`);
   }
   if (databaseName !== DEMO_DATABASE_NAME) {
     throw new DemoSeedError(`Refusing to seed ${databaseName || "an unspecified database"}; expected ${DEMO_DATABASE_NAME}`);
+  }
+
+  const expectedHost = process.env.TRACEIT_DEMO_DATABASE_HOST?.trim().toLowerCase().replace(/\.$/, "");
+  const configuredHost = target.hostname.toLowerCase().replace(/\.$/, "");
+  if (!expectedHost || configuredHost !== expectedHost) {
+    throw new DemoSeedError(`${name} host must match the explicitly configured TRACEIT_DEMO_DATABASE_HOST`);
   }
 }
 

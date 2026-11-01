@@ -50,9 +50,13 @@ This is the backend for the Trace-It donation tracking platform.
    npx prisma db seed
    ```
 
-   The seed refuses to run unless `DATABASE_URL` (and `DIRECT_DATABASE_URL`, when set) targets the `traceit_demo` database. Configure those URLs without changing the original database settings. Keep `TRACEIT_ANCHOR_WORKER_ENABLED`, `TRACEIT_EMAIL_WORKER_ENABLED`, and `TRACEIT_REFUND_WORKER_ENABLED` disabled, and use only non-deliverable placeholder values for `TRACEIT_TEST_ADMIN_EMAIL`, `TRACEIT_TEST_NGO_EMAIL`, and `TRACEIT_TEST_DONOR_EMAIL`.
+   The seed refuses to run unless `DATABASE_URL` (and `DIRECT_DATABASE_URL`, when set) targets the `traceit_demo` database and its hostname exactly matches the separately configured `TRACEIT_DEMO_DATABASE_HOST` (hostname only, without scheme or port). Set this value only after independently confirming the intended demo PostgreSQL instance; both configured URLs must use that expected host. Missing or mismatched host identity fails closed. The seed also checks the connected PostgreSQL database name. This host check is not a substitute for trusted DNS/TLS and deployment configuration. Configure these values without changing the original database settings. Keep `TRACEIT_ANCHOR_WORKER_ENABLED`, `TRACEIT_EMAIL_WORKER_ENABLED`, and `TRACEIT_REFUND_WORKER_ENABLED` disabled, and use only non-deliverable placeholder values for `TRACEIT_TEST_ADMIN_EMAIL`, `TRACEIT_TEST_NGO_EMAIL`, and `TRACEIT_TEST_DONOR_EMAIL`.
 
-   The seed creates or updates the demo profiles and campaign, creates one `INITIATED` donation with a synthetic order ID, then completes it through the donation service's simulation evidence path. It does not create a Razorpay order or payment. The service creates the success provenance event and its normal transactional queue/attestation records; post-commit audit/SIEM and receipt-storage work is suppressed for this controlled demo flow. Placeholder donor email prevents a deliverable email from being enqueued. The legacy blockchain retry processor is a separate standalone process and must not be started against the demo database; the durable Solana anchor worker must remain disabled unless separately approved.
+   The seed creates or updates the demo profiles and campaign, creates one `INITIATED` donation with a synthetic order ID, then calls the internal donation service directly using simulation evidence. It does not call the HTTP simulation endpoint, create a Razorpay order or payment, or prove payment settlement. The service creates the success provenance event and its normal transactional queue/attestation records; post-commit audit/SIEM and receipt-storage work is suppressed for this controlled demo flow. Placeholder donor email prevents a deliverable email from being enqueued.
+
+   The HTTP `POST /api/webhooks/simulate-success` route is disabled unless `TRACEIT_ENABLE_PAYMENT_SIMULATION=true`, requires an authenticated administrator, and is always disabled when `NODE_ENV=production`. Keep the opt-in unset except during a controlled demo. If enabled, deploy only behind a private network and enforce an ingress firewall/allowlist; never expose this route on a public or generally reachable deployment. The application does not implement an IP allowlist for this route. This simulated state is not evidence of Razorpay settlement. Normal Razorpay checkout and signature-verified webhook flows do not use this route or its opt-in.
+
+   The legacy `BlockchainRetryProcessor` is a standalone process; the backend `index.ts` worker flags do not control it. Never launch `npx tsx src/services/blockchainRetryProcessor.ts` against the demo database, and stop/remove any separately deployed processor, scheduler, or container that can access that database. Ensure no such process has the demo `DATABASE_URL`; remove `SOLANA_WALLET_KEYPAIR_PATH`, `SOLANA_RPC_URL`, `SOLANA_PROGRAM_ID`, and `BLOCKCHAIN_HMAC_SECRET` from its environment as defense in depth. Queue-record creation, processor startup, RPC submission, and confirmed on-chain execution are distinct. Keep the durable Solana anchor worker disabled unless separately approved.
 
    Re-running the seed preserves campaign raised amounts and verifies the existing donation and provenance chain instead of repeating the successful transition.
 
@@ -72,6 +76,10 @@ npm run dev
 ```
 
 This uses `tsx watch` to run TypeScript directly and auto-restart on file changes.
+
+### PostgreSQL integration tests
+
+The guarded concurrency and simulation integration suites require a dedicated disposable database and fail before fixture writes unless all of the following are configured: `TRACEIT_INTEGRATION_TEST_DATABASE_DISPOSABLE=YES_I_CONFIRM`, `TRACEIT_INTEGRATION_TEST_DATABASE_NAME=traceit_reliability_e2e_<unique_suffix>`, and `TRACEIT_INTEGRATION_TEST_DATABASE_HOST=<confirmed-hostname>`. The tests compare the configured host with `DATABASE_URL` and query `current_database()` on the actual connection to match the explicitly configured database name. Do not set these values for a populated, shared, demo, or production database. Other legacy PostgreSQL test suites may have separate safeguards or none; do not treat these guards as making the full Jest suite safe for an arbitrary database.
 
 ## Production
 

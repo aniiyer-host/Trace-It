@@ -10,15 +10,19 @@ import {
   type GatewayRefund,
   type RefundGateway,
 } from '../src/services/refundService.js';
+import { requireDisposableIntegrationDatabase } from './support/requireDisposableIntegrationDatabase.js';
 
 describe('donation settlement and refund outbox (real PostgreSQL)', () => {
   const profileIds: string[] = [];
   const campaignIds: string[] = [];
   const donationIds: string[] = [];
+  let databaseVerified = false;
   let ngoId: string;
   let donorId: string;
 
   beforeAll(async () => {
+    await requireDisposableIntegrationDatabase();
+    databaseVerified = true;
     const [ngo, donor] = await Promise.all([
       prisma.profile.create({ data: { email: `donation-ngo-${randomUUID()}@integration.traceit.org`, role: 'CHARITY', ngoStatus: 'ACTIVE' } }),
       prisma.profile.create({ data: { email: `donation-donor-${randomUUID()}@integration.traceit.org`, role: 'DONOR', kycStatus: 'APPROVED' } }),
@@ -29,6 +33,7 @@ describe('donation settlement and refund outbox (real PostgreSQL)', () => {
   });
 
   afterAll(async () => {
+    if (!databaseVerified) return;
     await prisma.providerRefund.deleteMany({ where: { donationId: { in: donationIds } } });
     await prisma.emailOutbox.deleteMany({ where: { donationId: { in: donationIds } } });
     await prisma.attestation.deleteMany({ where: { donationId: { in: donationIds } } });

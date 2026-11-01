@@ -4,16 +4,20 @@ import jwt from 'jsonwebtoken';
 import app from '../src/index.js';
 import { prisma } from '../src/db/prisma.js';
 import { getRazorpayClient } from '../src/services/donationService.js';
+import { requireDisposableIntegrationDatabase } from './support/requireDisposableIntegrationDatabase.js';
 
 describe('concurrent donation capacity reservations (disposable database)', () => {
   const profileIds: string[] = [];
   const campaignIds: string[] = [];
   const donationIds: string[] = [];
+  let databaseVerified = false;
   let ngoId: string;
   let donorTokens: string[];
   const orderCreate = getRazorpayClient().orders.create as jest.Mock;
 
   beforeAll(async () => {
+    await requireDisposableIntegrationDatabase();
+    databaseVerified = true;
     const ngo = await prisma.profile.create({
       data: {
         email: `capacity-ngo-${randomUUID()}@example.test`,
@@ -42,6 +46,7 @@ describe('concurrent donation capacity reservations (disposable database)', () =
   });
 
   afterAll(async () => {
+    if (!databaseVerified) return;
     orderCreate.mockReset();
     await prisma.auditLog.deleteMany({ where: { entityId: { in: donationIds } } });
     await prisma.donation.deleteMany({ where: { id: { in: donationIds } } });
