@@ -44,12 +44,8 @@ const authorizedCampaignResponse = (campaign: any) => {
   } = campaign;
   return {
     ...safe,
-    beneficiaryName: encryptedName
-      ? HashService.decryptSensitiveValue(encryptedName)
-      : beneficiaryName,
-    beneficiaryDescription: encryptedDescription
-      ? HashService.decryptSensitiveValue(encryptedDescription)
-      : beneficiaryDescription,
+    beneficiaryName: encryptedName ? HashService.decryptSensitiveValue(encryptedName) : undefined,
+    beneficiaryDescription: encryptedDescription ? HashService.decryptSensitiveValue(encryptedDescription) : undefined,
   };
 };
 

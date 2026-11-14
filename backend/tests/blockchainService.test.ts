@@ -63,47 +63,16 @@ describe('BlockchainService & HashService Unit Tests', () => {
       expect(service).toBeDefined();
     });
 
-    it('submits program transactions and confirms with HTTP polling, without Anchor .rpc WebSockets', async () => {
+    it("rejects legacy status writes before touching RPC", async () => {
       const service = new BlockchainService({
         programId: dummyProgramId,
         walletKeypairJson: validKeypairBytes,
         hmacSecret,
       });
-      const transaction = new Transaction().add(SystemProgram.transfer({
-        fromPubkey: validKeypair.publicKey,
-        toPubkey: Keypair.generate().publicKey,
-        lamports: 1,
-      }));
-      const builder = {
-        accounts: jest.fn().mockReturnThis(),
-        transaction: jest.fn().mockResolvedValue(transaction),
-        rpc: jest.fn().mockRejectedValue(new Error('Anchor .rpc must not be used')),
-      };
-      const confirmTransaction = jest.fn();
-      const getSignatureStatuses = jest.fn().mockResolvedValue({
-        context: { slot: 1 },
-        value: [{ err: null, confirmationStatus: 'confirmed' }],
-      });
-      (service as any).program = {
-        methods: { updateDonationStatus: jest.fn(() => builder) },
-      };
-      (service as any).connection = {
-        getLatestBlockhash: jest.fn().mockResolvedValue({
-          blockhash: PublicKey.default.toBase58(),
-          lastValidBlockHeight: 100,
-        }),
-        sendRawTransaction: jest.fn().mockResolvedValue('provider-signature'),
-        getSignatureStatuses,
-        confirmTransaction,
-      };
-
-      const result = await service.updateDonationStatus('123e4567-e89b-12d3-a456-426614174000', 1);
-
-      expect(result.success).toBe(true);
-      expect(result.txHash).toMatch(/^[1-9A-HJ-NP-Za-km-z]{80,90}$/);
-      expect(builder.rpc).not.toHaveBeenCalled();
-      expect(getSignatureStatuses).toHaveBeenCalledTimes(1);
-      expect(confirmTransaction).not.toHaveBeenCalled();
+      const sendRawTransaction = jest.spyOn((service as any).connection, "sendRawTransaction");
+      await expect(service.updateDonationStatus("123e4567-e89b-12d3-a456-426614174000", 1))
+        .rejects.toThrow("LEGACY_BLOCKCHAIN_WRITE_RETIRED:updateDonationStatus");
+      expect(sendRawTransaction).not.toHaveBeenCalled();
     });
 
     it('generates correct explorer URLs', () => {
@@ -184,163 +153,36 @@ describe('BlockchainService & HashService Unit Tests', () => {
       expect(result.computedHash).toEqual(expectedHash);
     });
 
-    describe('recordDonation Idempotency & Signature Recovery', () => {
-      let service: BlockchainService;
-      let getAccountInfoMock: jest.SpyInstance;
-      let getSignaturesMock: jest.SpyInstance;
-      let consoleWarn: jest.SpyInstance;
-      let consoleError: jest.SpyInstance;
-
-      beforeEach(() => {
-        consoleWarn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-        consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
-        service = new BlockchainService({
-          programId: dummyProgramId,
-          walletKeypairJson: validKeypairBytes,
-          hmacSecret,
-        });
-
-        // Mock connection methods safely
-        // @ts-ignore
-        getAccountInfoMock = jest.spyOn(service.connection, 'getAccountInfo').mockResolvedValue(null);
-        // @ts-ignore
-        getSignaturesMock = jest.spyOn(service.connection, 'getSignaturesForAddress').mockResolvedValue([]);
-
-        // Mock program property to prevent throw
-        (service as any).program = {
-          methods: {
-            recordDonation: jest.fn().mockReturnThis(),
-            accounts: jest.fn().mockReturnThis(),
-            rpc: jest.fn().mockResolvedValue('fresh_tx_hash'),
-          }
-        };
+    it("fails closed for every legacy blockchain write method", async () => {
+      const service = new BlockchainService({
+        programId: dummyProgramId,
+        walletKeypairJson: validKeypairBytes,
+        hmacSecret,
       });
+      const donation = {
+        donationId: "123e4567-e89b-12d3-a456-426614174000",
+        donorUserId: "user-1",
+        ngoId: "ngo-1",
+        campaignId: "campaign-1",
+        amountInr: 100,
+        currency: "INR",
+        timestamp: new Date(),
+      };
+      const disbursement = {
+        disbursementId: "disbursement-1",
+        ngoId: "ngo-1",
+        cohortId: "cohort-1",
+        amountInr: 100,
+        currency: "INR",
+        timestamp: new Date(),
+        transactionHash: "payment-ref",
+      };
 
-      afterEach(() => {
-        consoleWarn.mockRestore();
-        consoleError.mockRestore();
-      });
-
-      it('recovers creation signature using pagination when account already exists', async () => {
-        // Derive the expected PDA using the exact production seeds.
-        // Production path: cleanDonationId = donationId.replace(/-/g, '')
-        const donationId = '123e4567-e89b-12d3-a456-426614174000';
-        const cleanDonationId = donationId.replace(/-/g, '');
-        const [expectedPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from('donation'), Buffer.from(cleanDonationId, 'utf8')],
-          new PublicKey(dummyProgramId)
-        );
-
-        // Force account to exist (idempotency trigger)
-        getAccountInfoMock.mockResolvedValue({ data: Buffer.from([]) });
-
-        // Page 1: full 1000 with a distinct last signature so the cursor is unambiguous.
-        // Page 2: partial (< 1000) — signals end of history; loop exits after this page.
-        const page1Sigs = [
-          ...Array(999).fill({ signature: 'page1_earlier_sig' }),
-          { signature: 'page1_last_sig' }
-        ];
-        getSignaturesMock
-          .mockResolvedValueOnce(page1Sigs)
-          .mockResolvedValueOnce([{ signature: 'page2_older' }, { signature: 'true_creation_signature' }]);
-
-        // Stub getParsedTransaction to return a transaction that passes all four checks:
-        //   1. meta.err === null  (transaction succeeded)
-        //   2. programId matches  (correct program)
-        //   3. accounts[0] equals the expected PDA  (correct account)
-        //   4. coder.decode returns { name: 'recordDonation' }  (correct instruction)
-        jest.spyOn((service as any).connection, 'getParsedTransaction').mockResolvedValue({
-          meta: { err: null },
-          transaction: {
-            message: {
-              instructions: [{
-                programId: new PublicKey(dummyProgramId),
-                accounts: [expectedPda],
-                data: '1'  // valid bs58 (encodes [0x00]); decoded value is irrelevant — coder.decode is mocked
-              }]
-            }
-          }
-        } as any);
-
-        // Stub the coder — anchor.utils.bytes.bs58.decode runs on the data string;
-        // the coder.decode is intercepted before any real BorshCoder is needed.
-        (service as any).program.coder = {
-          instruction: {
-            decode: jest.fn().mockReturnValue({ name: 'recordDonation' })
-          }
-        };
-
-        const result = await service.recordDonation({
-          donationId,
-          donorUserId: 'user-1',
-          ngoId: 'ngo-1',
-          campaignId: '',
-          amountInr: 100,
-          currency: 'INR',
-          timestamp: new Date()
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.txHash).toEqual('true_creation_signature');
-        // Two getSignaturesForAddress calls: page 1 (no before), page 2 (before = last sig of page 1)
-        expect(getSignaturesMock).toHaveBeenCalledTimes(2);
-        expect(getSignaturesMock.mock.calls[0][1]).toEqual({ limit: 1000, before: undefined });
-        expect(getSignaturesMock.mock.calls[1][1]).toEqual({ limit: 1000, before: 'page1_last_sig' });
-      });
-
-      it('returns null txHash safely when RPC signature fetch fails or verification fails', async () => {
-        getAccountInfoMock.mockResolvedValue({ data: Buffer.from([]) });
-
-        // Scenario 1: RPC Failure
-        getSignaturesMock.mockRejectedValueOnce(new Error('RPC node timed out'));
-
-        let result = await service.recordDonation({
-          donationId: '123e4567-e89b-12d3-a456-426614174000',
-          donorUserId: 'user-2',
-          ngoId: 'ngo-2',
-          campaignId: '',
-          amountInr: 100,
-          currency: 'INR',
-          timestamp: new Date()
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.txHash).toBeNull();
-
-        // Scenario 2: Verification fails (wrong instruction)
-        getSignaturesMock.mockReset().mockResolvedValueOnce([{ signature: 'fake_creation' }]);
-        const getParsedTransactionMock = jest.spyOn((service as any).connection, 'getParsedTransaction').mockResolvedValue({
-          meta: { err: null },
-          transaction: {
-            message: {
-              instructions: [{
-                programId: new PublicKey(dummyProgramId),
-                accounts: [],
-                data: '1'  // valid bs58 (encodes [0x00]); coder.decode is mocked so decoded value is irrelevant
-              }]
-            }
-          }
-        } as any);
-
-        (service as any).program.coder = {
-        instruction: {
-            decode: jest.fn().mockReturnValue({ name: 'updateStatus' })
-          }
-        };
-
-        result = await service.recordDonation({
-          donationId: '123e4567-e89b-12d3-a456-426614174001',
-          donorUserId: 'user-3',
-          ngoId: 'ngo-3',
-          campaignId: '',
-          amountInr: 100,
-          currency: 'INR',
-          timestamp: new Date()
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.txHash).toBeNull();
-      });
+      await expect(service.recordDonation(donation)).rejects.toThrow("LEGACY_BLOCKCHAIN_WRITE_RETIRED:recordDonation");
+      await expect(service.updateDonationStatus(donation.donationId, 1)).rejects.toThrow("LEGACY_BLOCKCHAIN_WRITE_RETIRED:updateDonationStatus");
+      await expect(service.registerNgo({ ngoId: "ngo-1", metadataHash: "hash" })).rejects.toThrow("LEGACY_BLOCKCHAIN_WRITE_RETIRED:registerNgo");
+      await expect(service.registerCohort({ cohortId: "cohort-1", ngoId: "ngo-1", metadataHash: "hash" })).rejects.toThrow("LEGACY_BLOCKCHAIN_WRITE_RETIRED:registerCohort");
+      await expect(service.recordDisbursement(disbursement)).rejects.toThrow("LEGACY_BLOCKCHAIN_WRITE_RETIRED:recordDisbursement");
     });
   });
 });

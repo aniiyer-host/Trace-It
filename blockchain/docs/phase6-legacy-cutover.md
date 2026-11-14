@@ -2,7 +2,7 @@
 
 > **Implemented:** 2026-10-02
 >
-> **Code status:** Blockchain-owned retirement implementation complete
+> **Code status:** Legacy retirement is enforced at the gateway and direct writer methods; the durable retry-safety metadata is added by the 2026-11-14 follow-up.
 >
 > **Operational status:** Awaiting Phase 5 devnet completion, Backend/Data audit-batch integration, outage evidence, and deployment of this backend release
 
@@ -12,7 +12,7 @@ Trace-It no longer authorizes individual Solana writes for donations, donation s
 
 The application write gateway `getBlockchainService()` now always returns `null`. Every legacy `BlockchainService` write method also fails closed with the stable error prefix `LEGACY_BLOCKCHAIN_WRITE_RETIRED` before initialization, account lookup, simulation, or submission. This defense in depth prevents a forgotten call site from sending a transaction.
 
-The old `BlockchainRetryProcessor` is a transaction-free compatibility shell and is no longer started by the API process. Existing `BlockchainRetryQueue` rows are retained as migration evidence but cannot create obsolete accounts. Backend/Data may archive them only under its data-retention procedure.
+The old `BlockchainRetryProcessor` is a transaction-free compatibility shell and is no longer started by the API process. Donation success does not enqueue new legacy rows, the old reconciliation script is retired, and existing `BlockchainRetryQueue` rows are retained as migration evidence but cannot create obsolete accounts. Backend/Data may archive them only under its data-retention procedure.
 
 ## Write Disposition
 

@@ -279,39 +279,6 @@ export const razorpayRefundWebhookHandler = async (
   }
 };
 
-// Helper function for retry queue
-async function addToBlockchainRetryQueue(data: {
-  donationId: string;
-  error: string;
-  retryCount: number;
-}): Promise<void> {
-  try {
-    // Create or update retry queue entry
-    await prisma.blockchainRetryQueue.upsert({
-      where: { donationId: data.donationId },
-      update: {
-        error: data.error,
-        retryCount: data.retryCount + 1,
-        lastAttempt: new Date(),
-        updatedAt: new Date()
-      },
-      create: {
-        donationId: data.donationId,
-        error: data.error,
-        retryCount: data.retryCount + 1,
-        lastAttempt: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-    });
-
-    console.info(`Added donation ${data.donationId} to blockchain retry queue (attempt ${data.retryCount + 1})`);
-  } catch (queueError) {
-    console.error(`Failed to add to retry queue:`, queueError);
-    // Don't fail the webhook if queue fails - the donation is already recorded in DB
-  }
-}
-
 const isPaymentSimulationEnabled = () =>
   process.env.TRACEIT_ENABLE_PAYMENT_SIMULATION === 'true' &&
   process.env.NODE_ENV !== 'production';

@@ -14,15 +14,19 @@ import {
   type AnchorBatch,
 } from "./anchorTypes.js";
 import { waitForSignatureConfirmation } from "../solanaRpc.js";
+import * as anchor from "@coral-xyz/anchor";
 
 export interface AnchorChainAdapter {
   getAccountInfo(address: PublicKey): Promise<AccountInfo<Buffer> | null>;
+  getSignatureStatus(signature: string): Promise<{ err: unknown | null; confirmationStatus?: string | null } | null>;
+  getBlockHeight(): Promise<number>;
   submitRecordAnchor(input: {
     batch: AnchorBatch;
     programId: PublicKey;
     configPda: PublicKey;
     anchorPda: PublicKey;
     authority: PublicKey;
+    onPrepared?: (metadata: { signature: string; blockhash: string; lastValidBlockHeight: bigint }) => Promise<void>;
   }): Promise<string>;
 }
 
@@ -39,12 +43,22 @@ export class SolanaAnchorAdapter implements AnchorChainAdapter {
     return this.connection.getAccountInfo(address, this.commitment);
   }
 
+  async getSignatureStatus(signature: string) {
+    const response = await this.connection.getSignatureStatus(signature, { searchTransactionHistory: true });
+    return response.value;
+  }
+
+  getBlockHeight(): Promise<number> {
+    return this.connection.getBlockHeight("confirmed");
+  }
+
   async submitRecordAnchor(input: {
     batch: AnchorBatch;
     programId: PublicKey;
     configPda: PublicKey;
     anchorPda: PublicKey;
     authority: PublicKey;
+    onPrepared?: (metadata: { signature: string; blockhash: string; lastValidBlockHeight: bigint }) => Promise<void>;
   }): Promise<string> {
     if (!input.authority.equals(this.authority.publicKey)) {
       throw new AnchorAdapterError(
@@ -89,7 +103,25 @@ export class SolanaAnchorAdapter implements AnchorChainAdapter {
         );
       }
 
-      signature = await this.connection.sendRawTransaction(
+      const signedSignature = transaction.signature;
+      if (!signedSignature) throw new Error("signed anchor transaction has no signature");
+      signature = anchor.utils.bytes.bs58.encode(signedSignature);
+      try {
+        await input.onPrepared?.({
+          signature,
+          blockhash: latest.blockhash,
+          lastValidBlockHeight: BigInt(latest.lastValidBlockHeight),
+        });
+      } catch (error) {
+        // The transaction has not been broadcast; a failed durable write is safe to retry.
+        throw new AnchorAdapterError(
+          "RPC",
+          `could not persist prepared anchor submission before broadcast: ${error instanceof Error ? error.message : String(error)}`,
+          error,
+        );
+      }
+
+      const returnedSignature = await this.connection.sendRawTransaction(
         transaction.serialize(),
         {
           skipPreflight: false,
@@ -97,6 +129,9 @@ export class SolanaAnchorAdapter implements AnchorChainAdapter {
           maxRetries: 0,
         },
       );
+      if (returnedSignature !== signature) {
+        throw new AnchorAdapterError("RPC", "RPC returned a signature different from the persisted signed transaction", undefined, signature);
+      }
       const confirmation = await this.waitForConfirmation(signature);
       if (confirmation.err) {
         throw new AnchorAdapterError(

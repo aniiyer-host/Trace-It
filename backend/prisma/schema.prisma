@@ -704,6 +704,8 @@ model AnchorBatch {
   endSequence        BigInt
   eventCount         Int
   solanaTxSignature  String?
+  submissionBlockhash String?
+  lastValidBlockHeight BigInt?
   anchorPda          String?
   anchoredAt         DateTime?
   status             String   @default("PENDING")

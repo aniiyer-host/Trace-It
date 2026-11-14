@@ -1,30 +1,6 @@
-import { BlockchainService } from './blockchainService';
-import path from 'path';
+import type { BlockchainService } from './blockchainService';
 
-let instance: BlockchainService | null = null;
-
+/** Legacy Anchor writer retired. Durable AnchorBatch processing is the only write path. */
 export async function getBlockchainService(): Promise<BlockchainService | null> {
-  if (instance) return instance;
-
-  if (!process.env.SOLANA_WALLET_KEYPAIR_PATH) {
-    console.warn('[Blockchain] SOLANA_WALLET_KEYPAIR_PATH not configured — blockchain service disabled. This is expected in local dev.');
-    return null;
-  }
-
-  const service = new BlockchainService({
-    rpcUrl: process.env.SOLANA_RPC_URL,
-    walletKeypairPath: process.env.SOLANA_WALLET_KEYPAIR_PATH,
-    programId: process.env.SOLANA_PROGRAM_ID!,
-    hmacSecret: process.env.BLOCKCHAIN_HMAC_SECRET!,
-    commitment: 'confirmed',
-  });
-
-  // Load the IDL from the blockchain build output
-  const idlPath = path.resolve(
-    __dirname, '..', '..', '..', 'blockchain', 'target', 'idl', 'traceit.json'
-  );
-  await service.init(idlPath);
-
-  instance = service;
-  return instance;
+  return null;
 }

@@ -916,6 +916,10 @@ export const getDonationAnchors = async (
     return res.json({
       anchors: events.map((event) => ({
         eventType: event.eventType,
+        // Read-only anchor verification currently supports Devnet only. Emit
+        // the network marker when that verifier is configured so donor views
+        // can distinguish these signatures from other Solana clusters.
+        network: chain ? "devnet" : null,
         payloadHash: event.payloadHash,
         chainHash: event.chainHash,
         status: event.anchorStatus,

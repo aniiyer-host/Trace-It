@@ -17,6 +17,8 @@ export interface PersistedAnchorBatch extends AnchorBatch {
   reconciliationCount: number;
   nextAttemptAt: Date;
   transactionSignature?: string;
+  submissionBlockhash?: string;
+  lastValidBlockHeight?: bigint;
   anchorPda?: string;
   lastError?: string;
 }
@@ -33,6 +35,9 @@ export interface AnchorTransition {
   reconciliationCount?: number;
   transactionSignature?: string;
   clearTransactionSignature?: boolean;
+  submissionBlockhash?: string;
+  lastValidBlockHeight?: bigint;
+  clearSubmissionMetadata?: boolean;
   anchorPda?: string;
   error?: string;
   nextAttemptAt?: Date;
@@ -63,7 +68,10 @@ export interface AnchorBacklogSnapshot {
 
 export interface AnchorPublisher {
   verifyAnchorRecord(batch: AnchorBatch): Promise<AnchorResult>;
-  submitAnchorBatch(batch: AnchorBatch): Promise<AnchorResult>;
+  submitAnchorBatch(
+    batch: AnchorBatch,
+    onPrepared?: (metadata: { signature: string; blockhash: string; lastValidBlockHeight: bigint }) => Promise<void>,
+  ): Promise<AnchorResult>;
   reconcileAnchorSubmission(batch: AnchorBatch): Promise<AnchorResult>;
 }
 

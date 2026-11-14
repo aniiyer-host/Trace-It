@@ -311,16 +311,6 @@ export const completeDonationSuccessWithResult = async (
         });
       }
 
-      await tx.blockchainRetryQueue.create({
-        data: {
-          donationId: currentDonation.id,
-          operationType: 'RECORD_DONATION',
-          retryCount: 0,
-          lastAttempt: new Date(0),
-          error: 'Enqueued from payment success',
-        },
-      });
-
       await enqueueDonationSuccessEmail(tx, currentDonation, occurredAt);
 
       return { donation: currentDonation, transitioned: true, outcome: 'SUCCESS' as const };

@@ -15,6 +15,10 @@ export interface AnchorBatch {
   eventCount: number;
   schemaVersion: number;
   nonce?: Uint8Array;
+  /** Local transaction metadata; this is not encoded into the on-chain instruction. */
+  transactionSignature?: string;
+  submissionBlockhash?: string;
+  lastValidBlockHeight?: bigint;
 }
 
 export interface AnchorRecord extends AnchorBatch {

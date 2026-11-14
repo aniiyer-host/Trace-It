@@ -24,6 +24,8 @@ type AnchorBatchRow = {
   reconciliationCount: number;
   nextAttemptAt: Date;
   solanaTxSignature: string | null;
+  submissionBlockhash: string | null;
+  lastValidBlockHeight: bigint | null;
   anchorPda: string | null;
   lastError: string | null;
   claimToken?: string;
@@ -74,7 +76,7 @@ export class PrismaAnchorBatchRepository implements AnchorBatchRepository {
         SELECT
           "id", "batchKey", "auditRoot", "nonce", "schemaVersion", "startSequence", "endSequence",
           "eventCount", "status", "createdAt", "attemptCount",
-          "reconciliationCount", "nextAttemptAt", "solanaTxSignature",
+          "reconciliationCount", "nextAttemptAt", "solanaTxSignature", "submissionBlockhash", "lastValidBlockHeight",
           "anchorPda", "lastError"
         FROM "anchor_batches"
         WHERE "status" IN ('PENDING', 'RETRYABLE', 'SUBMITTING', 'RECONCILIATION_REQUIRED')
@@ -97,7 +99,7 @@ export class PrismaAnchorBatchRepository implements AnchorBatchRepository {
         RETURNING
           "id", "batchKey", "auditRoot", "nonce", "schemaVersion", "startSequence", "endSequence",
           "eventCount", "status", "createdAt", "attemptCount",
-          "reconciliationCount", "nextAttemptAt", "solanaTxSignature",
+          "reconciliationCount", "nextAttemptAt", "solanaTxSignature", "submissionBlockhash", "lastValidBlockHeight",
           "anchorPda", "lastError", "claimToken", "claimExpiresAt"
       `;
       if (updated.length !== 1) return null;
@@ -199,6 +201,14 @@ export class PrismaAnchorBatchRepository implements AnchorBatchRepository {
               WHEN ${transition.clearTransactionSignature ?? false} THEN NULL
               ELSE COALESCE(${transition.transactionSignature ?? null}, "solanaTxSignature")
             END,
+            "submissionBlockhash" = CASE
+              WHEN ${transition.clearSubmissionMetadata ?? false} THEN NULL
+              ELSE COALESCE(${transition.submissionBlockhash ?? null}, "submissionBlockhash")
+            END,
+            "lastValidBlockHeight" = CASE
+              WHEN ${transition.clearSubmissionMetadata ?? false} THEN NULL
+              ELSE COALESCE(${transition.lastValidBlockHeight ?? null}, "lastValidBlockHeight")
+            END,
             "anchorPda" = COALESCE(${transition.anchorPda ?? null}, "anchorPda"),
             "lastError" = ${transition.error ?? null},
             "nextAttemptAt" = COALESCE(${transition.nextAttemptAt ?? null}, "nextAttemptAt"),
@@ -262,6 +272,8 @@ export async function assertAnchorSchemaReady(
     "anchor_batches.anchorPda",
     "anchor_batches.lastError",
     "anchor_batches.solanaTxSignature",
+    "anchor_batches.submissionBlockhash",
+    "anchor_batches.lastValidBlockHeight",
     "anchor_batches.anchoredAt",
     "provenance_events.chainHash",
     "provenance_events.anchorBatchId",
@@ -294,6 +306,9 @@ function toClaimedBatch(
     batchKey,
     auditRoot,
     ...(row.nonce ? { nonce: decodeHex(row.nonce, 32, "nonce") } : {}),
+    ...(row.solanaTxSignature ? { transactionSignature: row.solanaTxSignature } : {}),
+    ...(row.submissionBlockhash ? { submissionBlockhash: row.submissionBlockhash } : {}),
+    ...(row.lastValidBlockHeight !== null ? { lastValidBlockHeight: row.lastValidBlockHeight } : {}),
     startSequence: row.startSequence,
     endSequence: row.endSequence,
     eventCount: row.eventCount,
@@ -307,6 +322,8 @@ function toClaimedBatch(
     reconciliationCount: row.reconciliationCount,
     nextAttemptAt: row.nextAttemptAt,
     transactionSignature: row.solanaTxSignature ?? undefined,
+    submissionBlockhash: row.submissionBlockhash ?? undefined,
+    lastValidBlockHeight: row.lastValidBlockHeight ?? undefined,
     anchorPda: row.anchorPda ?? undefined,
     lastError: row.lastError ?? undefined,
   };

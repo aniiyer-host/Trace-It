@@ -128,10 +128,15 @@ export async function verifyPersistedAnchor(
       : { status: "PENDING", reason: "No on-chain account is visible yet; Trace-It has not recorded the batch as confirmed." };
   }
   if (onChainRecord.status !== "PASSED") {
+    const transaction: IntegrityCheck = onChainRecord.status === "PENDING"
+      ? { status: "PENDING", reason: "The transaction cannot be confirmed until the anchor record is visible." }
+      : onChainRecord.status === "UNAVAILABLE"
+        ? { status: "UNAVAILABLE", reason: "The transaction cannot be checked while the anchor record is unavailable." }
+        : { status: "NOT_APPLICABLE", reason: "The on-chain anchor record did not match the expected batch." };
     return {
       batchRoot,
       onChainRecord: { ...onChainRecord, ...(anchorResult.error ? { reason: safeAnchorReason(anchorResult.status) } : {}) },
-      transaction: { status: "NOT_APPLICABLE", reason: "The on-chain anchor record did not match the expected batch." },
+      transaction,
     };
   }
   if (!batch.solanaTxSignature) {

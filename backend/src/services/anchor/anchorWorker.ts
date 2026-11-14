@@ -160,13 +160,19 @@ export class AnchorWorker {
     }
 
     const attemptCount = batch.attemptCount + 1;
-    const baseTransition = this.transition(batch, attemptCount, existing);
-    await this.repository.markSubmitting(batch.id, baseTransition);
-
+    let submissionStarted = false;
     const submitted = await this.callPublisher("submit", () =>
-      this.publisher.submitAnchorBatch(batch),
+      this.publisher.submitAnchorBatch(batch, async (metadata) => {
+        await this.repository.markSubmitting(batch.id, {
+          ...this.transition(batch, attemptCount, { status: "PENDING_CONFIRMATION" }),
+          transactionSignature: metadata.signature,
+          submissionBlockhash: metadata.blockhash,
+          lastValidBlockHeight: metadata.lastValidBlockHeight,
+        });
+        submissionStarted = true;
+      }),
     );
-    await this.handleResult(batch, submitted, attemptCount, true);
+    await this.handleResult(batch, submitted, attemptCount, submissionStarted);
   }
 
   private async reconcileClaim(batch: ClaimedAnchorBatch): Promise<void> {
@@ -190,6 +196,23 @@ export class AnchorWorker {
         error: result.error ?? "anchor is not visible yet; automatic resubmission is disabled for ambiguous submissions",
         nextAttemptAt: this.nextAttemptAt(reconciliationCount),
       });
+      return;
+    }
+    if (result.status === "RETRYABLE_RPC_FAILURE") {
+      const reconciliationCount = batch.reconciliationCount + 1;
+      await this.repository.markReconciliationRequired(batch.id, {
+        ...this.transition(batch, batch.attemptCount, result, { reconciliationCount }),
+        error: result.error ?? "RPC failure while reconciling an ambiguous submission",
+        nextAttemptAt: this.nextAttemptAt(reconciliationCount),
+      });
+      return;
+    }
+    if (result.status === "RETRYABLE_BLOCKHASH_FAILURE") {
+      await this.scheduleRetry(batch, {
+        ...this.transition(batch, batch.attemptCount + 1, result),
+        clearTransactionSignature: true,
+        clearSubmissionMetadata: true,
+      }, result.error);
       return;
     }
     await this.handleResult(batch, result, batch.attemptCount + 1, false);
@@ -233,7 +256,11 @@ export class AnchorWorker {
           nextAttemptAt: this.nextAttemptAt(Math.max(1, attemptCount)),
         });
       } else {
-        await this.scheduleRetry(batch, transition, result.error);
+        await this.scheduleRetry(batch, {
+          ...transition,
+          clearTransactionSignature: true,
+          clearSubmissionMetadata: true,
+        }, result.error);
       }
       return;
     }

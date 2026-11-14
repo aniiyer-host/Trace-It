@@ -102,7 +102,10 @@ export class AnchorService {
     return fetched;
   }
 
-  async submitAnchorBatch(batch: AnchorBatch): Promise<AnchorResult> {
+  async submitAnchorBatch(
+    batch: AnchorBatch,
+    onPrepared?: (metadata: { signature: string; blockhash: string; lastValidBlockHeight: bigint }) => Promise<void>,
+  ): Promise<AnchorResult> {
     try {
       validateAnchorBatch(batch);
     } catch (error) {
@@ -134,6 +137,7 @@ export class AnchorService {
         configPda: deriveConfigPda(this.programId),
         anchorPda: pda,
         authority: this.authority,
+        onPrepared,
       });
       return {
         status: "CONFIRMED",
@@ -149,6 +153,39 @@ export class AnchorService {
   async reconcileAnchorSubmission(batch: AnchorBatch): Promise<AnchorResult> {
     const verified = await this.verifyAnchorRecord(batch);
     if (verified.status === "NOT_FOUND") {
+      const persisted = batch as AnchorBatch & {
+        transactionSignature?: string;
+        lastValidBlockHeight?: bigint;
+      };
+      if (persisted.transactionSignature && persisted.lastValidBlockHeight !== undefined) {
+        try {
+          const status = await this.adapter.getSignatureStatus(persisted.transactionSignature);
+          if (status?.err && status.confirmationStatus === "finalized") {
+            return {
+              status: "RETRYABLE_BLOCKHASH_FAILURE",
+              pda: verified.pda,
+              signature: persisted.transactionSignature,
+              error: "the persisted transaction failed at finalized commitment; safe to submit a fresh transaction",
+            };
+          }
+          const blockHeight = await this.adapter.getBlockHeight();
+          if (!status && BigInt(blockHeight) > persisted.lastValidBlockHeight) {
+            return {
+              status: "RETRYABLE_BLOCKHASH_FAILURE",
+              pda: verified.pda,
+              signature: persisted.transactionSignature,
+              error: "the signed transaction is absent and its persisted blockhash validity window has expired",
+            };
+          }
+        } catch (error) {
+          return {
+            status: "RETRYABLE_RPC_FAILURE",
+            pda: verified.pda,
+            signature: persisted.transactionSignature,
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }
       return {
         status: "PENDING_CONFIRMATION",
         pda: verified.pda,

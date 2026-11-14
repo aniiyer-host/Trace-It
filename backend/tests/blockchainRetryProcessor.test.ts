@@ -1,4 +1,4 @@
-import { getRetryEligibilityFilter } from "../src/services/blockchainRetryProcessor.js";
+import { BlockchainRetryProcessor, getRetryEligibilityFilter } from "../src/services/blockchainRetryProcessor.js";
 
 describe("getRetryEligibilityFilter", () => {
   it("requires both an available retry count and that retry count's backoff interval", () => {
@@ -38,5 +38,17 @@ describe("getRetryEligibilityFilter", () => {
     expect(filter.retryCount).toEqual({ lt: 5 });
     expect(filter.OR).toHaveLength(5);
     expect(filter.OR.some((condition: any) => condition.retryCount === 5)).toBe(false);
+  });
+});
+
+describe("retired BlockchainRetryProcessor", () => {
+  it("starts without querying or mutating the legacy queue", async () => {
+    const warning = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await expect(new BlockchainRetryProcessor().start()).resolves.toBeUndefined();
+      expect(warning).toHaveBeenCalledWith(expect.stringContaining("legacy queue entries are inert"));
+    } finally {
+      warning.mockRestore();
+    }
   });
 });

@@ -70,22 +70,19 @@ export class HashService {
     const key = Buffer.from(keyString, 'hex');
     if (key.length !== 32) throw new Error('AES_BENEFICIARY_KEY must be a 64-character hex string (32 bytes)');
 
-    if (encryptedValue.startsWith('v1:')) {
-      const data = Buffer.from(encryptedValue.slice(3), 'base64');
-      const iv = data.subarray(0, 12);
-      const tag = data.subarray(12, 28);
-      const ciphertext = data.subarray(28);
-      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-      decipher.setAuthTag(tag);
-      return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+    if (!encryptedValue.startsWith('v1:')) {
+      throw new Error('Unsupported beneficiary encryption format; legacy values must be migrated');
     }
-
-    // Legacy CBC ciphertext compatibility for IDs created before v1.
-    const data = Buffer.from(encryptedValue, 'base64');
-    const iv = data.subarray(0, 16);
-    const encrypted = data.subarray(16);
-    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-    return decrypted.toString('utf8');
+    const encoded = encryptedValue.slice(3);
+    const data = Buffer.from(encoded, 'base64');
+    if (!encoded || data.toString('base64') !== encoded || data.length < 28) {
+      throw new Error('Invalid v1 beneficiary ciphertext');
+    }
+    const iv = data.subarray(0, 12);
+    const tag = data.subarray(12, 28);
+    const ciphertext = data.subarray(28);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
   }
 }

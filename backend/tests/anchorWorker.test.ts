@@ -58,10 +58,9 @@ function repository(batch: ClaimedAnchorBatch | null = claim()): jest.Mocked<Anc
 function publisher(): jest.Mocked<AnchorPublisher> {
   return {
     verifyAnchorRecord: jest.fn().mockResolvedValue({ status: "NOT_FOUND" }),
-    submitAnchorBatch: jest.fn().mockResolvedValue({
-      status: "CONFIRMED",
-      signature: "signature-1",
-      pda: "anchor-pda",
+    submitAnchorBatch: jest.fn().mockImplementation(async (_batch, onPrepared) => {
+      await onPrepared?.({ signature: "signature-1", blockhash: "blockhash-1", lastValidBlockHeight: 42n });
+      return { status: "CONFIRMED", signature: "signature-1", pda: "anchor-pda" };
     }),
     reconcileAnchorSubmission: jest.fn().mockResolvedValue({
       status: "PENDING_CONFIRMATION",
@@ -95,7 +94,8 @@ describe("AnchorWorker", () => {
     const chain = publisher();
     const order: string[] = [];
     repo.markSubmitting.mockImplementation(async () => { order.push("submitting"); });
-    chain.submitAnchorBatch.mockImplementation(async () => {
+    chain.submitAnchorBatch.mockImplementation(async (_batch, onPrepared) => {
+      await onPrepared?.({ signature: "signature-1", blockhash: "blockhash-1", lastValidBlockHeight: 42n });
       order.push("send");
       return { status: "CONFIRMED", signature: "signature-1", pda: "anchor-pda" };
     });
@@ -104,6 +104,11 @@ describe("AnchorWorker", () => {
     await expect(worker(repo, chain).runOnce()).resolves.toBe("HANDLED");
 
     expect(order).toEqual(["submitting", "send", "confirmed"]);
+    expect(repo.markSubmitting).toHaveBeenCalledWith("batch-1", expect.objectContaining({
+      transactionSignature: "signature-1",
+      submissionBlockhash: "blockhash-1",
+      lastValidBlockHeight: 42n,
+    }));
     expect(repo.markConfirmed).toHaveBeenCalledWith(
       "batch-1",
       expect.objectContaining({
@@ -264,12 +269,40 @@ describe("AnchorWorker", () => {
     expect(chain.submitAnchorBatch).not.toHaveBeenCalled();
   });
 
+  it("resubmits only after reconciliation proves the signed blockhash expired", async () => {
+    const repo = repository(claim({
+      status: "RECONCILIATION_REQUIRED",
+      claimedFromStatus: "RECONCILIATION_REQUIRED",
+      attemptCount: 1,
+      transactionSignature: "expired-signature",
+      submissionBlockhash: "old-blockhash",
+      lastValidBlockHeight: 42n,
+    }));
+    const chain = publisher();
+    chain.reconcileAnchorSubmission.mockResolvedValue({
+      status: "RETRYABLE_BLOCKHASH_FAILURE",
+      signature: "expired-signature",
+      error: "signed blockhash expired",
+    });
+
+    await worker(repo, chain).runOnce();
+
+    expect(repo.markRetryable).toHaveBeenCalledWith("batch-1", expect.objectContaining({
+      clearTransactionSignature: true,
+      clearSubmissionMetadata: true,
+    }));
+    expect(chain.submitAnchorBatch).not.toHaveBeenCalled();
+  });
+
   it("reconciles generic submission RPC failures even when no signature was returned", async () => {
     const repo = repository();
     const chain = publisher();
-    chain.submitAnchorBatch.mockResolvedValue({
+    chain.submitAnchorBatch.mockImplementation(async (_batch, onPrepared) => {
+      await onPrepared?.({ signature: "maybe-landed", blockhash: "blockhash-1", lastValidBlockHeight: 42n });
+      return {
       status: "RETRYABLE_RPC_FAILURE",
       error: "connection reset while submitting",
+      };
     });
 
     await worker(repo, chain).runOnce();

@@ -214,6 +214,7 @@ export class BlockchainService {
    * Idempotent: If the donation already exists on-chain, returns success with the existing tx.
    */
   async recordDonation(params: RecordDonationParams): Promise<BlockchainResult> {
+    throw new Error('LEGACY_BLOCKCHAIN_WRITE_RETIRED:recordDonation');
     if (!this.program) {
       throw new Error('BlockchainService not initialized. Call init() first.');
     }
@@ -252,7 +253,7 @@ export class BlockchainService {
       }
 
       // 6. Submit the transaction
-      const transaction = await this.program.methods
+      const transaction = await this.program!.methods
         .recordDonation(
           params.donationId,
           donorIdHash,
@@ -303,6 +304,7 @@ export class BlockchainService {
     donationId: string,
     newStatus: number
   ): Promise<BlockchainResult> {
+    throw new Error('LEGACY_BLOCKCHAIN_WRITE_RETIRED:updateDonationStatus');
     if (!this.program) {
       throw new Error('BlockchainService not initialized. Call init() first.');
     }
@@ -315,7 +317,7 @@ export class BlockchainService {
         this.programId
       );
 
-      const transaction = await this.program.methods
+      const transaction = await this.program!.methods
         .updateDonationStatus(donationId, newStatus)
         .accounts({
           donationRecord: donationPda,
@@ -453,6 +455,7 @@ export class BlockchainService {
    * Called after NGO approval in the backend.
    */
   async registerNgo(params: RegisterNgoParams): Promise<BlockchainResult> {
+    throw new Error('LEGACY_BLOCKCHAIN_WRITE_RETIRED:registerNgo');
     if (!this.program) {
       throw new Error('BlockchainService not initialized. Call init() first.');
     }
@@ -465,7 +468,7 @@ export class BlockchainService {
         this.programId
       );
 
-      const transaction = await this.program.methods
+      const transaction = await this.program!.methods
         .registerNgo(params.ngoId, params.metadataHash)
         .accounts({
           ngoRecord: ngoPda,
@@ -497,6 +500,7 @@ export class BlockchainService {
    * Called after NGO uploads proof documents.
    */
   async registerCohort(params: RegisterCohortParams): Promise<BlockchainResult> {
+    throw new Error('LEGACY_BLOCKCHAIN_WRITE_RETIRED:registerCohort');
     if (!this.program) {
       throw new Error('BlockchainService not initialized. Call init() first.');
     }
@@ -509,7 +513,7 @@ export class BlockchainService {
         this.programId
       );
 
-      const transaction = await this.program.methods
+      const transaction = await this.program!.methods
         .registerCohort(params.cohortId, params.ngoId, params.metadataHash)
         .accounts({
           cohortRecord: cohortPda,
@@ -536,6 +540,7 @@ export class BlockchainService {
    * Called after platform sends funds to an NGO.
    */
   async recordDisbursement(params: RecordDisbursementParams): Promise<BlockchainResult> {
+    throw new Error('LEGACY_BLOCKCHAIN_WRITE_RETIRED:recordDisbursement');
     if (!this.program) {
       throw new Error('BlockchainService not initialized. Call init() first.');
     }
@@ -548,7 +553,7 @@ export class BlockchainService {
         this.programId
       );
 
-      const transaction = await this.program.methods
+      const transaction = await this.program!.methods
         .recordDisbursement(
           params.disbursementId,
           params.ngoId,

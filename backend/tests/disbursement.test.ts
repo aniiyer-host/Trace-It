@@ -494,6 +494,11 @@ describe("Disbursement API Integration Tests", () => {
       },
       data: { status: DisbursementStatus.REJECTED },
     });
+    // The campaign reached its capped fundraising goal; final settlement may close it.
+    await prisma.campaign.update({
+      where: { id: campaignId },
+      data: { status: CampaignStatus.FUNDING_COMPLETE },
+    });
 
     // Create another disbursement for the remaining 4000
     const disRes = await request(app)

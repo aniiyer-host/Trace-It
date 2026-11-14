@@ -1,7 +1,9 @@
 import crypto from "crypto";
+import * as anchor from "@coral-xyz/anchor";
 import {
   Keypair,
   PublicKey,
+  Transaction,
   type AccountInfo,
   type Connection,
 } from "@solana/web3.js";
@@ -95,6 +97,8 @@ function accountInfo(
 function adapterMock(): jest.Mocked<AnchorChainAdapter> {
   return {
     getAccountInfo: jest.fn(),
+    getSignatureStatus: jest.fn(),
+    getBlockHeight: jest.fn(),
     submitRecordAnchor: jest.fn(),
   };
 }
@@ -232,6 +236,38 @@ describe("AnchorService", () => {
     expect(adapter.submitRecordAnchor).not.toHaveBeenCalled();
   });
 
+  it("does not retry an absent transaction before its persisted blockhash expires", async () => {
+    const adapter = adapterMock();
+    adapter.getAccountInfo.mockResolvedValue(null);
+    adapter.getSignatureStatus.mockResolvedValue(null);
+    adapter.getBlockHeight.mockResolvedValue(100);
+    await expect(service(adapter).reconcileAnchorSubmission(batch({
+      transactionSignature: "persisted-signature",
+      lastValidBlockHeight: 101n,
+    }))).resolves.toMatchObject({ status: "PENDING_CONFIRMATION" });
+  });
+
+  it("allows a safe retry only after the persisted signature is absent beyond blockhash expiry", async () => {
+    const adapter = adapterMock();
+    adapter.getAccountInfo.mockResolvedValue(null);
+    adapter.getSignatureStatus.mockResolvedValue(null);
+    adapter.getBlockHeight.mockResolvedValue(102);
+    await expect(service(adapter).reconcileAnchorSubmission(batch({
+      transactionSignature: "persisted-signature",
+      lastValidBlockHeight: 101n,
+    }))).resolves.toMatchObject({ status: "RETRYABLE_BLOCKHASH_FAILURE" });
+  });
+
+  it("allows a safe retry after a finalized failed transaction", async () => {
+    const adapter = adapterMock();
+    adapter.getAccountInfo.mockResolvedValue(null);
+    adapter.getSignatureStatus.mockResolvedValue({ err: { InstructionError: [0, "Custom"] }, confirmationStatus: "finalized" });
+    await expect(service(adapter).reconcileAnchorSubmission(batch({
+      transactionSignature: "persisted-signature",
+      lastValidBlockHeight: 101n,
+    }))).resolves.toMatchObject({ status: "RETRYABLE_BLOCKHASH_FAILURE" });
+  });
+
   it.each([
     ["RPC", "RETRYABLE_RPC_FAILURE"],
     ["BLOCKHASH", "RETRYABLE_BLOCKHASH_FAILURE"],
@@ -274,9 +310,9 @@ describe("SolanaAnchorAdapter", () => {
         calls.push("simulate");
         return { context: { slot: 1 }, value: { err: null, logs: [] } };
       }),
-      sendRawTransaction: jest.fn(async () => {
+      sendRawTransaction: jest.fn(async (raw: Buffer) => {
         calls.push("send");
-        return "signature";
+        return anchor.utils.bytes.bs58.encode(Transaction.from(Buffer.from(raw)).signature!);
       }),
       getSignatureStatuses: jest.fn(async () => {
         calls.push("poll-confirmation");
@@ -285,6 +321,7 @@ describe("SolanaAnchorAdapter", () => {
     } as unknown as Connection;
     const adapter = new SolanaAnchorAdapter(connection, signer);
     const value = batch();
+    let preparedSignature = "";
     const signature = await adapter.submitRecordAnchor({
       batch: value,
       programId: PROGRAM_ID,
@@ -294,10 +331,11 @@ describe("SolanaAnchorAdapter", () => {
       )[0],
       anchorPda: deriveAnchorPda(PROGRAM_ID, value.batchKey),
       authority: signer.publicKey,
+      onPrepared: async (metadata) => { calls.push("prepared"); preparedSignature = metadata.signature; },
     });
-    expect(signature).toBe("signature");
-    expect(calls).toEqual(["blockhash", "simulate", "send", "poll-confirmation"]);
-    expect(connection.getSignatureStatuses).toHaveBeenCalledWith(["signature"], {
+    expect(signature).toBe(preparedSignature);
+    expect(calls).toEqual(["blockhash", "simulate", "prepared", "send", "poll-confirmation"]);
+    expect(connection.getSignatureStatuses).toHaveBeenCalledWith([preparedSignature], {
       searchTransactionHistory: true,
     });
     expect(connection.confirmTransaction).toBeUndefined();
@@ -337,6 +375,27 @@ describe("SolanaAnchorAdapter", () => {
     expect(sendRawTransaction).not.toHaveBeenCalled();
   });
 
+  it("never broadcasts if persisting prepared transaction metadata fails", async () => {
+    const signer = Keypair.generate();
+    const sendRawTransaction = jest.fn();
+    const connection = {
+      getLatestBlockhash: jest.fn(async () => ({ blockhash: PublicKey.default.toBase58(), lastValidBlockHeight: 10 })),
+      simulateTransaction: jest.fn(async () => ({ context: { slot: 1 }, value: { err: null, logs: [] } })),
+      sendRawTransaction,
+    } as unknown as Connection;
+    const value = batch();
+    const adapter = new SolanaAnchorAdapter(connection, signer);
+    await expect(adapter.submitRecordAnchor({
+      batch: value,
+      programId: PROGRAM_ID,
+      configPda: PublicKey.findProgramAddressSync([Buffer.from("anchor_config")], PROGRAM_ID)[0],
+      anchorPda: deriveAnchorPda(PROGRAM_ID, value.batchKey),
+      authority: signer.publicKey,
+      onPrepared: async () => { throw new Error("database write failed"); },
+    })).rejects.toMatchObject({ kind: "RPC" });
+    expect(sendRawTransaction).not.toHaveBeenCalled();
+  });
+
   it("marks a timeout after submission as requiring reconciliation", async () => {
     const signer = Keypair.generate();
     const connection = {
@@ -348,7 +407,7 @@ describe("SolanaAnchorAdapter", () => {
         context: { slot: 1 },
         value: { err: null, logs: [] },
       })),
-      sendRawTransaction: jest.fn(async () => "ambiguous-signature"),
+      sendRawTransaction: jest.fn(async (raw: Buffer) => anchor.utils.bytes.bs58.encode(Transaction.from(Buffer.from(raw)).signature!)),
       getSignatureStatuses: jest.fn(async () => ({ context: { slot: 2 }, value: [null] })),
     } as unknown as Connection;
     const adapter = new SolanaAnchorAdapter(connection, signer, "confirmed", 0, 1);
@@ -378,7 +437,7 @@ describe("SolanaAnchorAdapter", () => {
         context: { slot: 1 },
         value: { err: null, logs: [] },
       })),
-      sendRawTransaction: jest.fn(async () => "rejected-signature"),
+      sendRawTransaction: jest.fn(async (raw: Buffer) => anchor.utils.bytes.bs58.encode(Transaction.from(Buffer.from(raw)).signature!)),
       getSignatureStatuses: jest.fn(async () => ({
         context: { slot: 2 },
         value: [{ err: { InstructionError: [0, "InvalidAccountData"] }, confirmationStatus: "confirmed" }],
@@ -386,6 +445,7 @@ describe("SolanaAnchorAdapter", () => {
     } as unknown as Connection;
     const adapter = new SolanaAnchorAdapter(connection, signer);
     const value = batch();
+    let signedSignature = "";
 
     await expect(
       adapter.submitRecordAnchor({
@@ -397,10 +457,11 @@ describe("SolanaAnchorAdapter", () => {
         )[0],
         anchorPda: deriveAnchorPda(PROGRAM_ID, value.batchKey),
         authority: signer.publicKey,
+        onPrepared: async (metadata) => { signedSignature = metadata.signature; },
       }),
     ).rejects.toMatchObject({
       kind: "PROGRAM",
-      signature: "rejected-signature",
+      signature: signedSignature,
     });
   });
 });

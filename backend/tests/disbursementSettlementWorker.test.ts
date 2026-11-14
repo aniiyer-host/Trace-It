@@ -1,14 +1,24 @@
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { settleDueDisbursements } from '../src/services/disbursementSettlementWorker.js';
 
-function fakeDatabase(dueIds: string[], updateCount = 1) {
+function fakeDatabase(
+  dueIds: string[],
+  updateCount = 1,
+  campaignStatus: 'ACTIVE' | 'FUNDING_COMPLETE' = 'ACTIVE',
+) {
   const updateMany = jest.fn().mockResolvedValue({ count: updateCount });
   const auditCreate = jest.fn().mockResolvedValue({});
   const tx = {
     disbursement: {
-      findMany: jest.fn().mockResolvedValue(dueIds.map((id) => ({ id }))),
+      findMany: jest.fn().mockResolvedValue(dueIds.map((id) => ({
+        id,
+        campaignId: `campaign-${id}`,
+        isFinalDisbursement: true,
+        campaign: { status: campaignStatus },
+      }))),
       updateMany,
     },
+    campaign: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     auditLog: { create: auditCreate },
   };
   const database = {
@@ -50,6 +60,26 @@ describe('disbursement settlement worker', () => {
         action: 'DISBURSEMENT_SETTLEMENT_DELAY_ELAPSED',
       }),
     }));
+    expect(tx.campaign.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('does not complete an active campaign just because its currently raised funds were fully disbursed', async () => {
+    const { database, tx } = fakeDatabase(['final-disbursement'], 1, 'ACTIVE');
+
+    await expect(settleDueDisbursements(database, new Date())).resolves.toBe(1);
+
+    expect(tx.campaign.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('completes a funding-complete campaign after its final disbursement settles', async () => {
+    const { database, tx } = fakeDatabase(['final-disbursement'], 1, 'FUNDING_COMPLETE');
+
+    await expect(settleDueDisbursements(database, new Date())).resolves.toBe(1);
+
+    expect(tx.campaign.updateMany).toHaveBeenCalledWith({
+      where: { id: 'campaign-final-disbursement', status: 'FUNDING_COMPLETE' },
+      data: { status: 'COMPLETED' },
+    });
   });
 
   it('does not duplicate the audit event when another worker already claimed the transition', async () => {

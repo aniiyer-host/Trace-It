@@ -178,7 +178,7 @@ describe('donation settlement and refund outbox (real PostgreSQL)', () => {
     expect(await prisma.refundOutbox.count({ where: { donationId: { in: donations.map(({ id }) => id) } } })).toBe(1);
     expect(await prisma.attestation.count({ where: { donationId: { in: donations.map(({ id }) => id) }, type: 'RECEIPT' } })).toBe(1);
     expect(await prisma.emailOutbox.count({ where: { donationId: { in: donations.map(({ id }) => id) } } })).toBe(2);
-    expect(await prisma.blockchainRetryQueue.count({ where: { donationId: { in: donations.map(({ id }) => id) } } })).toBe(1);
+    expect(await prisma.blockchainRetryQueue.count({ where: { donationId: { in: donations.map(({ id }) => id) } } })).toBe(0);
     expect(await prisma.provenanceEvent.count({ where: { entityId: { in: donations.map(({ id }) => id) }, eventType: 'DONATION_SUCCESS' } })).toBe(1);
     expect(await prisma.provenanceEvent.count({ where: { entityId: { in: donations.map(({ id }) => id) }, eventType: 'DONATION_OVERFLOW_REJECTED' } })).toBe(1);
   }, 30_000);
@@ -215,7 +215,7 @@ describe('donation settlement and refund outbox (real PostgreSQL)', () => {
     expect((await prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } })).raisedAmount.toFixed(2)).toBe('250.00');
     expect(await prisma.attestation.count({ where: { donationId: donation.id, type: 'RECEIPT' } })).toBe(1);
     expect(await prisma.emailOutbox.count({ where: { donationId: donation.id } })).toBe(1);
-    expect(await prisma.blockchainRetryQueue.count({ where: { donationId: donation.id } })).toBe(1);
+    expect(await prisma.blockchainRetryQueue.count({ where: { donationId: donation.id } })).toBe(0);
     expect(await prisma.provenanceEvent.count({ where: { entityId: donation.id, eventType: 'DONATION_SUCCESS' } })).toBe(1);
   }, 30_000);
 

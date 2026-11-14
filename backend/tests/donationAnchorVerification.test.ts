@@ -102,6 +102,21 @@ describe("persisted anchor batch root verification", () => {
     });
   });
 
+  it("keeps the transaction pending while an ambiguous batch has no visible anchor record", async () => {
+    const anchorPda = deriveAnchorPda(PROGRAM_ID, batchValues.batchKey);
+    const chain = {
+      service: {
+        deriveAnchorPda: jest.fn().mockReturnValue(anchorPda),
+        verifyAnchorRecord: jest.fn().mockResolvedValue({ status: "NOT_FOUND", pda: anchorPda.toBase58() }),
+      },
+    };
+    await expect(verifyPersistedAnchor({ ...batch, status: "RECONCILIATION_REQUIRED" }, events, chain as never)).resolves.toMatchObject({
+      batchRoot: { status: "PASSED" },
+      onChainRecord: { status: "PENDING" },
+      transaction: { status: "PENDING", reason: expect.stringContaining("until the anchor record is visible") },
+    });
+  });
+
   it("fails when Trace-It's stored PDA does not derive from the batch key", async () => {
     const chain = {
       service: { deriveAnchorPda: jest.fn().mockReturnValue(deriveAnchorPda(PROGRAM_ID, batchValues.batchKey)) },

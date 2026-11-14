@@ -1,5 +1,5 @@
 import type { PrismaClient } from '../../generated/prisma/client.js';
-import { AuditActorType, DisbursementStatus } from '../../generated/prisma/enums.js';
+import { AuditActorType, CampaignStatus, DisbursementStatus } from '../../generated/prisma/enums.js';
 import { prisma } from '../db/prisma.js';
 
 const POLL_INTERVAL_MS = 500;
@@ -15,7 +15,12 @@ export async function settleDueDisbursements(
         status: DisbursementStatus.SENT,
         settlementDueAt: { lte: now },
       },
-      select: { id: true, campaignId: true, isFinalDisbursement: true },
+      select: {
+        id: true,
+        campaignId: true,
+        isFinalDisbursement: true,
+        campaign: { select: { status: true } },
+      },
       orderBy: { settlementDueAt: 'asc' },
       take: BATCH_SIZE,
     });
@@ -36,8 +41,14 @@ export async function settleDueDisbursements(
       });
       if (transition.count !== 1) continue;
 
-      if (item.isFinalDisbursement) {
-        await tx.campaign.update({ where: { id: item.campaignId }, data: { status: 'COMPLETED' } });
+      if (item.isFinalDisbursement && item.campaign.status === CampaignStatus.FUNDING_COMPLETE) {
+        // Exhausting the money raised so far does not complete a campaign that
+        // has not reached its fundraising goal. Only finish a capped campaign
+        // whose funding lifecycle has already reached FUNDING_COMPLETE.
+        await tx.campaign.updateMany({
+          where: { id: item.campaignId, status: CampaignStatus.FUNDING_COMPLETE },
+          data: { status: CampaignStatus.COMPLETED },
+        });
       }
 
       await tx.auditLog.create({

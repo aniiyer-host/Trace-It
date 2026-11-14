@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit",
     "seed": "prisma db seed",
     "db:seed": "prisma db seed",
-    "reconcile:blockchain": "tsx scripts/reconcile-blockchain-records.ts"
+    "reconcile:blockchain": "tsx scripts/reconcile-blockchain-records.ts",
+    "migrate:beneficiary-encryption": "tsx scripts/migrate-beneficiary-encryption.ts"
   },
   "keywords": [],
   "author": "",
