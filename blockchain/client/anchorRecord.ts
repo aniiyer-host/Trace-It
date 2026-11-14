@@ -7,6 +7,7 @@ export type ExpectedAnchorRecord = {
   endSequence: anchor.BN;
   eventCount: number;
   schemaVersion: number;
+  nonce?: number[];
 };
 
 export type DecodedAnchorRecord = ExpectedAnchorRecord & {
@@ -25,6 +26,7 @@ export function anchorRecordMatches(
     record.startSequence.eq(expected.startSequence) &&
     record.endSequence.eq(expected.endSequence) &&
     record.eventCount === expected.eventCount &&
-    record.schemaVersion === expected.schemaVersion
+    record.schemaVersion === expected.schemaVersion &&
+    (expected.schemaVersion < 2 || (!!record.nonce && !!expected.nonce && Buffer.from(record.nonce).equals(Buffer.from(expected.nonce))))
   );
 }

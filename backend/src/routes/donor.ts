@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction, Router } from "express";
 import { randomUUID } from "node:crypto";
+import crypto from "node:crypto";
 import { prisma } from "../db/prisma.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
@@ -647,6 +648,7 @@ export const getDonorReceipt = async (
         .json({ error: "Failed to generate receipt. Please try again later." });
     }
 
+    res.set("Cache-Control", "no-store");
     res.json({ receiptUrl: signedUrl, publicDonationId: donation.publicId });
   } catch (err) {
     next(err);
@@ -674,7 +676,7 @@ export const getDonationTimeline = async (
     // Verify ownership of the donation (IDOR protection)
     const donation = await prisma.donation.findFirst({
       where: { id: donationId, donorId },
-      select: { id: true },
+      select: { id: true, ngoId: true },
     });
 
     if (!donation) {
@@ -745,14 +747,19 @@ export const getDonationAnchors = async (
 ) => {
   try {
     const donationId = req.params["id"] as string;
-    const donorId = req.user?.id;
-    if (!donorId) {
+    const actorId = req.user?.id;
+    const role = req.user?.role;
+    if (!actorId) {
       return res.status(401).json({ error: "User not authenticated" });
     }
 
     const donation = await prisma.donation.findFirst({
-      where: { id: donationId, donorId },
-      select: { id: true },
+      where: role === UserRole.ADMIN
+        ? { id: donationId }
+        : role === UserRole.CHARITY
+          ? { id: donationId, ngoId: actorId }
+          : { id: donationId, donorId: actorId },
+      select: { id: true, ngoId: true },
     });
     if (!donation) return res.status(404).json({ error: "Donation not found" });
 
@@ -786,6 +793,8 @@ export const getDonationAnchors = async (
             startSequence: true,
             endSequence: true,
             eventCount: true,
+            schemaVersion: true,
+            nonce: true,
             solanaTxSignature: true,
             anchorPda: true,
             anchoredAt: true,
@@ -879,11 +888,34 @@ export const getDonationAnchors = async (
       });
     }));
 
+    const alerts = events.flatMap((event) => {
+      const result = verificationByEvent.get(event.id.toString());
+      if (!result) return [];
+      const failed = Object.entries({
+        provenance: result.provenance,
+        batchRoot: result.batchRoot,
+        onChainRecord: result.onChainRecord,
+        transaction: result.transaction,
+      }).filter(([, check]) => check.status === "FAILED");
+      return failed.map(([failureType, check]) => ({
+        id: randomUUID(),
+        dedupeKey: crypto.createHash("sha256").update(`${donation.id}:${event.id}:${event.anchorBatchId ?? "none"}:${failureType}`).digest("hex"),
+        donationId: donation.id,
+        ngoId: donation.ngoId,
+        eventId: event.id.toString(),
+        batchId: event.anchorBatchId,
+        failureType,
+        source: "ON_DEMAND",
+        severity: "HIGH",
+        details: { status: check.status, reason: check.reason ?? "Integrity check failed", timestamp: new Date().toISOString() },
+      }));
+    });
+    if (alerts.length) await prisma.integrityAlert.createMany({ data: alerts, skipDuplicates: true });
+
+    res.set("Cache-Control", "no-store");
     return res.json({
       anchors: events.map((event) => ({
         eventType: event.eventType,
-        network: process.env.TRACEIT_ANCHOR_CLUSTER?.trim() || null,
-        programId: process.env.TRACEIT_ANCHOR_PROGRAM_ID?.trim() || null,
         payloadHash: event.payloadHash,
         chainHash: event.chainHash,
         status: event.anchorStatus,
@@ -898,13 +930,38 @@ export const getDonationAnchors = async (
         ) || null,
         anchorPda: event.anchorBatch?.anchorPda ?? null,
         anchoredAt: event.anchorBatch?.anchoredAt?.toISOString() ?? null,
-        verification: verificationByEvent.get(event.id.toString()),
+        verification: role === UserRole.DONOR
+          ? redactVerificationForDonor(verificationByEvent.get(event.id.toString()))
+          : verificationByEvent.get(event.id.toString()),
       })),
     });
   } catch (err) {
     next(err);
   }
 };
+
+function redactVerificationForDonor(result: DonationAnchorVerification | undefined): DonationAnchorVerification | undefined {
+  if (!result) return result;
+  const safe = (check: DonationAnchorVerification[keyof DonationAnchorVerification]) => {
+    if (!check || typeof check !== "object" || !("status" in check)) return check;
+    const message = check.status === "FAILED"
+      ? "We detected an inconsistency in the recorded donation history. Our team has been notified."
+      : check.status === "PENDING"
+        ? "Verification is currently pending."
+        : check.status === "UNAVAILABLE"
+          ? "Blockchain verification is temporarily unavailable."
+          : undefined;
+    return { status: check.status, ...(message ? { reason: message } : {}) };
+  };
+  return {
+    provenance: safe(result.provenance) as DonationAnchorVerification["provenance"],
+    batchRoot: safe(result.batchRoot) as DonationAnchorVerification["batchRoot"],
+    anchorStatus: result.anchorStatus,
+    onChainRecord: safe(result.onChainRecord) as DonationAnchorVerification["onChainRecord"],
+    transaction: safe(result.transaction) as DonationAnchorVerification["transaction"],
+    attestationSignature: safe(result.attestationSignature) as DonationAnchorVerification["attestationSignature"],
+  };
+}
 
 export const requestDonationAttestation = async (
   req: Request,
@@ -1016,6 +1073,7 @@ donorRouter.get(
 );
 donorRouter.get(
   "/donations/:id/anchors",
+  requireAuth,
   requireRole(UserRole.DONOR),
   getDonationAnchors,
 );

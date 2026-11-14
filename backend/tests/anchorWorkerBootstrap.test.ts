@@ -24,6 +24,8 @@ const requiredColumns = [
   "anchor_batches.id",
   "anchor_batches.batchKey",
   "anchor_batches.auditRoot",
+  "anchor_batches.nonce",
+  "anchor_batches.schemaVersion",
   "anchor_batches.startSequence",
   "anchor_batches.endSequence",
   "anchor_batches.eventCount",

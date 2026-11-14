@@ -9,6 +9,7 @@ function response() {
   const res = {
     status: jest.fn(),
     json: jest.fn(),
+    set: jest.fn(),
   };
   res.status.mockReturnValue(res as never);
   res.json.mockReturnValue(res as never);
@@ -59,7 +60,7 @@ describe("getDonationAnchors", () => {
 
     expect(donationLookup).toHaveBeenCalledWith({
       where: { id: "donation-1", donorId: "donor-1" },
-      select: { id: true },
+      select: { id: true, ngoId: true },
     });
     expect(provenanceLookup).toHaveBeenCalledWith(
       expect.objectContaining({

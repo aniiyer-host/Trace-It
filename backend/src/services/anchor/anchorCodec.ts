@@ -2,6 +2,8 @@ import crypto from "crypto";
 import { PublicKey, type AccountInfo } from "@solana/web3.js";
 import {
   ANCHOR_RECORD_SIZE,
+  LEGACY_ANCHOR_RECORD_SIZE,
+  LEGACY_SCHEMA_VERSION,
   SUPPORTED_SCHEMA_VERSION,
   U32_MAX,
   U64_MAX,
@@ -21,6 +23,8 @@ export const ANCHOR_RECORD_DISCRIMINATOR = crypto
   .update("account:AnchorRecord")
   .digest()
   .subarray(0, 8);
+export const RECORD_ANCHOR_V2_DISCRIMINATOR = crypto.createHash("sha256").update("global:record_anchor_v2").digest().subarray(0, 8);
+export const ANCHOR_RECORD_V2_DISCRIMINATOR = crypto.createHash("sha256").update("account:AnchorRecordV2").digest().subarray(0, 8);
 
 export class AnchorValidationError extends Error {
   constructor(message: string) {
@@ -66,18 +70,20 @@ export function validateAnchorBatch(batch: AnchorBatch): void {
   if (batch.endSequence - batch.startSequence + 1n !== BigInt(batch.eventCount)) {
     throw new AnchorValidationError("eventCount must match the contiguous sequence range");
   }
-  if (batch.schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
+  if (batch.schemaVersion !== SUPPORTED_SCHEMA_VERSION && batch.schemaVersion !== LEGACY_SCHEMA_VERSION) {
     throw new AnchorValidationError(
       `unsupported schemaVersion ${batch.schemaVersion}`,
     );
   }
+  if (batch.schemaVersion === SUPPORTED_SCHEMA_VERSION && (!batch.nonce || batch.nonce.length !== 32)) throw new AnchorValidationError("schemaVersion 2 requires a 32-byte nonce");
 }
 
 export function encodeRecordAnchorInstruction(batch: AnchorBatch): Buffer {
   validateAnchorBatch(batch);
-  const data = Buffer.alloc(126);
+  const v2 = batch.schemaVersion === SUPPORTED_SCHEMA_VERSION;
+  const data = Buffer.alloc(v2 ? 158 : 126);
   let offset = 0;
-  RECORD_ANCHOR_DISCRIMINATOR.copy(data, offset);
+  (v2 ? RECORD_ANCHOR_V2_DISCRIMINATOR : RECORD_ANCHOR_DISCRIMINATOR).copy(data, offset);
   offset += 8;
   Buffer.from(batch.batchKey).copy(data, offset);
   offset += 32;
@@ -90,6 +96,7 @@ export function encodeRecordAnchorInstruction(batch: AnchorBatch): Buffer {
   data.writeUInt32LE(batch.eventCount, offset);
   offset += 4;
   data.writeUInt16LE(batch.schemaVersion, offset);
+  if (v2) Buffer.from(batch.nonce!).copy(data, offset + 2);
   return data;
 }
 
@@ -122,12 +129,13 @@ export function decodeAnchorRecord(
   if (account.executable) {
     throw new AnchorAccountError("anchor data account cannot be executable");
   }
-  if (account.data.length !== ANCHOR_RECORD_SIZE) {
+  const v2 = account.data.length === ANCHOR_RECORD_SIZE;
+  if (!v2 && account.data.length !== LEGACY_ANCHOR_RECORD_SIZE) {
     throw new AnchorAccountError(
       `anchor account length must be ${ANCHOR_RECORD_SIZE} bytes`,
     );
   }
-  if (!account.data.subarray(0, 8).equals(ANCHOR_RECORD_DISCRIMINATOR)) {
+  if (!account.data.subarray(0, 8).equals(v2 ? ANCHOR_RECORD_V2_DISCRIMINATOR : ANCHOR_RECORD_DISCRIMINATOR)) {
     throw new AnchorAccountError("anchor account discriminator is invalid");
   }
 
@@ -144,6 +152,8 @@ export function decodeAnchorRecord(
   offset += 4;
   const schemaVersion = account.data.readUInt16LE(offset);
   offset += 2;
+  const nonce = v2 ? Uint8Array.from(account.data.subarray(offset, offset + 32)) : undefined;
+  if (v2) offset += 32;
   const authority = new PublicKey(account.data.subarray(offset, offset + 32));
   offset += 32;
   const anchoredAt = account.data.readBigInt64LE(offset);
@@ -160,7 +170,7 @@ export function decodeAnchorRecord(
   if (bump !== expectedBump) {
     throw new AnchorAccountError("anchor account stores an invalid PDA bump");
   }
-  if (schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
+  if ((v2 && schemaVersion !== SUPPORTED_SCHEMA_VERSION) || (!v2 && schemaVersion !== LEGACY_SCHEMA_VERSION)) {
     throw new AnchorAccountError(`unsupported schemaVersion ${schemaVersion}`);
   }
   if (!trustedAuthorities.some((trusted) => trusted.equals(authority))) {
@@ -174,6 +184,7 @@ export function decodeAnchorRecord(
     endSequence,
     eventCount,
     schemaVersion,
+    ...(nonce ? { nonce } : {}),
     authority,
     anchoredAt,
     bump,
@@ -201,6 +212,7 @@ export function anchorRecordMatches(
     record.startSequence === batch.startSequence &&
     record.endSequence === batch.endSequence &&
     record.eventCount === batch.eventCount &&
-    record.schemaVersion === batch.schemaVersion
+    record.schemaVersion === batch.schemaVersion &&
+    (batch.schemaVersion < 2 || (!!record.nonce && !!batch.nonce && Buffer.from(record.nonce).equals(Buffer.from(batch.nonce))))
   );
 }

@@ -698,6 +698,8 @@ model AnchorBatch {
   id                 String   @id @default(uuid())
   batchKey           String   @unique
   auditRoot          String
+  nonce              String?  @unique
+  schemaVersion      Int      @default(1)
   startSequence      BigInt
   endSequence        BigInt
   eventCount         Int
@@ -718,4 +720,24 @@ model AnchorBatch {
   @@index([status])
   @@index([status, nextAttemptAt, createdAt], map: "anchor_batches_claim_idx")
   @@map("anchor_batches")
+}
+
+model IntegrityAlert {
+  id             String   @id @default(uuid())
+  dedupeKey      String   @unique
+  donationId     String
+  ngoId          String
+  eventId        String?
+  batchId        String?
+  failureType    String
+  source          String   @default("ON_DEMAND")
+  severity        String   @default("HIGH")
+  details         Json
+  detectedAt      DateTime @default(now())
+  resolvedAt      DateTime?
+  resolutionNote  String?
+
+  @@index([ngoId, resolvedAt, detectedAt])
+  @@index([resolvedAt, detectedAt])
+  @@map("integrity_alerts")
 }

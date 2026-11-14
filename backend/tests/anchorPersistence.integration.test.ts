@@ -93,6 +93,8 @@ anchorPersistenceSuite("durable anchor persistence (PostgreSQL)", () => {
     const expectedFirstBatch = deriveAnchorBatch(
       events[0].id,
       events.slice(0, 2).map((event) => event.payloadHash),
+      first!.schemaVersion,
+      Uint8Array.from(Buffer.from(first!.nonce, "hex")),
     );
 
     const linkedEvents = await db.provenanceEvent.findMany({

@@ -89,7 +89,7 @@ describe("AnchorBatchService", () => {
     );
 
     const result = await service.createNextBatch();
-    const expected = deriveAnchorBatch(41n, [first.payloadHash, second.payloadHash]);
+    const expected = deriveAnchorBatch(41n, [first.payloadHash, second.payloadHash], 2, Buffer.from(result!.nonce, "hex"));
 
     expect(result).toMatchObject({
       batchKey: Buffer.from(expected.batchKey).toString("hex"),
@@ -97,6 +97,7 @@ describe("AnchorBatchService", () => {
       startSequence: 41n,
       endSequence: 42n,
       eventCount: 2,
+      schemaVersion: 2,
     });
     expect(queryRaw.mock.calls[0][0].join("")).toContain("pg_advisory_xact_lock");
     const selectSql = queryRaw.mock.calls[1][0].join("");

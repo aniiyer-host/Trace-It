@@ -7,6 +7,7 @@ pub const CONFIG_SEED: &[u8] = b"anchor_config";
 pub const ANCHOR_SEED: &[u8] = b"anchor";
 pub const TEST_ANCHOR_SEED: &[u8] = b"test_anchor";
 pub const SUPPORTED_SCHEMA_VERSION: u16 = 1;
+pub const NONCE_SCHEMA_VERSION: u16 = 2;
 pub const TEST_MARKER_VERSION: u8 = 1;
 pub const BOOTSTRAP_AUTHORITY: Pubkey = pubkey!("5jV2gq2stVAbNnrHW8w55LyDWEhcAQPdZpWFwxpW9q7W");
 
@@ -58,6 +59,7 @@ pub mod traceit_anchor {
         event_count: u32,
         schema_version: u16,
     ) -> Result<()> {
+        require!(schema_version == SUPPORTED_SCHEMA_VERSION, AnchorError::UnsupportedSchemaVersion);
         validate_anchor(
             ctx.accounts.config.paused,
             &audit_root,
@@ -77,6 +79,17 @@ pub mod traceit_anchor {
             ctx.accounts.authority.key(),
             ctx.bumps.anchor_record,
         )?;
+        Ok(())
+    }
+
+    pub fn record_anchor_v2(
+        ctx: Context<RecordAnchorV2>, batch_key: [u8; 32], audit_root: [u8; 64],
+        start_sequence: u64, end_sequence: u64, event_count: u32,
+        schema_version: u16, nonce: [u8; 32],
+    ) -> Result<()> {
+        validate_anchor(ctx.accounts.config.paused, &audit_root, start_sequence, end_sequence, event_count, schema_version)?;
+        require!(schema_version == NONCE_SCHEMA_VERSION, AnchorError::UnsupportedSchemaVersion);
+        populate_anchor_record_v2(&mut ctx.accounts.anchor_record, batch_key, audit_root, start_sequence, end_sequence, event_count, schema_version, nonce, ctx.accounts.authority.key(), ctx.bumps.anchor_record)?;
         Ok(())
     }
 
@@ -125,7 +138,7 @@ fn validate_anchor(
 ) -> Result<()> {
     require!(!paused, AnchorError::ProgramPaused);
     require!(
-        schema_version == SUPPORTED_SCHEMA_VERSION,
+        schema_version == SUPPORTED_SCHEMA_VERSION || schema_version == NONCE_SCHEMA_VERSION,
         AnchorError::UnsupportedSchemaVersion
     );
     require!(
@@ -166,6 +179,12 @@ fn populate_anchor_record(
     record.anchored_at = Clock::get()?.unix_timestamp;
     record.bump = bump;
     Ok(())
+}
+
+fn populate_anchor_record_v2(record: &mut AnchorRecordV2, batch_key: [u8; 32], audit_root: [u8; 64], start_sequence: u64, end_sequence: u64, event_count: u32, schema_version: u16, nonce: [u8; 32], authority: Pubkey, bump: u8) -> Result<()> {
+    record.batch_key = batch_key; record.audit_root = audit_root; record.start_sequence = start_sequence;
+    record.end_sequence = end_sequence; record.event_count = event_count; record.schema_version = schema_version;
+    record.nonce = nonce; record.authority = authority; record.anchored_at = Clock::get()?.unix_timestamp; record.bump = bump; Ok(())
 }
 
 #[derive(Accounts)]
@@ -234,6 +253,17 @@ pub struct RecordAnchor<'info> {
 
 #[derive(Accounts)]
 #[instruction(batch_key: [u8; 32])]
+pub struct RecordAnchorV2<'info> {
+    #[account(seeds = [CONFIG_SEED], bump = config.bump, has_one = authority @ AnchorError::Unauthorized)]
+    pub config: Account<'info, AnchorConfig>,
+    #[account(init, payer = authority, space = AnchorRecordV2::SPACE, seeds = [ANCHOR_SEED, batch_key.as_ref()], bump)]
+    pub anchor_record: Account<'info, AnchorRecordV2>,
+    #[account(mut)] pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(batch_key: [u8; 32])]
 pub struct RecordTestAnchor<'info> {
     #[account(
         seeds = [CONFIG_SEED],
@@ -293,6 +323,15 @@ pub struct AnchorRecord {
 impl AnchorRecord {
     pub const SPACE: usize = 8 + Self::INIT_SPACE;
 }
+
+#[account]
+#[derive(InitSpace)]
+pub struct AnchorRecordV2 {
+    pub batch_key: [u8; 32], pub audit_root: [u8; 64], pub start_sequence: u64,
+    pub end_sequence: u64, pub event_count: u32, pub schema_version: u16,
+    pub nonce: [u8; 32], pub authority: Pubkey, pub anchored_at: i64, pub bump: u8,
+}
+impl AnchorRecordV2 { pub const SPACE: usize = 8 + Self::INIT_SPACE; }
 
 #[account]
 #[derive(InitSpace)]

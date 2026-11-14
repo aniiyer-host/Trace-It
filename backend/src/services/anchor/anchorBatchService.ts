@@ -13,7 +13,9 @@ import { deriveAnchorBatch } from "./anchorProtocol.js";
 const BATCH_SCHEDULER_LOCK_KEY = computeProvenanceLockKey(
   "TRACEIT_ANCHOR_BATCH_SCHEDULER_V1",
 );
-const DEFAULT_BATCH_SIZE = 20;
+const DEFAULT_BATCH_SIZE = configuredPositiveInteger("TRACEIT_ANCHOR_BATCH_SIZE", 20);
+const DEFAULT_BATCH_MAX_WAIT_MS = 1_000;
+const CURRENT_BATCH_SCHEMA_VERSION = 2;
 
 type ProvenanceRow = ProvenanceEventInput & {
   id: bigint;
@@ -30,6 +32,8 @@ export interface AnchorBatchCreation {
   startSequence: bigint;
   endSequence: bigint;
   eventCount: number;
+  nonce: string;
+  schemaVersion: number;
 }
 
 export class AnchorBatchService {
@@ -76,9 +80,12 @@ export class AnchorBatchService {
       const eligible = contiguousPrefix(rows);
       verifyEventHashes(eligible, previous[0]?.chainHash ?? null);
 
+      const nonceBytes = crypto.randomBytes(32);
       const batch = deriveAnchorBatch(
         eligible[0].id,
         eligible.map((event) => event.payloadHash),
+        CURRENT_BATCH_SCHEMA_VERSION,
+        nonceBytes,
       );
       const batchId = crypto.randomUUID();
       const createdAt = this.now();
@@ -87,11 +94,11 @@ export class AnchorBatchService {
 
       await tx.$executeRaw`
         INSERT INTO "anchor_batches" (
-          "id", "batchKey", "auditRoot", "startSequence", "endSequence",
+          "id", "batchKey", "auditRoot", "nonce", "schemaVersion", "startSequence", "endSequence",
           "eventCount", "status", "attemptCount", "reconciliationCount",
           "nextAttemptAt", "createdAt"
         ) VALUES (
-          ${batchId}, ${batchKey}, ${auditRoot}, ${batch.startSequence},
+          ${batchId}, ${batchKey}, ${auditRoot}, ${nonceBytes.toString("hex")}, ${CURRENT_BATCH_SCHEMA_VERSION}, ${batch.startSequence},
           ${batch.endSequence}, ${batch.eventCount}, 'PENDING', 0, 0,
           ${createdAt}, ${createdAt}
         )
@@ -115,6 +122,8 @@ export class AnchorBatchService {
         startSequence: batch.startSequence,
         endSequence: batch.endSequence,
         eventCount: batch.eventCount,
+        nonce: nonceBytes.toString("hex"),
+        schemaVersion: CURRENT_BATCH_SCHEMA_VERSION,
       };
     });
   }
@@ -127,7 +136,7 @@ export class AnchorBatchScheduler {
 
   constructor(
     private readonly batches: Pick<AnchorBatchService, "createNextBatch">,
-    private readonly pollIntervalMs = 1_000,
+    private readonly pollIntervalMs = configuredPositiveInteger("TRACEIT_ANCHOR_BATCH_MAX_WAIT_MS", DEFAULT_BATCH_MAX_WAIT_MS),
     private readonly onError: (error: unknown) => void = (error) => {
       console.error("[AnchorBatchScheduler] Batch creation failed:", error);
     },
@@ -170,6 +179,14 @@ export class AnchorBatchScheduler {
     }
     await this.inFlight;
   }
+}
+
+function configuredPositiveInteger(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`${name} must be a positive integer`);
+  return parsed;
 }
 
 async function lockBatchScheduler(tx: Prisma.TransactionClient): Promise<void> {

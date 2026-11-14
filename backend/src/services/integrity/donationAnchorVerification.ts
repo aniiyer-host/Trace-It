@@ -24,7 +24,7 @@ type EventRow = ProvenanceEventInput & {
 
 type BatchRow = Pick<DbAnchorBatch,
   "id" | "batchKey" | "auditRoot" | "startSequence" | "endSequence" |
-  "eventCount" | "status" | "solanaTxSignature" | "anchorPda">;
+  "eventCount" | "status" | "solanaTxSignature" | "anchorPda"> & { schemaVersion?: number; nonce?: string | null };
 
 export type DonationAnchorVerification = {
   provenance: IntegrityCheck;
@@ -61,7 +61,7 @@ export function checkBatchRoot(batch: BatchRow, events: readonly Pick<EventRow, 
   }
 
   try {
-    const expected = deriveAnchorBatch(batch.startSequence, ordered.map((event) => event.payloadHash));
+    const expected = deriveAnchorBatch(batch.startSequence, ordered.map((event) => event.payloadHash), batch.schemaVersion ?? 1, batch.nonce ? Uint8Array.from(Buffer.from(batch.nonce, "hex")) : undefined);
     const expectedKey = Buffer.from(expected.batchKey).toString("hex");
     const expectedRoot = Buffer.from(expected.auditRoot).toString("hex");
     if (expected.eventCount !== batch.eventCount || expected.endSequence !== batch.endSequence ||
@@ -107,7 +107,7 @@ export async function verifyPersistedAnchor(
     return { batchRoot, onChainRecord: { status: "UNAVAILABLE", reason: "Blockchain RPC verification is not configured." }, transaction: { status: "UNAVAILABLE", reason: "Blockchain RPC verification is not configured." } };
   }
 
-  const expectedBatch = deriveAnchorBatch(batch.startSequence, localEvents.slice().sort((a, b) => a.id < b.id ? -1 : 1).map((event) => event.payloadHash));
+  const expectedBatch = deriveAnchorBatch(batch.startSequence, localEvents.slice().sort((a, b) => a.id < b.id ? -1 : 1).map((event) => event.payloadHash), batch.schemaVersion ?? 1, batch.nonce ? Uint8Array.from(Buffer.from(batch.nonce, "hex")) : undefined);
   const expectedPda = chain.service.deriveAnchorPda(expectedBatch.batchKey).toBase58();
   if ((batch.anchorPda && batch.anchorPda !== expectedPda) ||
     (batch.status === "CONFIRMED" && !batch.anchorPda)) {

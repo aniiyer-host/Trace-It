@@ -2,8 +2,10 @@ import type { PublicKey } from "@solana/web3.js";
 
 export const U64_MAX = (1n << 64n) - 1n;
 export const U32_MAX = (1n << 32n) - 1n;
-export const SUPPORTED_SCHEMA_VERSION = 1;
-export const ANCHOR_RECORD_SIZE = 167;
+export const SUPPORTED_SCHEMA_VERSION = 2;
+export const LEGACY_SCHEMA_VERSION = 1;
+export const ANCHOR_RECORD_SIZE = 199;
+export const LEGACY_ANCHOR_RECORD_SIZE = 167;
 
 export interface AnchorBatch {
   batchKey: Uint8Array;
@@ -12,6 +14,7 @@ export interface AnchorBatch {
   endSequence: bigint;
   eventCount: number;
   schemaVersion: number;
+  nonce?: Uint8Array;
 }
 
 export interface AnchorRecord extends AnchorBatch {

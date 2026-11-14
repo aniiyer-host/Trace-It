@@ -73,7 +73,7 @@ export function NavBar() {
               if (link.to === "/admin") return user?.role === "ADMIN";
               if (link.to === "/donor")
                 return !user || user.role === "DONOR" || !user.role;
-              if (link.to === "/verify") return user?.role === "DONOR";
+              if (link.to === "/verify") return ["DONOR", "CHARITY", "ADMIN"].includes(user?.role ?? "");
               if (link.to === "/ngo") return user?.role !== "ADMIN"; // Hides it for ADMIN. Non-charities will have it mapped to /ngos below.
 
               return true;

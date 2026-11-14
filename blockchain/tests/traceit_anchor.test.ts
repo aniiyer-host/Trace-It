@@ -315,6 +315,31 @@ describe("traceit_anchor", () => {
     ).to.equal(false);
   });
 
+  it("records v2 nonce in its versioned account without changing the legacy account layout", async () => {
+    const batchKey = bytes(32, "nonce-v2-batch");
+    const auditRoot = bytes(64, "nonce-v2-root");
+    const nonce = bytes(32, "nonce-v2-value");
+    const [recordPda] = anchor.web3.PublicKey.findProgramAddressSync(
+      [ANCHOR_SEED, Buffer.from(batchKey)], ANCHOR_PROGRAM_ID,
+    );
+    await program.methods.recordAnchorV2(
+      batchKey, auditRoot, new anchor.BN(51), new anchor.BN(52), 2, 2, nonce,
+    ).accounts({
+      config: configPda,
+      anchorRecord: recordPda,
+      authority: bootstrap,
+      systemProgram: anchor.web3.SystemProgram.programId,
+    }).rpc({ commitment: "confirmed" });
+
+    const record = await program.account.anchorRecordV2.fetch(recordPda);
+    expect(record.batchKey).to.deep.equal(batchKey);
+    expect(record.auditRoot).to.deep.equal(auditRoot);
+    expect(record.nonce).to.deep.equal(nonce);
+    expect(record.schemaVersion).to.equal(2);
+    const accountInfo = await provider.connection.getAccountInfo(recordPda);
+    expect(accountInfo?.data.length).to.equal(199);
+  });
+
   it("marks synthetic test anchors in a separate linked on-chain account", async () => {
     const batchKey = bytes(32, "explicit-test-anchor");
     const auditRoot = bytes(64, "explicit-test-root");

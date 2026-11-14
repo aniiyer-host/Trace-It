@@ -13,6 +13,8 @@ type AnchorBatchRow = {
   id: string;
   batchKey: string;
   auditRoot: string;
+  nonce: string | null;
+  schemaVersion: number;
   startSequence: bigint;
   endSequence: bigint;
   eventCount: number;
@@ -70,7 +72,7 @@ export class PrismaAnchorBatchRepository implements AnchorBatchRepository {
     return this.database.$transaction(async (tx) => {
       const candidates = await tx.$queryRaw<AnchorBatchRow[]>`
         SELECT
-          "id", "batchKey", "auditRoot", "startSequence", "endSequence",
+          "id", "batchKey", "auditRoot", "nonce", "schemaVersion", "startSequence", "endSequence",
           "eventCount", "status", "createdAt", "attemptCount",
           "reconciliationCount", "nextAttemptAt", "solanaTxSignature",
           "anchorPda", "lastError"
@@ -93,7 +95,7 @@ export class PrismaAnchorBatchRepository implements AnchorBatchRepository {
           AND "status" = ${candidate.status}
           AND ("claimToken" IS NULL OR "claimExpiresAt" <= ${now})
         RETURNING
-          "id", "batchKey", "auditRoot", "startSequence", "endSequence",
+          "id", "batchKey", "auditRoot", "nonce", "schemaVersion", "startSequence", "endSequence",
           "eventCount", "status", "createdAt", "attemptCount",
           "reconciliationCount", "nextAttemptAt", "solanaTxSignature",
           "anchorPda", "lastError", "claimToken", "claimExpiresAt"
@@ -246,6 +248,8 @@ export async function assertAnchorSchemaReady(
     "anchor_batches.id",
     "anchor_batches.batchKey",
     "anchor_batches.auditRoot",
+    "anchor_batches.nonce",
+    "anchor_batches.schemaVersion",
     "anchor_batches.startSequence",
     "anchor_batches.endSequence",
     "anchor_batches.eventCount",
@@ -289,10 +293,11 @@ function toClaimedBatch(
     id: row.id,
     batchKey,
     auditRoot,
+    ...(row.nonce ? { nonce: decodeHex(row.nonce, 32, "nonce") } : {}),
     startSequence: row.startSequence,
     endSequence: row.endSequence,
     eventCount: row.eventCount,
-    schemaVersion: 1,
+    schemaVersion: row.schemaVersion,
     sourceCreatedAt: row.createdAt,
     status: row.status,
     claimedFromStatus: claimedFromStatus as ClaimedAnchorBatch["claimedFromStatus"],

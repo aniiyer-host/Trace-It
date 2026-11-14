@@ -289,7 +289,7 @@ export const generateAndStoreReceipt = async (
           anchorBatch: {
             select: {
               id: true, batchKey: true, auditRoot: true, startSequence: true,
-              endSequence: true, eventCount: true, status: true,
+              endSequence: true, eventCount: true, schemaVersion: true, nonce: true, status: true,
               solanaTxSignature: true, anchorPda: true,
             },
           },

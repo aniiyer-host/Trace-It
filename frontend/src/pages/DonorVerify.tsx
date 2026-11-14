@@ -4,7 +4,9 @@ import { CheckCircle2, CircleHelp, Copy, ExternalLink, Loader2, ShieldAlert, Shi
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/authStore";
 import { apiService } from "@/utils/apiClient";
-import type { Donation, DonationAnchorStatus } from "@/types";
+import type { DonationAnchorStatus } from "@/types";
+type VerifyDonation = { id: string; publicId?: string; amount: number | string; currencyCode?: string; status: string; createdAt: string; campaignTitle?: string | null; ngoName?: string | null };
+type IntegrityAlert = { id: string; donationId: string; eventId: string | null; batchId: string | null; failureType: string; source: string; severity: string; details: unknown; detectedAt: string; resolvedAt: string | null };
 
 type VerifyData = { anchors: DonationAnchorStatus[] };
 
@@ -12,9 +14,18 @@ function checkDescription(check: string, status: string) {
   if (status === "NOT_APPLICABLE") return "Blockchain verification is not applicable yet because this event has not been assigned to an anchor batch.";
   if (status === "PENDING") return `The ${check} check is awaiting completion.`;
   if (status === "UNAVAILABLE") return `Evidence for the ${check} check could not be retrieved or checked.`;
-  if (status === "FAILED") return `The ${check} check failed.`;
+  if (status === "FAILED") return "We detected an inconsistency in the recorded donation history. Our team has been notified.";
   if (status === "PASSED") return `The ${check} check passed.`;
   return `The ${check} check has status ${status}.`;
+}
+
+function audienceDescription(status: string, reason: string | undefined, userRole?: string) {
+  if (userRole === "DONOR") {
+    if (status === "FAILED") return "We detected an inconsistency in the recorded donation history. Our team has been notified.";
+    if (status === "UNAVAILABLE") return "Blockchain verification is temporarily unavailable. We could not confirm this result.";
+    if (status === "PENDING") return "Verification is currently pending.";
+  }
+  return reason ?? "No additional details are available.";
 }
 
 function labelStatus(status: string) {
@@ -32,25 +43,29 @@ function CheckLine({ title, text, status }: { title: string; text: string; statu
   const passed = status === "PASSED";
   const failed = status === "FAILED";
   return <div className="flex items-start gap-3 rounded-lg border border-border p-3">
-    {passed ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /> : failed ? <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-destructive" /> : <CircleHelp className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />}
-    <div><p className="text-sm font-medium">{title}: {passed ? "Verified" : failed ? "Problem detected" : "Not confirmed"}</p><p className="mt-0.5 text-sm text-muted-foreground">{text}</p></div>
+    {passed ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" /> : failed ? <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" /> : <CircleHelp className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />}
+    <div><p className={`text-sm font-medium ${failed ? "text-amber-800 dark:text-amber-300" : ""}`}>{title}: {passed ? "Verified" : failed ? "Integrity concern" : status === "PENDING" ? "Pending" : status === "UNAVAILABLE" ? "Temporarily unavailable" : "Not confirmed"}</p><p className="mt-0.5 text-sm text-muted-foreground">{text}</p></div>
   </div>;
 }
 
-function Evidence({ evidence }: { evidence: VerifyData }) {
+function Evidence({ evidence, userRole }: { evidence: VerifyData; userRole?: string }) {
   if (!evidence.anchors.length) return <p className="mt-4 rounded-lg bg-muted p-4 text-sm text-muted-foreground">No provenance events are available for this donation yet.</p>;
   return <div className="mt-4 space-y-4">{evidence.anchors.map((anchor, index) => {
     const checks = anchor.verification;
     return <div key={`${anchor.eventType}-${index}`} className="space-y-3 rounded-lg bg-muted/50 p-4">
       <h3 className="text-sm font-semibold">{labelStatus(anchor.eventType)}</h3>
       {checks && <div className="grid gap-2 md:grid-cols-2">
-        <CheckLine title="Record history" status={checks.provenance.status} text={checks.provenance.reason ?? "The recorded history links correctly to the preceding records."} />
-        <CheckLine title="Batch integrity" status={checks.batchRoot.status} text={checks.batchRoot.reason ?? "The stored events match the locally recorded batch root."} />
-        <CheckLine title="On-chain record" status={checks.onChainRecord.status} text={checks.onChainRecord.reason ?? checkDescription("on-chain record", checks.onChainRecord.status)} />
-        <CheckLine title="Transaction" status={checks.transaction.status} text={checks.transaction.reason ?? checkDescription("transaction", checks.transaction.status)} />
+        <CheckLine title="Record history" status={checks.provenance.status} text={audienceDescription(checks.provenance.status, checks.provenance.reason ?? "The recorded history links correctly to the preceding records.", userRole)} />
+        <CheckLine title="Batch integrity" status={checks.batchRoot.status} text={audienceDescription(checks.batchRoot.status, checks.batchRoot.reason ?? "The stored events match the locally recorded batch root.", userRole)} />
+        <CheckLine title="On-chain record" status={checks.onChainRecord.status} text={audienceDescription(checks.onChainRecord.status, checks.onChainRecord.reason ?? checkDescription("on-chain record", checks.onChainRecord.status), userRole)} />
+        <CheckLine title="Transaction" status={checks.transaction.status} text={audienceDescription(checks.transaction.status, checks.transaction.reason ?? (checks.transaction.status === "NOT_APPLICABLE" && anchor.batchId
+          ? checks.onChainRecord.status === "UNAVAILABLE"
+            ? "The transaction check could not run because the on-chain record could not be retrieved."
+            : "The transaction check could not run because the on-chain record did not match this batch."
+          : checkDescription("transaction", checks.transaction.status)), userRole)} />
       </div>}
       {anchor.explorerUrl && <a href={anchor.explorerUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-primary underline">View confirmed transaction <ExternalLink className="h-3.5 w-3.5" /></a>}
-      <details className="text-sm"><summary className="cursor-pointer font-medium">Technical details</summary>
+      {userRole !== "DONOR" && <details className="text-sm"><summary className="cursor-pointer font-medium">Technical details</summary>
         <dl className="mt-3 grid gap-2 break-all text-muted-foreground sm:grid-cols-2">
           <div><dt className="font-medium text-foreground">Event</dt><dd>{anchor.eventType}</dd></div>
           <div><dt className="font-medium text-foreground">Batch</dt><dd>{anchor.batchId ?? "Not assigned"}</dd></div>
@@ -58,45 +73,51 @@ function Evidence({ evidence }: { evidence: VerifyData }) {
           <div><dt className="font-medium text-foreground">Chain fingerprint</dt><dd>{anchor.chainHash ?? "Unavailable"}</dd></div>
           {anchor.transactionSignature && <div><dt className="font-medium text-foreground">Transaction reference</dt><dd className="flex items-center gap-2">{anchor.transactionSignature}<button aria-label="Copy transaction reference" onClick={() => void navigator.clipboard.writeText(anchor.transactionSignature!)}><Copy className="h-4 w-4" /></button></dd></div>}
         </dl>
-      </details>
+      </details>}
     </div>;
   })}</div>;
 }
 
 export default function DonorVerify() {
   const { user } = useAuthStore();
+  const userRole = user?.role;
   const navigate = useNavigate();
-  const [donations, setDonations] = useState<Donation[]>([]);
+  const [donations, setDonations] = useState<VerifyDonation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<Record<string, VerifyData>>({});
   const [verifyError, setVerifyError] = useState<Record<string, string>>({});
+  const [alerts, setAlerts] = useState<IntegrityAlert[]>([]);
 
   useEffect(() => {
-    if (!user || user.role !== "DONOR") return;
-    apiService.donations.getByUser().then(setDonations).catch(() => setError(true)).finally(() => setLoading(false));
+    if (!user) return;
+    const load = user.role === "DONOR" ? apiService.donations.getByUser() : user.role === "CHARITY" ? apiService.charity.getVerificationQueue().then((r) => r.donations) : user.role === "ADMIN" ? apiService.admin.getVerificationQueue().then((r) => r.donations) : Promise.resolve([]);
+    load.then(setDonations).catch(() => setError(true)).finally(() => setLoading(false));
+    if (user.role === "CHARITY") apiService.charity.getIntegrityAlerts().then((r) => setAlerts(r.alerts)).catch(() => undefined);
+    if (user.role === "ADMIN") apiService.admin.getIntegrityAlerts().then((r) => setAlerts(r.alerts)).catch(() => undefined);
   }, [user]);
 
   if (!user) return <div className="mx-auto max-w-xl py-20 text-center"><h1 className="text-2xl font-semibold">Sign in to verify your donations</h1><Button className="mt-5" onClick={() => navigate("/login")}>Sign in</Button></div>;
-  if (user.role && user.role !== "DONOR") return <Navigate to={user.role === "ADMIN" ? "/admin" : "/ngo"} replace />;
+  if (user.role && !["DONOR", "CHARITY", "ADMIN"].includes(user.role)) return <Navigate to="/" replace />;
 
   const verify = async (id: string) => {
     if (activeId) return;
     setActiveId(id); setVerifyError((current) => ({ ...current, [id]: "" }));
-    try { const result = await apiService.donations.getAnchors(id); setEvidence((current) => ({ ...current, [id]: result })); }
+    try { const result = user.role === "DONOR" ? await apiService.donations.getAnchors(id) : user.role === "CHARITY" ? await apiService.charity.getDonationVerification(id) : await apiService.admin.getDonationVerification(id); setEvidence((current) => ({ ...current, [id]: result })); }
     catch { setVerifyError((current) => ({ ...current, [id]: "We couldn't complete the check right now. This does not mean a problem was found with your donation." })); }
     finally { setActiveId(null); }
   };
 
   return <div className="mx-auto max-w-4xl space-y-8 pb-16">
-    <header className="space-y-3"><h1 className="text-3xl font-semibold tracking-tight">Verify Your Donations</h1><p className="max-w-3xl text-muted-foreground">Your contribution matters. Here, you can check how each donation has been recorded, track its current status, and verify the records that help protect its integrity.</p></header>
+    <header className="space-y-3"><h1 className="text-3xl font-semibold tracking-tight">{userRole === "DONOR" ? "Verify Your Donations" : "Donation Verification"}</h1><p className="max-w-3xl text-muted-foreground">{userRole === "DONOR" ? "Your contribution matters. Here, you can check how each donation has been recorded, track its current status, and verify the records that help protect its integrity." : "Run an on-demand integrity check for donations you are authorized to review. Failures are recorded as alerts for follow-up."}</p></header>
     <section className="rounded-xl border border-primary/20 bg-primary/5 p-5 sm:p-6"><h2 className="flex items-center gap-2 font-semibold"><ShieldCheck className="h-5 w-5 text-primary" />How does verification work?</h2>
       <ol className="mt-4 grid gap-4 sm:grid-cols-2">
         {["Your donation is recorded: the platform saves the payment and its details.", "A verification fingerprint is created: it can help reveal changes to the saved record.", "Records are linked together: changing an earlier record would disrupt those links.", "Blockchain adds a public reference: selected fingerprints are recorded on Solana for an additional integrity check."].map((item, i) => <li key={item} className="flex gap-3 text-sm text-muted-foreground"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">{i + 1}</span>{item}</li>)}
       </ol><p className="mt-4 border-t border-border/70 pt-3 text-xs text-muted-foreground">These checks help confirm the integrity of information recorded by Trace-It. They do not prove a bank transfer independently or show how an NGO spends funds.</p>
       <p className="mt-4 text-center text-xs font-medium text-muted-foreground">Donation → Platform record → Verification fingerprint → Blockchain reference</p>
     </section>
+    {userRole !== "DONOR" && <section className="space-y-3"><h2 className="text-xl font-semibold">Integrity alerts</h2>{alerts.length === 0 ? <p className="rounded-lg border p-4 text-sm text-muted-foreground">No recorded integrity failures.</p> : alerts.map((alert) => <article key={alert.id} className="rounded-lg border border-destructive/40 bg-destructive/5 p-4"><p className="font-medium text-destructive">{alert.failureType.replaceAll("_", " ")} · {alert.resolvedAt ? "Investigated" : "Unresolved"}</p><p className="mt-1 text-sm text-muted-foreground">Donation {alert.donationId} · Event {alert.eventId ?? "unknown"} · Batch {alert.batchId ?? "unknown"}</p><p className="mt-1 text-xs text-muted-foreground">Detected {new Date(alert.detectedAt).toLocaleString()} · {alert.source === "ON_DEMAND" ? "Detected during an on-demand check" : "Background check"}</p></article>)}</section>}
     <section className="space-y-4"><div><h2 className="text-xl font-semibold">Your donations</h2><p className="mt-1 text-sm text-muted-foreground">Each status describes a separate part of your donation.</p></div>
       {loading ? <div role="status" className="rounded-xl border p-8 text-center text-muted-foreground"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />Loading your donations…</div>
         : error ? <div role="alert" className="rounded-xl border border-destructive/30 p-6 text-sm">We couldn’t load your donations. Please refresh the page and try again.</div>
@@ -105,7 +126,7 @@ export default function DonorVerify() {
               <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div className="space-y-1"><p className="text-xl font-semibold">{donation.currencyCode ?? "INR"} {Number(donation.amount).toLocaleString()}</p><p className="text-sm text-muted-foreground">{donation.campaignTitle || "General NGO donation"}{donation.ngoName ? ` · ${donation.ngoName}` : ""}</p><p className="text-sm text-muted-foreground">{new Date(donation.createdAt).toLocaleDateString()} · Reference {donation.publicId ?? donation.id}</p><p className="text-sm">{labelStatus(String(donation.status))}</p>{String(donation.status) === "REFUND_RECONCILIATION_REQUIRED" && <p className="text-sm text-destructive">This refund needs attention from our support team.</p>}</div>
                 <Button onClick={() => void verify(donation.id)} disabled={activeId !== null}>{activeId === donation.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{activeId === donation.id ? "Checking…" : evidence[donation.id] ? "Check again" : "Verify"}</Button></div>
               {verifyError[donation.id] && <p role="alert" className="mt-4 text-sm text-destructive">{verifyError[donation.id]}</p>}
-              {evidence[donation.id] && <Evidence evidence={evidence[donation.id]} />}
+              {evidence[donation.id] && <Evidence evidence={evidence[donation.id]} userRole={userRole} />}
             </article>)}
     </section>
   </div>;

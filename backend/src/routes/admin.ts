@@ -3,6 +3,7 @@ import { prisma } from "../db/prisma.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
+import { getDonationAnchors } from "./donor.js";
 import {
   UserRole,
   DisbursementStatus,
@@ -30,6 +31,25 @@ import {
 } from "./bankTransfers.js";
 
 const adminRouter = Router();
+
+adminRouter.get(
+  "/donations/:id/verification",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  getDonationAnchors,
+);
+adminRouter.get("/integrity-alerts", requireAuth, requireRole(UserRole.ADMIN), async (_req, res, next) => {
+  try {
+    const alerts = await prisma.integrityAlert.findMany({ orderBy: { detectedAt: "desc" }, take: 200 });
+    res.json({ alerts });
+  } catch (error) { next(error); }
+});
+adminRouter.get("/donations/verification-queue", requireAuth, requireRole(UserRole.ADMIN), async (_req, res, next) => {
+  try {
+    const rows = await prisma.donation.findMany({ orderBy: { createdAt: "desc" }, take: 100, select: { id: true, publicId: true, amount: true, currencyCode: true, status: true, createdAt: true, project: { select: { title: true } }, ngo: { select: { organisationName: true } } } });
+    res.json({ donations: rows.map((row) => ({ id: row.id, publicId: row.publicId, amount: Number(row.amount), currencyCode: row.currencyCode, status: row.status, createdAt: row.createdAt, campaignTitle: row.project?.title, ngoName: row.ngo.organisationName })) });
+  } catch (error) { next(error); }
+});
 
 
 const listRefundReconciliation = async (_req: Request, res: Response, next: NextFunction) => {

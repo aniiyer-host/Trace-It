@@ -20,4 +20,16 @@ describe("anchor protocol batch hashes", () => {
       deriveAnchorBatch((1n << 64n) - 1n, ["00".repeat(64), "11".repeat(64)]),
     ).toThrow("overflows u64");
   });
+
+  it("binds the v2 batch key to its fixed-length nonce", () => {
+    const hashes = ["ab".repeat(64)];
+    const first = deriveAnchorBatch(9n, hashes, 2, Buffer.alloc(32, 1));
+    const retry = deriveAnchorBatch(9n, hashes, 2, Buffer.alloc(32, 1));
+    const changed = deriveAnchorBatch(9n, hashes, 2, Buffer.alloc(32, 2));
+    expect(Buffer.from(retry.batchKey)).toEqual(Buffer.from(first.batchKey));
+    expect(Buffer.from(changed.batchKey)).not.toEqual(Buffer.from(first.batchKey));
+    expect(Buffer.from(first.nonce!)).toEqual(Buffer.alloc(32, 1));
+    expect(first.nonce).not.toBeInstanceOf(Buffer);
+    expect(() => deriveAnchorBatch(9n, hashes, 2)).toThrow("32-byte nonce");
+  });
 });

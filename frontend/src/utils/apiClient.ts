@@ -583,6 +583,9 @@ export const apiService = {
 
   // Charity
   charity: {
+    getVerificationQueue: () => get<{ donations: Array<Pick<Donation, "id" | "publicId" | "amount" | "currencyCode" | "status" | "createdAt" | "campaignTitle" | "ngoName">> }>("/charity/donations/verification-queue"),
+    getDonationVerification: (id: string) => get<{ anchors: DonationAnchorStatus[] }>(`/charity/donations/${id}/verification`),
+    getIntegrityAlerts: () => get<{ alerts: Array<{ id: string; donationId: string; batchId: string | null; eventId: string | null; failureType: string; source: string; severity: string; details: unknown; detectedAt: string; resolvedAt: string | null }> }>("/charity/integrity-alerts"),
     onboard: (data: {
       organisationName: string;
       registrationNo: string;
@@ -657,6 +660,9 @@ export const apiService = {
 
   // Admin
   admin: {
+    getVerificationQueue: () => get<{ donations: Array<Pick<Donation, "id" | "publicId" | "amount" | "currencyCode" | "status" | "createdAt" | "campaignTitle" | "ngoName">> }>("/admin/donations/verification-queue"),
+    getDonationVerification: (id: string) => get<{ anchors: DonationAnchorStatus[] }>(`/admin/donations/${id}/verification`),
+    getIntegrityAlerts: () => get<{ alerts: Array<{ id: string; donationId: string; batchId: string | null; eventId: string | null; failureType: string; source: string; severity: string; details: unknown; detectedAt: string; resolvedAt: string | null }> }>("/admin/integrity-alerts"),
     //Change any to AdminPendingCampaign to fix LINT error
     getPendingCampaigns: () =>
       get<AdminPendingCampaign[]>("/admin/campaigns/pending"),

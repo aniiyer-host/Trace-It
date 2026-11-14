@@ -8,6 +8,7 @@ import {
 
 const AUDIT_ROOT_DOMAIN = Buffer.from("TRACEIT_AUDIT_ROOT_V1", "ascii");
 const ANCHOR_DOMAIN = Buffer.from("TRACEIT_ANCHOR_V1", "ascii");
+const NONCE_DOMAIN = Buffer.from("TRACEIT_ANCHOR_NONCE_V2", "ascii");
 
 function encodeU16(value: number): Buffer {
   if (!Number.isInteger(value) || value < 0 || value > 0xffff) {
@@ -47,6 +48,7 @@ export function deriveAnchorBatch(
   startSequence: bigint,
   eventHashes: readonly string[],
   schemaVersion = 1,
+  nonce?: Uint8Array,
 ): AnchorBatch {
   if (eventHashes.length === 0) throw new Error("anchor batch cannot be empty");
   const eventCount = eventHashes.length;
@@ -71,11 +73,14 @@ export function deriveAnchorBatch(
       ]),
     )
     .digest();
+  if (schemaVersion >= 2 && (!nonce || nonce.length !== 32)) {
+    throw new Error("schemaVersion 2 batches require a 32-byte nonce");
+  }
   const batchKey = crypto
     .createHash("sha512")
     .update(
       Buffer.concat([
-        ANCHOR_DOMAIN,
+        ...(schemaVersion >= 2 ? [NONCE_DOMAIN, Buffer.from(nonce!)] : [ANCHOR_DOMAIN]),
         schemaBytes,
         startBytes,
         endBytes,
@@ -93,5 +98,6 @@ export function deriveAnchorBatch(
     endSequence,
     eventCount,
     schemaVersion,
+    ...(schemaVersion >= 2 ? { nonce: Uint8Array.from(nonce!) } : {}),
   };
 }
