@@ -447,8 +447,9 @@ describe("SolanaAnchorAdapter", () => {
     const value = batch();
     let signedSignature = "";
 
-    await expect(
-      adapter.submitRecordAnchor({
+    let rejection: unknown;
+    try {
+      await adapter.submitRecordAnchor({
         batch: value,
         programId: PROGRAM_ID,
         configPda: PublicKey.findProgramAddressSync(
@@ -458,8 +459,13 @@ describe("SolanaAnchorAdapter", () => {
         anchorPda: deriveAnchorPda(PROGRAM_ID, value.batchKey),
         authority: signer.publicKey,
         onPrepared: async (metadata) => { signedSignature = metadata.signature; },
-      }),
-    ).rejects.toMatchObject({
+      });
+      throw new Error("expected submission to reject");
+    } catch (error) {
+      rejection = error;
+    }
+
+    expect(rejection).toMatchObject({
       kind: "PROGRAM",
       signature: signedSignature,
     });

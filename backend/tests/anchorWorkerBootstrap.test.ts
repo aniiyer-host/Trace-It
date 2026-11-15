@@ -38,6 +38,8 @@ const requiredColumns = [
   "anchor_batches.anchorPda",
   "anchor_batches.lastError",
   "anchor_batches.solanaTxSignature",
+  "anchor_batches.submissionBlockhash",
+  "anchor_batches.lastValidBlockHeight",
   "anchor_batches.anchoredAt",
   "provenance_events.chainHash",
   "provenance_events.anchorBatchId",

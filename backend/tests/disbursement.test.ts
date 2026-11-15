@@ -478,7 +478,7 @@ describe("Disbursement API Integration Tests", () => {
     ).toBe(1);
   });
 
-  test("POST /api/admin/disburse/:id/approve - approve final disbursement auto-closes campaign", async () => {
+  test("POST /api/admin/disburse/:id/approve - final disbursement completes campaign after settlement", async () => {
     // Earlier tests left one completed request and one unrelated approval.
     // Model their terminal outcomes so exactly ₹6,000 remains committed and
     // this final ₹4,000 request is eligible under the one-outstanding rule.
@@ -521,7 +521,7 @@ describe("Disbursement API Integration Tests", () => {
 
     // Completion follows final disbursement settlement, not approval alone.
     let campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
-    expect(campaign?.status).toBe(CampaignStatus.ACTIVE);
+    expect(campaign?.status).toBe(CampaignStatus.FUNDING_COMPLETE);
     await prisma.disbursement.update({ where: { id: finalDisbursementId }, data: { status: DisbursementStatus.SENT, settlementDueAt: new Date(Date.now() - 1_000) } });
     expect(await settleDueDisbursements(prisma, new Date())).toBe(1);
     campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });

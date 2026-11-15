@@ -161,17 +161,27 @@ export class AnchorWorker {
 
     const attemptCount = batch.attemptCount + 1;
     let submissionStarted = false;
+    let submissionPersistenceFailure: unknown;
     const submitted = await this.callPublisher("submit", () =>
       this.publisher.submitAnchorBatch(batch, async (metadata) => {
-        await this.repository.markSubmitting(batch.id, {
-          ...this.transition(batch, attemptCount, { status: "PENDING_CONFIRMATION" }),
-          transactionSignature: metadata.signature,
-          submissionBlockhash: metadata.blockhash,
-          lastValidBlockHeight: metadata.lastValidBlockHeight,
-        });
+        try {
+          await this.repository.markSubmitting(batch.id, {
+            ...this.transition(batch, attemptCount, { status: "PENDING_CONFIRMATION" }),
+            transactionSignature: metadata.signature,
+            submissionBlockhash: metadata.blockhash,
+            lastValidBlockHeight: metadata.lastValidBlockHeight,
+          });
+        } catch (error) {
+          // Publisher adapters classify callback errors as RPC failures. Keep
+          // persistence failures distinct so a batch selected for processing
+          // cannot be reported handled or retried before its state is durable.
+          submissionPersistenceFailure = error;
+          throw error;
+        }
         submissionStarted = true;
       }),
     );
+    if (submissionPersistenceFailure !== undefined) throw submissionPersistenceFailure;
     await this.handleResult(batch, submitted, attemptCount, submissionStarted);
   }
 

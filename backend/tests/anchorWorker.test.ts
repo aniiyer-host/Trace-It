@@ -403,7 +403,10 @@ describe("AnchorWorker", () => {
 
     await expect(worker(repo, chain).runOnce("02468100-6f1a-44a1-b3b1-87ba538a00b8"))
       .rejects.toBe(failure);
-    expect(chain.submitAnchorBatch).not.toHaveBeenCalled();
+    // The publisher prepares the transaction by calling onPrepared; the
+    // persistence failure rejects that call before the adapter broadcasts.
+    expect(chain.submitAnchorBatch).toHaveBeenCalledTimes(1);
+    expect(repo.markConfirmed).not.toHaveBeenCalled();
   });
 
   it("does not report a selected batch handled when confirmed-state persistence fails", async () => {
