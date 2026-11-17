@@ -256,6 +256,7 @@ export default function AdminPanel() {
 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [auditLogsLoading, setAuditLogsLoading] = useState(false);
+  const [integrityFeed, setIntegrityFeed] = useState<Awaited<ReturnType<typeof apiService.admin.getIntegrityAlerts>> | null>(null);
   const [campaignSearch, setCampaignSearch] = useState("");
   const [awaitingTransfers, setAwaitingTransfers] = useState<DisbursementResponse[]>([]);
   const [confirmingTransferId, setConfirmingTransferId] = useState<string | null>(null);
@@ -296,6 +297,7 @@ export default function AdminPanel() {
       fetchPendingMilestoneApprovals();
       void loadAwaitingTransfers();
       fetchPendingCampaigns();
+      void apiService.admin.getIntegrityAlerts().then(setIntegrityFeed).catch(() => setIntegrityFeed(null));
       //   loadAuditLogs();
       void (async () => {
         await loadAuditLogs();
@@ -727,6 +729,22 @@ export default function AdminPanel() {
           </table>
         </div>
       </div>
+
+      {/* ZONE 4: System Audit Logs */}
+      <section className="space-y-4 border-t border-border/20 pt-8" aria-labelledby="integrity-activity-title">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><h2 id="integrity-activity-title" className="text-2xl font-bold tracking-tight">Integrity activity</h2><p className="text-sm text-muted-foreground">On-demand verification results and current anchor operations.</p></div>
+          <Button variant="outline" onClick={() => navigate("/verify")}>Open forensic verification</Button>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Last admin verification</p><p className="mt-1 font-medium">{integrityFeed?.summary.lastVerificationAt ? new Date(integrityFeed.summary.lastVerificationAt).toLocaleString() : "No recorded admin check"}</p></div>
+          <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Anchor operations pending</p><p className="mt-1 font-medium">{integrityFeed?.summary.pendingAnchorCount ?? "Unavailable"}</p></div>
+          <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Reconciliation required</p><p className="mt-1 font-medium">{integrityFeed?.summary.reconciliationCount ?? "Unavailable"}</p></div>
+          <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Terminal anchor failures</p><p className="mt-1 font-medium">{integrityFeed?.summary.failedAnchorCount ?? "Unavailable"}</p></div>
+        </div>
+        <p className="text-xs text-muted-foreground">Verification is on demand; the dashboard does not continuously monitor provenance or Solana. Operational anchor counts describe worker state and are not tampering alerts.</p>
+        {!integrityFeed ? <p className="rounded-lg border p-4 text-sm text-muted-foreground">Integrity activity is currently unavailable.</p> : integrityFeed.alerts.length === 0 ? <p className="rounded-lg border p-4 text-sm text-muted-foreground">No unresolved integrity alerts. Checks are recorded when an authorized user requests verification.</p> : <div className="space-y-2">{integrityFeed.alerts.slice(0, 8).map((alert) => <article key={alert.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3"><div><p className="font-medium">{alert.severity === "CRITICAL" ? "Critical integrity alert" : "Integrity alert"} · {alert.failureType.replaceAll("_", " ")} · Unresolved</p><p className="text-xs text-muted-foreground">Donation {alert.donationId} · event {alert.eventId ?? "unknown"} · batch {alert.batchId ?? "unknown"} · first detected {new Date(alert.detectedAt).toLocaleString()}</p></div><Button variant="outline" size="sm" onClick={() => navigate(`/verify?donationId=${encodeURIComponent(alert.donationId)}`)}>Recheck</Button></article>)}</div>}
+      </section>
 
       {/* ZONE 4: System Audit Logs */}
       <div className="space-y-6 pt-8 border-t border-border/20">

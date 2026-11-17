@@ -298,6 +298,7 @@ import type {
   AdminAuditLog,
   AuditLogPagination,
   AdminPendingAttestation,
+  AdminDonationForensics,
 } from "@/types";
 import type { User } from "@/store/authStore";
 
@@ -661,8 +662,8 @@ export const apiService = {
   // Admin
   admin: {
     getVerificationQueue: () => get<{ donations: Array<Pick<Donation, "id" | "publicId" | "amount" | "currencyCode" | "status" | "createdAt" | "campaignTitle" | "ngoName">> }>("/admin/donations/verification-queue"),
-    getDonationVerification: (id: string) => get<{ anchors: DonationAnchorStatus[] }>(`/admin/donations/${id}/verification`),
-    getIntegrityAlerts: () => get<{ alerts: Array<{ id: string; donationId: string; batchId: string | null; eventId: string | null; failureType: string; source: string; severity: string; details: unknown; detectedAt: string; resolvedAt: string | null }> }>("/admin/integrity-alerts"),
+    getDonationVerification: (id: string) => get<AdminDonationForensics>(`/admin/donations/${id}/verification`),
+    getIntegrityAlerts: () => get<{ alerts: Array<{ id: string; donationId: string; batchId: string | null; eventId: string | null; failureType: string; source: string; severity: string; details: unknown; detectedAt: string; resolvedAt: string | null }>; summary: { lastVerificationAt: string | null; lastVerifiedDonationId: string | null; pendingAnchorCount: number; reconciliationCount: number; failedAnchorCount: number; monitoring: "ON_DEMAND" } }>("/admin/integrity-alerts"),
     //Change any to AdminPendingCampaign to fix LINT error
     getPendingCampaigns: () =>
       get<AdminPendingCampaign[]>("/admin/campaigns/pending"),

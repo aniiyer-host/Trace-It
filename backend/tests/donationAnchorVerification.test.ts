@@ -83,6 +83,21 @@ describe("persisted anchor batch root verification", () => {
     });
   });
 
+  it("detects a changed v2 nonce and batch key", () => {
+    const nonce = Buffer.alloc(32, 7);
+    const derived = deriveAnchorBatch(12n, payloadHashes, 2, nonce);
+    const versionTwoBatch = {
+      ...batch,
+      batchKey: Buffer.from(derived.batchKey).toString("hex"),
+      auditRoot: Buffer.from(derived.auditRoot).toString("hex"),
+      schemaVersion: 2,
+      nonce: nonce.toString("hex"),
+    };
+    expect(checkBatchRoot(versionTwoBatch, events)).toEqual({ status: "PASSED" });
+    expect(checkBatchRoot({ ...versionTwoBatch, nonce: Buffer.alloc(32, 8).toString("hex") }, events).status).toBe("FAILED");
+    expect(checkBatchRoot({ ...versionTwoBatch, batchKey: "f".repeat(64) }, events).status).toBe("FAILED");
+  });
+
   it("fails closed when the sequence is not contiguous", () => {
     expect(checkBatchRoot(batch, [events[0], { ...events[1], id: 14n }])).toMatchObject({
       status: "FAILED",

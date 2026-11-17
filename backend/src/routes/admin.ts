@@ -3,7 +3,7 @@ import { prisma } from "../db/prisma.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
-import { getDonationAnchors } from "./donor.js";
+import { getAdminDonationForensics } from "../services/integrity/adminForensicVerification.js";
 import {
   UserRole,
   DisbursementStatus,
@@ -36,12 +36,60 @@ adminRouter.get(
   "/donations/:id/verification",
   requireAuth,
   requireRole(UserRole.ADMIN),
-  getDonationAnchors,
+  async (req, res, next) => {
+    try {
+      const donationId = req.params.id as string;
+      const result = await getAdminDonationForensics(donationId);
+      if (!result) return res.status(404).json({ error: "Donation not found" });
+      await writeAuditLog({
+        actorType: AuditActorType.USER,
+        actorId: req.user!.id,
+        entityType: "donation",
+        entityId: donationId,
+        action: "ADMIN_FORENSIC_VERIFICATION_COMPLETED",
+        metadata: {
+          source: "ON_DEMAND",
+          result: result.chain.status,
+          checkedEvents: result.chain.checkedEvents,
+          issueCount: result.chain.errors.length,
+          completeCleanCheck: result.completeCleanCheck,
+          requestId: req.header("x-request-id") ?? null,
+        },
+        ipAddress: req.ip,
+        requestId: req.header("x-request-id") ?? undefined,
+      });
+      res.set("Cache-Control", "no-store");
+      return res.json(result);
+    } catch (error) { next(error); }
+  },
 );
 adminRouter.get("/integrity-alerts", requireAuth, requireRole(UserRole.ADMIN), async (_req, res, next) => {
   try {
-    const alerts = await prisma.integrityAlert.findMany({ orderBy: { detectedAt: "desc" }, take: 200 });
-    res.json({ alerts });
+    const [persistedAlerts, lastVerification, pendingAnchorCount, reconciliationCount, failedAnchorCount] = await Promise.all([
+      prisma.integrityAlert.findMany({ where: { resolvedAt: null }, orderBy: { detectedAt: "desc" }, take: 200 }),
+      prisma.auditLog.findFirst({ where: { action: "ADMIN_FORENSIC_VERIFICATION_COMPLETED" }, orderBy: { createdAt: "desc" }, select: { createdAt: true, entityId: true } }),
+      prisma.anchorBatch.count({ where: { status: { in: ["PENDING", "PENDING_CONFIRMATION", "RETRYABLE_RPC_FAILURE", "RETRYABLE_BLOCKHASH_FAILURE"] } } }),
+      prisma.anchorBatch.count({ where: { status: "RECONCILIATION_REQUIRED" } }),
+      prisma.anchorBatch.count({ where: { status: { in: ["TERMINAL_FAILURE", "DEAD_LETTER"] } } }),
+    ]);
+    const donationIds = [...new Set(persistedAlerts.map((alert) => alert.donationId))];
+    const recentChecks = donationIds.length ? await prisma.auditLog.findMany({
+      where: { action: "ADMIN_FORENSIC_VERIFICATION_COMPLETED", entityId: { in: donationIds } },
+      orderBy: { createdAt: "desc" },
+      select: { entityId: true, createdAt: true, metadata: true },
+    }) : [];
+    const latestCheckByDonation = new Map<string, (typeof recentChecks)[number]>();
+    for (const check of recentChecks) {
+      if (check.entityId && !latestCheckByDonation.has(check.entityId)) latestCheckByDonation.set(check.entityId, check);
+    }
+    // Keep the shared IntegrityAlert rows untouched for NGO compatibility. The
+    // admin active feed treats an alert as cleared after a later complete pass.
+    const alerts = persistedAlerts.filter((alert) => {
+      const latestCheck = latestCheckByDonation.get(alert.donationId);
+      if (!latestCheck || latestCheck.createdAt <= alert.detectedAt || !latestCheck.metadata || typeof latestCheck.metadata !== "object" || Array.isArray(latestCheck.metadata)) return true;
+      return (latestCheck.metadata as Record<string, unknown>).completeCleanCheck !== true;
+    });
+    res.json({ alerts, summary: { lastVerificationAt: lastVerification?.createdAt ?? null, lastVerifiedDonationId: lastVerification?.entityId ?? null, pendingAnchorCount, reconciliationCount, failedAnchorCount, monitoring: "ON_DEMAND" } });
   } catch (error) { next(error); }
 });
 adminRouter.get("/donations/verification-queue", requireAuth, requireRole(UserRole.ADMIN), async (_req, res, next) => {

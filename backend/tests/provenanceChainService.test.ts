@@ -167,4 +167,26 @@ describe("verifyProvenanceEvents", () => {
       ]),
     );
   });
+
+  it("localizes a canonical payload change that leaves its payload hash and chain link untouched", () => {
+    const first = makeEvent(1n, firstInput, null);
+    const changed = { ...first, canonicalPayload: first.canonicalPayload.replace("1250.50", "999.00") };
+    const result = verifyProvenanceEvents([changed]);
+    expect(result.errors).toContainEqual({ eventId: "1", reason: "canonicalPayload does not match the event fields" });
+    expect(result.errors).not.toContainEqual(expect.objectContaining({ reason: "payloadHash does not match the event" }));
+    expect(result.errors).not.toContainEqual(expect.objectContaining({ reason: "chainHash does not match the event" }));
+  });
+
+  it("detects a changed payload and payload hash whose original chain links were retained", () => {
+    const first = makeEvent(1n, firstInput, null);
+    const changedInput = { ...firstInput, amountInr: "999.00" };
+    const result = verifyProvenanceEvents([{
+      ...makeEvent(1n, changedInput, null),
+      chainHash: first.chainHash,
+    }]);
+    expect(result.errors).toEqual(expect.arrayContaining([
+      { eventId: "1", reason: "payloadHash does not match the event" },
+      { eventId: "1", reason: "chainHash does not match the event" },
+    ]));
+  });
 });

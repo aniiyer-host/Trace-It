@@ -415,6 +415,37 @@ export interface AuditLogPagination {
   totalPages: number;
 }
 
+export interface AdminForensicCheck {
+  status: string;
+  reason?: string;
+}
+
+export interface AdminForensicAnchor {
+  eventId: string;
+  sequence: string;
+  entityType: string;
+  entityId: string;
+  eventType: string;
+  occurredAt: string;
+  scope: string;
+  severity: string;
+  explanation: string;
+  payloadHash: { status: string; observed: string; expected: string | null };
+  canonicalPayload: { status: string; fieldDifferences: Array<{ field: string; observed: unknown; expected: unknown }> };
+  previousHash: { status: string; observed: string | null };
+  chainHash: { status: string; observed: string | null; expected: string | null };
+  verification: Record<string, AdminForensicCheck>;
+  batch: null | { id: string; key: string; expectedKey: string | null; auditRoot: string; expectedAuditRoot: string | null; nonce: string | null; sequenceStart: string; sequenceEnd: string; eventCount: number; status: string; pda: string | null; transactionSignature: string | null; anchoredAt: string | null };
+}
+
+export interface AdminDonationForensics {
+  generatedAt: string;
+  source: "ON_DEMAND";
+  chain: { status: string; checkedEvents: number; legacyEvents: number; errors: Array<{ eventId: string; reason: string }> };
+  anchors: AdminForensicAnchor[];
+  limitations: string[];
+}
+
 // Disbursement interface
 
 export type DisbursementStatus =
